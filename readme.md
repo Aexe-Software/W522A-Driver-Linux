@@ -42,22 +42,23 @@ This is an Armbian/mainline-kernel port of Amlogic's vendor `aml-w1` SDIO driver
 ## 📦 Repo layout
 
 ```
-README.md
-install.sh            One-shot installer (menu): prebuilt OR build-from-source (gcc-15)
-source/              Full driver source — build this
-  vmac/              Wi-Fi MAC / HAL / PHY / rate-control (core driver)
-  common/            Chip register headers
-  bt/                Bluetooth: hci_uart aml driver, bluez-alsa, BT firmware .bin
-  install_files/     modprobe / modules-load templates
+readme.md
+install.sh                One-shot installer (menu): prebuilt OR build-from-source (gcc-15)
+driver/
   Makefile
-prebuilt-modules/    vlsicomm.ko + aml_sdio.ko prebuilt for 6.12.81-ophub
-config/              hostapd + driver configs, modprobe.d, modules-load.d
-scripts/
-  start_ap.sh        Bring up the 5 GHz VHT80 AP + NAT + local speedtest site
-  bt-audio.sh        Free the radio from Wi-Fi, bring BT up, pair + play (AAC)
-  speedtest_server.py  Local link speedtest web page (measures the Wi-Fi link itself)
-firmware/            RF calibration tables (aml_wifi_rf*.txt)
-dtb/                 Device tree (X96 Max Plus W100 v2.1, SDIO @ 100 MHz)
+  vmac/                   Wi-Fi MAC / HAL / PHY / rate-control (core driver)
+  common/                 Chip register headers
+  bt/                     Bluetooth: hci_uart aml driver, bluez-alsa, BT firmware .bin
+  firmware/               RF calibration tables (aml_wifi_rf*.txt)
+  local_ap_scripts/
+    start_ap.sh           Bring up the 5 GHz VHT80 AP + NAT + local speedtest site
+    bt-audio.sh           Free the radio from Wi-Fi, bring BT up, pair + play (AAC)
+    speedtest_server.py   Local link speedtest web page (measures the Wi-Fi link itself)
+    ap-vht80b.conf        hostapd 5 GHz VHT80 config (primary mode)
+    ap-ht40.conf          hostapd 2.4 GHz HT40 config
+    aml_wifi_drv_cfg_*.conf  driver mode configs (ap / sta / monitor)
+  meson-sm1-x96-max-plus-w100-v2.1.dts / .dtb   Device tree (SDIO @ 100 MHz)
+  CHANGELOG.md
 ```
 
 ---
