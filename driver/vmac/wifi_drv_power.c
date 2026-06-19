@@ -1,17 +1,3 @@
-/*
- ****************************************************************************************
- *
- * Copyright (C) Amlogic 2010-2014
- *
- * Project: 11N 80211 driver  layer Software
- *
- * Description:
- *     driver layer power save function
- *
- *
- ****************************************************************************************
- */
-
 
 #include "wifi_mac_com.h"
 #include "wifi_drv_power.h"
@@ -27,16 +13,14 @@ static char drv_pwrsave_cmd_arbitration(struct drv_private *drv_priv,
     if (wnet_vif_id == PHY_VMAC_ID) {
         drv_priv->drv_PhyPsState = newstate;
     } else {
-        //if (drv_priv->dot11VmacPsState[wnet_vif_id] == newstate) {
-        //    return 0;//state not change,don't down cmd
-        //}
+        
         drv_priv->dot11VmacPsState[wnet_vif_id] = newstate;
 
         if (newstate == DRV_PWRSAVE_AWAKE) {
             if (drv_priv->dot11ComPsState == DRV_PWRSAVE_FULL_SLEEP) {
                 drv_priv->dot11ComPsState = DRV_PWRSAVE_AWAKE;
             }
-            return DRV_PWRSAVE_AWAKE;//send awake cmd
+            return DRV_PWRSAVE_AWAKE;
 
         } else if (newstate == DRV_PWRSAVE_FULL_SLEEP) {
             unsigned char all_wnet_vif_same = 1;
@@ -59,7 +43,7 @@ static char drv_pwrsave_cmd_arbitration(struct drv_private *drv_priv,
             if (drv_priv->dot11ComPsState == DRV_PWRSAVE_FULL_SLEEP) {
                 drv_priv->dot11ComPsState = DRV_PWRSAVE_AWAKE;
             }
-            return 0;//fw is awake by itself, and hal_fw_ps_status changed in interrupt.no cmd need down
+            return 0;
         }
     }
 
@@ -69,8 +53,7 @@ static char drv_pwrsave_cmd_arbitration(struct drv_private *drv_priv,
 static void drv_pwrsave_set_state(struct drv_private *drv_priv,
     enum drv_ps_state newstate,int wnet_vif_id)
 {
-    //newstate = drv_pwrsave_cmd_arbitration(drv_priv,newstate,wnet_vif_id);
-
+    
     switch (newstate)
     {
         case DRV_PWRSAVE_AWAKE:
@@ -80,7 +63,7 @@ static void drv_pwrsave_set_state(struct drv_private *drv_priv,
             drv_hal_setpower(PS_DOZE, wnet_vif_id);
             break;
         case DRV_PWRSAVE_NETWORK_SLEEP:
-            //drv_hal_setpower(PS_NETWORK_SLEEP, wnet_vif_id);
+            
             break;
         default:
             break;
@@ -96,7 +79,7 @@ void drv_pwrsave_awake( struct drv_private *drv_priv, int wnet_vif_id)
 void drv_pwrsave_fullsleep( struct drv_private *drv_priv, int wnet_vif_id)
 {
     if (aml_wifi_is_enable_rf_test()) {
-        drv_pwrsave_set_state(drv_priv, DRV_PWRSAVE_AWAKE, wnet_vif_id); //xman modified for hal thr test.
+        drv_pwrsave_set_state(drv_priv, DRV_PWRSAVE_AWAKE, wnet_vif_id); 
         return;
     }
 
@@ -116,32 +99,12 @@ void drv_pwrsave_netsleep( struct drv_private *drv_priv, int wnet_vif_id)
 
 void driv_ps_wakeup (struct drv_private *drv_priv)
 {
-/*
-    DRV_PS_LOCK(drv_priv);
-    drv_priv->drv_ps.ps_hal_usecount++;
-    DRV_PS_UNLOCK(drv_priv);
-#if 1
-    if (drv_priv->drv_ps.ps_hal_usecount == 1)
-    {
-        drv_pwrsave_awake(drv_priv, PHY_VMAC_ID);
-    }
-#endif
-*/
+
 }
 
 void driv_ps_sleep(struct drv_private *drv_priv)
 {
-/*
-    DRV_PS_LOCK(drv_priv);
-    drv_priv->drv_ps.ps_hal_usecount--;
-    DRV_PS_UNLOCK(drv_priv);
-#if 1
-    if (drv_priv->drv_ps.ps_hal_usecount == 0)
-    {
-        drv_pwrsave_fullsleep(drv_priv, PHY_VMAC_ID);
-    }
-#endif
-*/
+
 }
 
 void drv_pwrsave_init(struct drv_private *drv_priv)
@@ -180,7 +143,7 @@ void drv_pwrsave_wake_req (void *dpriv, int power_save)
                 DRV_PS_UNLOCK(drv_priv);
 
                 drv_priv->net_ops->wifi_mac_pwrsave_wakeup_for_tx(wnet_vif);
-                /* wake a wnet_vif operation can wake hal and firmware */
+                
                 break;
             }
         }

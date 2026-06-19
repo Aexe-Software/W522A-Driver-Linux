@@ -1,20 +1,7 @@
-/*
- ****************************************************************************************
- *
- * Copyright (C) Amlogic 2020-2024
- *
- * Project: file read write
- *
- * Description:
- *     file read write fun
- *
- *
- ****************************************************************************************
- */
+
 #include "wifi_hal_com.h"
 #include <linux/namei.h>
 #include "wifi_common.h"
-
 
 static int openFile(struct file **fpp, const char *path, int flag, int mode)
 {
@@ -30,11 +17,6 @@ static int openFile(struct file **fpp, const char *path, int flag, int mode)
     }
 }
 
-/*
-* Close the file with the specific @param fp
-* @param fp the pointer of struct file to close
-* @return always 0
-*/
 static int closeFile(struct file *fp)
 {
     filp_close(fp, NULL);
@@ -105,12 +87,6 @@ static int writeFile(struct file *fp, char *buf, int len)
     return sum;
 }
 
-/*
-* Test if the specific @param path is a file and readable
-* If readable, @param sz is got
-* @param path the path of the file to test
-* @return Linux specific error code
-*/
 int isFileReadable(const char *path, u32 *sz)
 {
     int ret = 0;
@@ -152,13 +128,6 @@ int isFileReadable(const char *path, u32 *sz)
     return ret;
 }
 
-/*
-* Open the file with @param path and retrive the file content into memory starting from @param buf for @param sz at most
-* @param path the path of the file to open and read
-* @param buf the starting address of the buffer to store file content
-* @param sz how many bytes to read at most
-* @return the byte we've read, or Linux specific error code
-*/
 static int retriveFromFile(const char *path, u8 *buf, u32 sz)
 {
 
@@ -197,13 +166,6 @@ static int retriveFromFile(const char *path, u8 *buf, u32 sz)
     return ret;
 }
 
-/*
-* Open the file with @param path and write @param sz byte of data starting from @param buf into the file
-* @param path the path of the file to open and write
-* @param buf the starting address of the data to write into file
-* @param sz how many bytes to write at most
-* @return the byte we've written, or Linux specific error code
-*/
 static int storeToFile(const char *path, u8 *buf, u32 sz)
 {
     int ret = 0;
@@ -240,11 +202,6 @@ static int storeToFile(const char *path, u8 *buf, u32 sz)
     return ret;
 }
 
-/*
-* Test if the specific @param path is a file and readable
-* @param path the path of the file to test
-* @return true or false
-*/
 int aml_is_file_readable(const char *path)
 {
     if (isFileReadable(path, NULL) == 0) {
@@ -254,12 +211,6 @@ int aml_is_file_readable(const char *path)
     }
 }
 
-/*
-* Test if the specific @param path is a file and readable.
-* If readable, @param sz is got
-* @param path the path of the file to test
-* @return _TRUE or _FALSE
-*/
 int aml_is_file_readable_with_size(const char *path, u32 *sz)
 {
     if (isFileReadable(path, sz) == 0) {
@@ -269,12 +220,6 @@ int aml_is_file_readable_with_size(const char *path, u32 *sz)
     }
 }
 
-/*
-* Test if the specific @param path is a readable file with valid size.
-* If readable, @param sz is got
-* @param path the path of the file to test
-* @return _TRUE or _FALSE
-*/
 int aml_readable_file_sz_chk(const char *path, u32 sz)
 {
     u32 fsz = 0;
@@ -290,38 +235,18 @@ int aml_readable_file_sz_chk(const char *path, u32 sz)
     return true;
 }
 
-/*
-* Open the file with @param path and retrive the file content into memory starting from @param buf for @param sz at most
-* @param path the path of the file to open and read
-* @param buf the starting address of the buffer to store file content
-* @param sz how many bytes to read at most
-* @return the byte we've read
-*/
 int aml_retrieve_from_file(const char *path, u8 *buf, u32 sz)
 {
     int ret = retriveFromFile(path, buf, sz);
     return ret >= 0 ? ret : 0;
 }
 
-/*
-* Open the file with @param path and write @param sz byte of data starting from @param buf into the file
-* @param path the path of the file to open and write
-* @param buf the starting address of the data to write into file
-* @param sz how many bytes to write at most
-* @return the byte we've written
-*/
 int aml_store_to_file(const char *path, u8 *buf, u32 sz)
 {
     int ret = storeToFile(path, buf, sz);
     return ret >= 0 ? ret : 0;
 }
 
-/**
-* IsHexDigit -
-*
-* Return TRUE if chTmp is represent for hex digit
-* FALSE otherwise.
-*/
 bool aml_char_is_hex_digit(char chTmp)
 {
     if ((chTmp >= '0' && chTmp <= '9') ||
@@ -332,7 +257,6 @@ bool aml_char_is_hex_digit(char chTmp)
         return false;
     }
 }
-
 
 u32 aml_read_macaddr_from_file(const char *path, u8 *buf)
 {
@@ -358,7 +282,7 @@ u32 aml_read_macaddr_from_file(const char *path, u8 *buf)
         base = PARSE_DIGIT_BASE;
     }
 
-    temp[2] = 0; /* end of string '\0' */
+    temp[2] = 0; 
 
     for (i = 0 ; i < ETH_ALEN ; i++) {
         if (aml_char_is_hex_digit(file_data[base + i * 3]) == false

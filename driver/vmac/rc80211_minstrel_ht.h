@@ -1,10 +1,3 @@
-/*
- * Copyright (C) 2010 Felix Fietkau <nbd@openwrt.org>
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- */
 
 #ifndef __RC_MINSTREL_HT_H
 #define __RC_MINSTREL_HT_H
@@ -12,7 +5,6 @@
 
 #include "linux/types.h"
 
-/* 802.11n HT capabilities masks (for cap_info) */
 #define IEEE80211_HT_CAP_LDPC_CODING            0x0001
 #define IEEE80211_HT_CAP_SUP_WIDTH_20_40        0x0002
 #define IEEE80211_HT_CAP_SM_PS                  0x000C
@@ -26,15 +18,12 @@
 #define IEEE80211_HT_CAP_DSSSCCK40              0x1000
 #define IEEE80211_HT_CAP_LSIG_TXOP_PROT         0x8000
 
-/* 802.11n HT extended capabilities masks (for extended_ht_cap_info) */
 #define IEEE80211_HT_EXT_CAP_PCO		0x0001
 #define IEEE80211_HT_EXT_CAP_PCO_TIME		0x0006
 #define IEEE80211_HT_EXT_CAP_MCS_FB		0x0300
 
-/* 802.11n HT capability AMPDU settings (for ampdu_params_info) */
 #define IEEE80211_HT_AMPDU_PARM_DENSITY		0x1C
 
-/* 802.11ac VHT Capabilities */
 #define IEEE80211_VHT_CAP_MAX_MPDU_LENGTH_3895			0x00000000
 #define IEEE80211_VHT_CAP_MAX_MPDU_LENGTH_7991			0x00000001
 #define IEEE80211_VHT_CAP_MAX_MPDU_LENGTH_11454			0x00000002
@@ -51,14 +40,10 @@
 #define IEEE80211_VHT_CAP_MAX_A_MPDU_LENGTH_EXPONENT_MASK	\
 		(7 << IEEE80211_VHT_CAP_MAX_A_MPDU_LENGTH_EXPONENT_SHIFT)
 
-/*
- * The number of streams can be changed to 2 to reduce code
- * size and memory footprint.
- */
 #define MINSTREL_MAX_STREAMS 1
-#define MINSTREL_HT_STREAM_GROUPS 4/* BW(=2) * SGI(=2) */
+#define MINSTREL_HT_STREAM_GROUPS 4
 #ifdef CONFIG_MAC80211_RC_MINSTREL_VHT
-#define MINSTREL_VHT_STREAM_GROUPS	6 /* BW(=3) * SGI(=2) */
+#define MINSTREL_VHT_STREAM_GROUPS	6 
 #else
 #define MINSTREL_VHT_STREAM_GROUPS	0
 #endif
@@ -79,22 +64,18 @@
 #endif
 
 #define AVG_AMPDU_SIZE	16
-#define AVG_PKT_SIZE 24000//1200
+#define AVG_PKT_SIZE 24000
 
-/* Number of bits for an average sized packet */
 #define MCS_NBITS ((AVG_PKT_SIZE * AVG_AMPDU_SIZE) << 3)
 
-/* Number of symbols for a packet with (bps) bits per symbol */
 #define MCS_NSYMS(bps) DIV_ROUND_UP(MCS_NBITS, (bps))
 
-/* Transmission time (nanoseconds) for a packet containing (syms) symbols */
 #define MCS_SYMBOL_TIME(sgi, syms)					\
 	(sgi ?								\
-	  ((syms) * 18000 + 4000) / 5 :	/* syms * 3.6 us */		\
-	  ((syms) * 1000) << 2		/* syms * 4 us */		\
+	  ((syms) * 18000 + 4000) / 5 :			\
+	  ((syms) * 1000) << 2				\
 	)
 
-/* Transmit duration for the raw data part of an average sized packet */
 #define MCS_DURATION(streams, sgi, bps) \
 	(MCS_SYMBOL_TIME(sgi, MCS_NSYMS((streams) * (bps))) / AVG_AMPDU_SIZE)
 
@@ -102,16 +83,12 @@
 #define BW_40			1
 #define BW_80			2
 
-/*
- * Define group sort order: HT40 -> SGI -> #streams
- */
 #define GROUP_IDX(_streams, _sgi, _ht40)	\
 	MINSTREL_HT_GROUP_0 +			\
 	MINSTREL_MAX_STREAMS * 2 * _ht40 +	\
 	MINSTREL_MAX_STREAMS * _sgi +	\
 	_streams - 1
 
-/* MCS rate information for an MCS group */
 #define MCS_GROUP(_streams, _sgi, _ht40)				\
 	[GROUP_IDX(_streams, _sgi, _ht40)] = {				\
 	.streams = _streams,						\
@@ -173,7 +150,7 @@
 }
 
 #define CCK_DURATION(_bitrate, _short, _len)		\
-	(1000 * (10 /* SIFS */ +			\
+	(1000 * (10  +			\
 	 (_short ? 72 + 24 : 144 + 48) +		\
 	 (8 * (_len + 4) * 10) / (_bitrate)))
 
@@ -197,7 +174,6 @@
 		}					\
 	}
 
-
 struct mcs_group {
 	u32 flags;
 	unsigned int streams;
@@ -210,39 +186,31 @@ struct minstrel_mcs_group_data {
 	u8 index;
 	u8 column;
 
-	/* sorted rate set within a MCS group*/
 	u16 max_group_tp_rate[MAX_THR_RATES];
 	u16 max_group_prob_rate;
 
-	/* MCS rate statistics */
 	struct minstrel_rate_stats rates[MCS_GROUP_RATES];
 };
 
 struct minstrel_ht_sta {
 	struct ieee80211_sta_aml *sta;
 
-	/* ampdu length (average, per sampling interval) */
 	unsigned int ampdu_len;
 	unsigned int ampdu_packets;
 
-	/* ampdu length (EWMA) */
 	unsigned int avg_ampdu_len;
 
-	/* overall sorted rate set */
 	u16 max_tp_rate[MAX_THR_RATES];
 	u16 max_prob_rate;
 
-	/* time of last status update */
 	unsigned long last_stats_update;
 
-	/* overhead time in usec for each frame */
 	unsigned int overhead;
 	unsigned int overhead_rtscts;
 
 	unsigned int total_packets;
 	unsigned int sample_packets;
 
-	/* tx flags to add for frames for this sta */
 	u32 tx_flags;
 
 	u8 sample_wait;
@@ -250,16 +218,13 @@ struct minstrel_ht_sta {
 	u32 sample_count;
 	u8 sample_slow;
 
-	/* current MCS group to be sampled */
 	u8 sample_group;
 
 	u8 cck_supported;
 	u8 cck_supported_short;
 
-	/* Bitfield of supported MCS rates of all groups */
 	u16 supported[MINSTREL_GROUPS_NB];
 
-	/* MCS rate group info and statistics */
 	struct minstrel_mcs_group_data groups[MINSTREL_GROUPS_NB];
 };
 

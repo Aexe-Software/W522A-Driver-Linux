@@ -1,21 +1,6 @@
-/*
- ****************************************************************************************
- *
- * Copyright (C) Amlogic 2010-2014
- *
- * Project: 11N 80211 mac  layer Software
- *
- * Description:
- *     wifi_mac layer common need include *.h
- *
- *
- ****************************************************************************************
- */
-
 
 #ifndef _NET80211_COMMON_H_
 #define _NET80211_COMMON_H_
-
 
 #include <linux/version.h>
 #include <linux/kmod.h>
@@ -87,4 +72,4 @@ extern const char *wifi_mac_state_name[WIFINET_S_MAX];
                         pr_debug("<%s> %s %d  mac[%s] "_fmt"\n", (_sta)->sta_wnet_vif->vm_ndev->name , __func__, __LINE__, ether_sprintf((_sta)->sta_macaddr),__VA_ARGS__);  \
         } while (0)
 
-#endif //_NET80211_COMMON_H_
+#endif 

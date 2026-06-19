@@ -1,16 +1,3 @@
-/*
- ****************************************************************************************
- *
- * Copyright (C) Amlogic 2015-2018
- *
- * Project: 11N 80211 mac  layer Software
- *
- * Description:
- *     wifi_mac beacon alloc/initial/update module
- *
- *
- ****************************************************************************************
- */
 
 struct sk_buff *_wifi_mac_beacon_alloc(struct wifi_station *sta, struct wifi_mac_beacon_offsets *bo);
 int _wifi_mac_beacon_update(struct wifi_station *sta,            struct wifi_mac_beacon_offsets *bo, struct sk_buff *skb, int mcast);

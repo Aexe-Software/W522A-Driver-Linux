@@ -1,16 +1,4 @@
-/*
- ****************************************************************************************
- *
- * Copyright (C) Amlogic 2010-2014
- *
- * Project: 11N 80211 mac  layer Software
- *
- * Description:
- *     wifi_mac layer nl80211 iocontrol module
- *
- *
- ****************************************************************************************
- */
+
 #include "wifi_hal_com.h"
 #include "wifi_mac_com.h"
 #include "wifi_drv_statistic.h"
@@ -20,7 +8,7 @@
 #include <net/addrconf.h>
 #include "wifi_clock_measure.h"
 #include "rf_d_adda_recv_reg.h"
-#include "wifi_cfg80211_compat.h"  /* compile-time cfg80211 API compat */
+#include "wifi_cfg80211_compat.h"  
 #include "chip_intf_reg.h"
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0)
@@ -38,19 +26,23 @@
 #include "wifi_mac_tx_reg.h"
 #include "wifi_drv_capture.h"
 
-
 #ifdef CONFIG_AML_CFG80211
 
-/** vendor events */
 const struct nl80211_vendor_cmd_info vendor_events[] = {
-	{.vendor_id = AMLOGIC_VENDOR_ID,.subcmd = event_hang,},	/* event_id 0, not used currently*/
-    {.vendor_id = AMLOGIC_VENDOR_ID,.subcmd = event_reg_value,},	/* event_id 1 */
-	/**add vendor event here*/
+	{.vendor_id = AMLOGIC_VENDOR_ID,.subcmd = event_hang,},	
+    {.vendor_id = AMLOGIC_VENDOR_ID,.subcmd = event_reg_value,},	
+	
 };
 
 unsigned long long g_dbg_info_enable = 0;
 unsigned long long g_dbg_modules = 0;
 extern int g_auto_gain_base;
+
+module_param_named(dbg_info, g_dbg_info_enable, ullong, 0644);
+MODULE_PARM_DESC(dbg_info, "Vendor debug-info mask used by cfg80211 private commands");
+
+module_param_named(dbg_modules, g_dbg_modules, ullong, 0644);
+MODULE_PARM_DESC(dbg_modules, "AML_PRINT module mask (0xffffffffffffffff enables all groups)");
 
 static struct device *cfg80211_parent_dev = NULL;
 static const unsigned int aml_cipher_suites[] =
@@ -60,22 +52,11 @@ static const unsigned int aml_cipher_suites[] =
     WLAN_CIPHER_SUITE_TKIP,
     WLAN_CIPHER_SUITE_CCMP,
 #ifdef AML_WPA3
-	/*
-	 * Advertising AES_CMAC cipher suite to userspace would imply that we
-	 * are supporting MFP. So advertise only when MFP support is enabled.
-	 */
+	
 	WLAN_CIPHER_SUITE_AES_CMAC,
-#if 0
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 0, 0))
-	WLAN_CIPHER_SUITE_BIP_GMAC_256,
-	WLAN_CIPHER_SUITE_BIP_GMAC_128,
-	WLAN_CIPHER_SUITE_BIP_CMAC_256,
-#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(4, 0, 0) */
-#endif//hw not support
 #endif
 };
 
-/*Table 31-DPP Public Action Frame Type [easy connect v2.0]*/
 char dpp_pub_action_str[][50] = {
     "Authentication Request",
     "Authentication Response",
@@ -98,11 +79,6 @@ char dpp_pub_action_str[][50] = {
     "PKEX Exchange Request"
 };
 
-/* if wowlan is not supported, kernel generate a disconnect at each suspend
- * cf: /net/wireless/sysfs.c, so register a stub wowlan.
- * Moreover wowlan has to be enabled via a the nl80211_set_wowlan callback.
- * (from user space, e.g. iw phy0 wowlan enable)
- */
 static const struct wiphy_wowlan_support wowlan_stub =
 {
     .flags = WIPHY_WOWLAN_ANY,
@@ -147,7 +123,6 @@ struct ieee80211_channel aml_5ghz_channels[AML_5G_CHANNELS_NUM] =
     CHAN5G(165, 0),
 };
 
-
 struct ieee80211_rate aml_rates[AML_G_RATES_NUM] =
 {
     RATETAB_ENT(10,  0x1,   0),
@@ -177,7 +152,7 @@ vm_cfg80211_default_mgmt_stypes[NUM_NL80211_IFTYPES] =
         BIT(IEEE80211_STYPE_PROBE_REQ >> 4)
 #ifdef AML_WPA3
         | BIT(IEEE80211_STYPE_AUTH >> 4)
-#endif /* WL_CLIENT_SAE */
+#endif 
     },
     [NL80211_IFTYPE_AP] = {
         .tx = 0xffff,
@@ -215,8 +190,6 @@ vm_cfg80211_default_mgmt_stypes[NUM_NL80211_IFTYPES] =
         BIT(IEEE80211_STYPE_ACTION >> 4)
     },
 };
-
-
 
 static void aml_2g_channels_init(struct ieee80211_channel *channels)
 {
@@ -384,15 +357,9 @@ nl80211_iftype_2_drv_opmode(enum nl80211_iftype NL80211_IFTYPE)
         case NL80211_IFTYPE_ADHOC:
             out = WIFINET_M_IBSS;
             break;
-#ifdef      CONFIG_P2P
-        case NL80211_IFTYPE_P2P_CLIENT:
-#endif
         case NL80211_IFTYPE_STATION:
             out = WIFINET_M_STA;
             break;
-#ifdef      CONFIG_P2P
-        case NL80211_IFTYPE_P2P_GO:
-#endif
         case NL80211_IFTYPE_AP:
             out = WIFINET_M_HOSTAP;
             break;
@@ -421,25 +388,11 @@ drv_opmode_2_nl80211_iftype (enum wifi_mac_opmode drv_type,
             out = NL80211_IFTYPE_ADHOC;
             break;
         case WIFINET_M_STA:
-#ifdef  CONFIG_P2P
-            if (NET80211_P2P_ROLE_CLIENT == p2p_role)
-            {
-                out = NL80211_IFTYPE_P2P_CLIENT;
-            }
-            else
-#endif
             {
                 out = NL80211_IFTYPE_STATION;
             }
             break;
         case WIFINET_M_HOSTAP:
-#ifdef  CONFIG_P2P
-            if (NET80211_P2P_ROLE_GO == p2p_role)
-            {
-                out = NL80211_IFTYPE_P2P_GO;
-            }
-            else
-#endif
             {
                 out = NL80211_IFTYPE_AP;
             }
@@ -479,29 +432,6 @@ static unsigned int get_cipher_rsn (unsigned int ecipher)
     }
     return cipher;
 }
-
-#if 0
-static int get_cipher_wpa (unsigned int ecipher)
-{
-    int cipher;
-    switch (ecipher)
-    {
-        case WLAN_CIPHER_SUITE_WEP40:
-        case WLAN_CIPHER_SUITE_WEP104:
-            cipher = WIFINET_CIPHER_WEP;
-            break;
-        case WLAN_CIPHER_SUITE_TKIP:
-            cipher = WIFINET_CIPHER_TKIP;
-            break;
-        case WLAN_CIPHER_SUITE_CCMP:
-            cipher = WIFINET_CIPHER_AES_CCM;
-            break;
-        default:
-            cipher = -ENOTSUPP;
-    }
-    return cipher;
-}
-#endif
 
 int translate_to_dbm(int rssi)
 {
@@ -581,7 +511,7 @@ cfg80211_informbss_cb(void *arg, const struct wifi_scan_info *se)
 
     rssi = 100 * translate_to_dbm(lse->SI_rssi);
     if ((rssi > -2000) || (rssi < -10000)) {
-        //DPRINTF(AML_DEBUG_ERROR, "%s rssi exceeds scope:%d\n", __func__, rssi);
+        
         rssi = -2000;
     }
 
@@ -602,7 +532,6 @@ cfg80211_informbss_cb(void *arg, const struct wifi_scan_info *se)
     pbuf += sizeof(struct wifi_frame);
     len += sizeof (struct wifi_frame);
 
-    //memcpy(pbuf, lse->SI_tstamp.data, sizeof(u_int64_t));     //default to zero
     pbuf += sizeof(u_int64_t);
     len += sizeof(u_int64_t);
 
@@ -705,35 +634,6 @@ cfg80211_informbss_cb(void *arg, const struct wifi_scan_info *se)
         len += ielen;
     }
 
-#ifdef CONFIG_WAPI
-    if (lse->SI_wai_ie[1])
-    {
-        ielen = wifi_mac_copy_ie(pbuf, lse->SI_wai_ie, SCANINFO_IE_DATA_LENGTH);
-        pbuf += ielen;
-        len += ielen;
-    }
-#endif
-#ifdef CONFIG_P2P
-    for (index = 0; index < MAX_P2PIE_NUM; index++)
-    {
-        if (lse->SI_p2p_ie[index][1])
-        {
-            ielen = wifi_mac_copy_ie(pbuf, lse->SI_p2p_ie[index], SCANINFO_IE_DATA_LENGTH);
-            pbuf += ielen;
-            len += ielen;
-            DPRINTF(AML_DEBUG_SCAN, "<%s>: scan %s %s %s,notify_channel = %d,channel %d\n",
-             wnet_vif->vm_ndev->name ,__func__, ssidie_sprintf(lse->SI_ssid), ether_sprintf(lse->SI_macaddr), freq, channel);
-        }
-    }
-#endif//CONFIG_P2P
-#ifdef CONFIG_WFD
-    if (lse->SI_wfd_ie[1])
-    {
-        ielen = wifi_mac_copy_ie(pbuf, lse->SI_wfd_ie, SCANINFO_IE_DATA_LENGTH);
-        pbuf += ielen;
-        len += ielen;
-    }
-#endif//CONFIG_WFD
     if (lse->ie_ext_cap[0] == WIFINET_ELEMID_EXTCAP )
     {
        ielen = wifi_mac_copy_ie(pbuf, lse->ie_ext_cap, SCANINFO_IE_DATA_LENGTH);
@@ -861,7 +761,7 @@ vm_get_wps_ie(unsigned char *in_ie, uint in_len,
         }
         else
         {
-            cnt+=in_ie[cnt+1]+2; //goto next
+            cnt+=in_ie[cnt+1]+2; 
         }
 
     }
@@ -952,35 +852,9 @@ vm_p2p_set_probersp_ie(struct wlan_net_vif *wnet_vif, char *frm, int len)
     struct wifi_mac_app_ie_t *wps_app_ie = &wnet_vif->app_ie[WIFINET_APPIE_FRAME_PROBE_RESP];
     int tmplen = 0;
     unsigned char *tmp = NULL;
-#ifdef CONFIG_WFD
-    unsigned char wfd_ie[WIFINET_MAX_WDF_IE] = {0};
-#endif
-
-#ifdef  CONFIG_P2P
-    const unsigned char *p2p_ie = NULL;
-
-    {
-        struct wifi_mac_app_ie_t *p2p_app_ie = &wnet_vif->vm_p2p->p2p_app_ie[WIFINET_APPIE_FRAME_PROBE_RESP];
-        p2p_ie = vm_get_p2p_ie(frm, len, NULL, &tmplen);
-        wifi_mac_save_app_ie(p2p_app_ie, p2p_ie, tmplen);
-    }
-#endif
 
     tmp = vm_get_wps_ie(frm, len,NULL, &tmplen);
     wifi_mac_save_app_ie(wps_app_ie, tmp, tmplen);
-
-#ifdef CONFIG_WFD
-    {
-        struct wifi_mac_app_ie_t *wfd_app_ie = &wnet_vif->vm_p2p->wfd_app_ie[WIFINET_APPIE_FRAME_PROBE_RESP];
-        tmp = vm_get_wfd_ie(frm, len, NULL, &tmplen);
-
-        if (((tmp == NULL) && (p2p_ie != NULL)) && wnet_vif->vm_p2p->wfd_info.wfd_enable) {
-            tmplen = vm_wfd_add_probersp_ie(wnet_vif->vm_p2p,wfd_ie);
-            tmp = wfd_ie;
-        }
-        wifi_mac_save_app_ie(wfd_app_ie,tmp,tmplen);
-    }
-#endif //CONFIG_WFD
 
     DPRINTF(AML_DEBUG_CFG80211, "%s set_probersp %s wps_ie len %d\n", __func__, tmp, tmplen);
     return ret;
@@ -990,39 +864,7 @@ static int
 vm_p2p_set_probereq_ie(struct wlan_net_vif *wnet_vif, char *frm, int len)
 {
     int ret = 0;
-#ifdef  CONFIG_P2P
-    int tmplen=0;
-    unsigned char * tmp = NULL;
-    const unsigned char * p2p_ie = NULL;
-#endif
 
-#ifdef  CONFIG_P2P
-    {
-        //struct wifi_mac_app_ie_t  *p2p_app_ie=&vmac->vm_p2p->p2p_app_ie[WIFINET_APPIE_FRAME_PROBE_REQ];
-
-        p2p_ie =vm_get_p2p_ie(frm, len,NULL, &tmplen);
-        if (p2p_ie && tmplen)
-        {
-            //DPRINTF(AML_DEBUG_P2P,"%s %d found p2p ie\n", __func__, __LINE__);
-            //vm_change_p2pie_listenchannel(vmac->vm_p2p,p2p_ie,tmplen);
-        }
-    }
-#endif
-#ifdef CONFIG_WFD
-    {
-        struct wifi_mac_app_ie_t *wfd_app_ie = &wnet_vif->vm_p2p->wfd_app_ie[WIFINET_APPIE_FRAME_PROBE_REQ];
-        unsigned char wfd_ie[WIFINET_MAX_WDF_IE]= {0};
-        tmp =vm_get_wfd_ie(frm, len,NULL, &tmplen);
-
-        if (((tmp == NULL) && (p2p_ie != NULL))
-            && (wnet_vif->vm_p2p->wfd_info.wfd_enable==true))
-        {
-            tmplen=vm_wfd_add_probereq_ie(wnet_vif->vm_p2p,wfd_ie);
-            tmp = wfd_ie;
-        }
-        wifi_mac_save_app_ie(wfd_app_ie,tmp,tmplen);
-    }
-#endif //CONFIG_WFD
     return ret;
 
 }
@@ -1033,41 +875,12 @@ vm_p2p_set_assocrsp_ie(struct wlan_net_vif *wnet_vif, char *frm, int len)
     int ret = 0;
     struct wifi_mac_app_ie_t *wps_app_ie=&wnet_vif->app_ie[WIFINET_APPIE_FRAME_ASSOC_RESP];
     int tmplen=0;
-#ifdef  CONFIG_P2P
-    const unsigned char * p2p_ie = NULL;
-#endif
 
     unsigned char * tmp = NULL;
     AML_PRINT(AML_DBG_MODULES_P2P, "++ len=%d\n", len);
 
-#ifdef  CONFIG_P2P
-    {
-        struct wifi_mac_app_ie_t *p2p_app_ie = &wnet_vif->vm_p2p->p2p_app_ie[WIFINET_APPIE_FRAME_ASSOC_RESP];
-        p2p_ie =vm_get_p2p_ie(frm, len,NULL, &tmplen);
-        wifi_mac_save_app_ie(p2p_app_ie,p2p_ie,tmplen);
-#if 1
-        if (p2p_ie && tmplen && (WIFINET_M_HOSTAP == wnet_vif->vm_opmode))
-        {
-            AML_PRINT(AML_DBG_MODULES_P2P, " found p2p ie vm_opmode %d\n",  wnet_vif->vm_opmode);
-        }
-#endif
-    }
-#endif
     tmp =vm_get_wps_ie(frm, len,NULL, &tmplen);
     wifi_mac_save_app_ie(wps_app_ie,tmp,tmplen);
-#ifdef CONFIG_WFD
-    {
-        struct wifi_mac_app_ie_t *wfd_app_ie = &wnet_vif->vm_p2p->wfd_app_ie[WIFINET_APPIE_FRAME_ASSOC_RESP];
-        unsigned char wfd_ie[WIFINET_MAX_WDF_IE]= {0};
-        tmp =vm_get_wfd_ie(frm, len,NULL, &tmplen);
-        if (((tmp == NULL)&&(p2p_ie != NULL))&&(wnet_vif->vm_p2p->wfd_info.wfd_enable==true))
-        {
-            tmplen=vm_wfd_add_assocrsp_ie(wnet_vif->vm_p2p,wfd_ie);
-            tmp = wfd_ie;
-        }
-        wifi_mac_save_app_ie(wfd_app_ie,tmp,tmplen);
-    }
-#endif //CONFIG_WFD
     return ret;
 
 }
@@ -1076,163 +889,22 @@ static int
 vm_p2p_set_assocreq_ie(struct wlan_net_vif *wnet_vif, char *frm, int len)
 {
     int ret = 0;
-#ifdef  CONFIG_P2P
-    int tmplen=0;
-    unsigned char * tmp = NULL;
-    const unsigned char * p2p_ie = NULL;
-#endif
 
-#ifdef  CONFIG_P2P
-    {
-        p2p_ie =vm_get_p2p_ie(frm, len,NULL, &tmplen);
-#if 1
-        if (p2p_ie && tmplen && (WIFINET_M_HOSTAP == wnet_vif->vm_opmode))
-        {
-           AML_PRINT(AML_DBG_MODULES_P2P, "found p2p ie\n");
-        }
-#endif
-    }
-#endif
-
-#ifdef CONFIG_WFD
-    {
-        struct wifi_mac_app_ie_t  *wfd_app_ie=&wnet_vif->vm_p2p->wfd_app_ie[WIFINET_APPIE_FRAME_ASSOC_REQ];
-        unsigned char wfd_ie[WIFINET_MAX_WDF_IE]= {0};
-        tmp =vm_get_wfd_ie(frm, len,NULL, &tmplen);
-        if (((tmp == NULL)&&(p2p_ie != NULL))&&(wnet_vif->vm_p2p->wfd_info.wfd_enable==true))
-        {
-            tmplen=vm_wfd_add_assocreq_ie(wnet_vif->vm_p2p,wfd_ie);
-            tmp = wfd_ie;
-            wifi_mac_save_app_ie(wfd_app_ie,tmp,tmplen);
-        }
-    }
-#endif //#ifdef CONFIG_WFD
     return ret;
 
 }
 
 int vm_p2p_update_beacon_app_ie (struct wlan_net_vif *wnet_vif)
 {
-#ifndef CONFIG_P2P
     return 0;
-#else
-    struct wifi_mac_app_ie_t  *beacon_app_ie=&(wnet_vif->app_ie[WIFINET_APPIE_FRAME_BEACON]);
-    int total_beacon_app_ie_len = 0;
-    void * ie=NULL, *ptr=NULL;
-
-#ifdef  CONFIG_P2P
-    total_beacon_app_ie_len += wnet_vif->vm_p2p->p2p_app_ie[WIFINET_APPIE_FRAME_BEACON].length;
-    total_beacon_app_ie_len += wnet_vif->vm_p2p->noa_app_ie[WIFINET_APPIE_FRAME_BEACON].length;
-    total_beacon_app_ie_len += wnet_vif->vm_p2p->wps_beacon_ie.length;
-#endif
-
-#ifdef CONFIG_WFD
-    total_beacon_app_ie_len += wnet_vif->vm_p2p->wfd_app_ie[WIFINET_APPIE_FRAME_BEACON].length;
-#endif
-    if (!total_beacon_app_ie_len)
-    {
-        DPRINTF(AML_DEBUG_ERROR,"%s %d total_beacon_app_ie_len=%d\n",
-                __func__, __LINE__, total_beacon_app_ie_len);
-        return -1;
-    }
-
-    wifi_mac_rm_app_ie(beacon_app_ie);
-
-    ie = NET_MALLOC(total_beacon_app_ie_len, GFP_ATOMIC, "vm_p2p_update_beacon_app_ie.ie");
-    if (ie == NULL)
-    {
-        DPRINTF(AML_DEBUG_ERROR,"%s %d no mem\n", __func__, __LINE__);
-        return -ENOMEM;
-    }
-    ptr = ie;
-    if (wnet_vif->vm_p2p->wps_beacon_ie.length)
-    {
-        memcpy(ptr, wnet_vif->vm_p2p->wps_beacon_ie.ie,
-               wnet_vif->vm_p2p->wps_beacon_ie.length);
-        ptr += wnet_vif->vm_p2p->wps_beacon_ie.length;
-    }
-
-#ifdef CONFIG_WFD
-    if (wnet_vif->vm_p2p->wfd_app_ie[WIFINET_APPIE_FRAME_BEACON].length)
-    {
-        memcpy(ptr, wnet_vif->vm_p2p->wfd_app_ie[WIFINET_APPIE_FRAME_BEACON].ie,
-               wnet_vif->vm_p2p->wfd_app_ie[WIFINET_APPIE_FRAME_BEACON].length);
-        ptr += wnet_vif->vm_p2p->wfd_app_ie[WIFINET_APPIE_FRAME_BEACON].length;
-    }
-#endif
-
-#ifdef  CONFIG_P2P
-    if (wnet_vif->vm_p2p->p2p_app_ie[WIFINET_APPIE_FRAME_BEACON].length)
-    {
-        memcpy(ptr, wnet_vif->vm_p2p->p2p_app_ie[WIFINET_APPIE_FRAME_BEACON].ie,
-               wnet_vif->vm_p2p->p2p_app_ie[WIFINET_APPIE_FRAME_BEACON].length);
-        ptr += wnet_vif->vm_p2p->p2p_app_ie[WIFINET_APPIE_FRAME_BEACON].length;
-    }
-    if (wnet_vif->vm_p2p->noa_app_ie[WIFINET_APPIE_FRAME_BEACON].length)
-    {
-        memcpy(ptr, wnet_vif->vm_p2p->noa_app_ie[WIFINET_APPIE_FRAME_BEACON].ie,
-               wnet_vif->vm_p2p->noa_app_ie[WIFINET_APPIE_FRAME_BEACON].length);
-        ptr += wnet_vif->vm_p2p->noa_app_ie[WIFINET_APPIE_FRAME_BEACON].length;
-    }
-
-#endif
-
-    beacon_app_ie->ie = ie;
-    beacon_app_ie->length = total_beacon_app_ie_len;
-
-    wnet_vif->vm_flags_ext |= WIFINET_FEXT_APPIE_UPDATE;
-    return 0;
-#endif
 }
 
 static int
 vm_p2p_set_beacon_ie(struct wlan_net_vif *wnet_vif, char *frm, int len)
 {
     int ret = 0;
-#ifdef  CONFIG_P2P
-    int tmplen=0;
-    unsigned char * tmp = NULL;
-    const unsigned char * p2p_ie = NULL;
-#endif
     DPRINTF(AML_DEBUG_SCAN,"%s ++\n", __func__);
-#ifdef  CONFIG_P2P
-    {
-        struct wifi_mac_app_ie_t *p2p_app_ie =
-            &wnet_vif->vm_p2p->p2p_app_ie[WIFINET_APPIE_FRAME_BEACON];
 
-        p2p_ie =vm_get_p2p_ie(frm, len,NULL, &tmplen);
-#if 1
-        if (p2p_ie && tmplen && (WIFINET_M_HOSTAP == wnet_vif->vm_opmode))
-        {
-            AML_PRINT(AML_DBG_MODULES_P2P, "found p2p ie\n");
-        }
-#endif
-        wifi_mac_save_app_ie(p2p_app_ie, p2p_ie, tmplen);
-    }
-    {
-        struct wifi_mac_app_ie_t  *wps_app_ie=&wnet_vif->vm_p2p->wps_beacon_ie;
-
-        tmp =vm_get_wps_ie(frm, len,NULL, &tmplen);
-        wifi_mac_save_app_ie(wps_app_ie,tmp,tmplen);
-    }
-#endif
-
-#ifdef CONFIG_WFD
-    {
-        struct wifi_mac_app_ie_t *wfd_app_ie =
-            &wnet_vif->vm_p2p->wfd_app_ie[WIFINET_APPIE_FRAME_BEACON];
-        unsigned char wfd_ie[WIFINET_MAX_WDF_IE] = {0};
-        p2p_ie =vm_get_p2p_ie(frm, len,NULL, &tmplen);
-        tmp =vm_get_wfd_ie(frm, len,NULL, &tmplen);
-        if (((tmp == NULL) && (p2p_ie != NULL))
-            && (wnet_vif->vm_p2p->wfd_info.wfd_enable == true))
-        {
-            tmplen=vm_wfd_add_beacon_ie(wnet_vif->vm_p2p,wfd_ie);
-            tmp = wfd_ie;
-        }
-        wifi_mac_save_app_ie(wfd_app_ie,tmp,tmplen);
-    }
-#endif //#ifdef CONFIG_WFD
     ret = vm_p2p_update_beacon_app_ie(wnet_vif);
     return ret;
 }
@@ -1277,12 +949,9 @@ int vm_p2p_set_wpsp2pie(struct net_device *dev, char *frm, int len, int type)
 int vm_p2p_set_p2p_noa(struct net_device *dev, char* buf, int len)
 {
     struct wlan_net_vif *wnet_vif = netdev_priv(dev);
-    // struct p2p_noa        *p_noa = NULL;
+    
     int ret = -1;
     int count, start, duration;
-#ifdef  CONFIG_P2P
-    struct wireless_dev *pwdev = wnet_vif->vm_wdev;
-#endif
 
     if (buf == NULL) {
         return 0;
@@ -1292,7 +961,7 @@ int vm_p2p_set_p2p_noa(struct net_device *dev, char* buf, int len)
     if (buf && len && (WIFINET_M_HOSTAP == wnet_vif->vm_opmode))
     {
         AML_PRINT(AML_DBG_MODULES_P2P, "len=%d\n", len);
-        //dump_memory_internal(buf, len);
+        
     }
 #endif
 
@@ -1300,129 +969,18 @@ int vm_p2p_set_p2p_noa(struct net_device *dev, char* buf, int len)
     AML_PRINT(AML_DBG_MODULES_P2P, "<%s> count=%d start=%d duration=%d\n",
         dev->name, count, start, duration);
 
-#ifdef  CONFIG_P2P
-    if (pwdev->iftype == NL80211_IFTYPE_P2P_GO)
-    {
-        struct p2p_noa noa = {0};
-        do
-        {
-            if ((count < 0) || (start < 0) || (duration < 0)
-                || (count > NET80211_P2P_SCHED_REPEAT))
-            {
-                ERROR_DEBUG_OUT("illegal setting for count=%d start=%d duration=%d\n",
-                    count, start, duration);
-                break;
-            }
-
-            if ((count==NET80211_P2P_SCHED_RSVD) && (duration>0))
-            {
-                ERROR_DEBUG_OUT("illegal setting for count=%d duration=%d\n",
-                    count, duration);
-                break;
-            }
-
-            if ((count==NET80211_P2P_SCHED_RSVD) || (duration==0))
-            {
-                noa.count = 0;
-                noa.interval = 0;
-                noa.duration = 0;
-                noa.start = 0;
-            }
-            else
-            {
-                noa.count = count;
-                noa.duration = duration*1000;
-                noa.interval = start*1000;
-            }
-            wnet_vif->vm_p2p->noa_index ++;
-            vm_p2p_noa_start(wnet_vif->vm_p2p, &noa);
-            ret = vm_p2p_update_noa_ie(wnet_vif->vm_p2p);
-        }
-        while (0);
-    }
-    else
-    {
-        ERROR_DEBUG_OUT("not supported, iftype=%d\n", pwdev->iftype);
-    }
-#endif
-
     return ret;
 }
 
 int vm_p2p_set_p2p_ps(struct net_device *dev, char* buf, int len)
 {
     struct wlan_net_vif *wnet_vif = netdev_priv(dev);
-#ifdef  CONFIG_P2P
-    struct wireless_dev *pwdev = wnet_vif->vm_wdev;
-    static union type_ctw_opps_u ctw_opps_u;
-#endif
     int ret = -1;
     int legacy_ps, opps, ctw;
 
     sscanf(buf, "%d %d %d", &legacy_ps, &opps, &ctw);
     AML_PRINT(AML_DBG_MODULES_P2P, "<%s> legacy_ps %d opps %d ctw %d\n",
              dev->name, legacy_ps, opps, ctw);
-
-#ifdef  CONFIG_P2P
-    if (pwdev->iftype == NL80211_IFTYPE_P2P_GO)
-    {
-        memset(&ctw_opps_u,0,sizeof(union type_ctw_opps_u));
-        if (ctw != -1)
-        {
-            if (ctw <= 0x7f){
-                ctw_opps_u.ctw_opps_s.ctw = ctw;
-                if(wnet_vif->vm_p2p->ctw_opps_u.ctw_opps_s.ctw != ctw_opps_u.ctw_opps_s.ctw)
-                    wnet_vif->vm_p2p->ctw_opps_u.ctw_opps_s.ctw = ctw_opps_u.ctw_opps_s.ctw;
-            }
-            else
-                ERROR_DEBUG_OUT("illegal setting for ctw=%d\n", ctw);
-        }
-
-        if (opps != -1)
-        {
-            do
-            {
-                if ((opps != 0) && (opps != 1))
-                {
-                    ERROR_DEBUG_OUT("opps=%d not support\n", opps);
-                    break;
-                }
-
-                if ((opps == 1) && (!wnet_vif->vm_p2p->ctw_opps_u.ctw_opps_s.ctw))
-                {
-                    ERROR_DEBUG_OUT( "ctw=%d need to set\n", ctw);
-                    break;
-                }
-
-                ctw_opps_u.ctw_opps_s.opps = opps;
-                ctw_opps_u.ctw_opps_s.ctw = wnet_vif->vm_p2p->ctw_opps_u.ctw_opps_s.ctw;
-                wnet_vif->vm_p2p->noa_index ++;
-                vm_p2p_opps_start(wnet_vif->vm_p2p, &ctw_opps_u);
-                ret = vm_p2p_update_noa_ie(wnet_vif->vm_p2p);
-            }
-            while (0);
-        }
-
-        switch (legacy_ps)
-        {
-            case PM_OFF:
-                wifi_mac_pwrsave_set_mode(wnet_vif, WIFINET_PWRSAVE_NONE);
-                break;
-            case PM_MAX:
-                wifi_mac_pwrsave_set_mode(wnet_vif, WIFINET_PWRSAVE_NORMAL);
-                break;
-            case -1:
-                break;
-            default:
-               ERROR_DEBUG_OUT("illegal setting for legacy_ps=%d\n", legacy_ps);
-                break;
-        }
-    }
-    else
-    {
-         ERROR_DEBUG_OUT("not supported, iftype=%d\n", pwdev->iftype);
-    }
-#endif
 
     return ret;
 }
@@ -1455,9 +1013,6 @@ vm_cfg80211_indicate_scan_done(struct vm_wdev_priv *pwdev_priv,
         };
     #endif
 
-    /* H-8 FIX: acquire lock BEFORE reading scan_request to prevent TOCTOU race.
-     * Previously: read outside lock, check, then lock → another thread could free
-     * scan_request between read and lock → use-after-free in cfg80211_scan_done(). */
     OS_SPIN_LOCK(&pwdev_priv->scan_req_lock);
     scan_request = pwdev_priv->scan_request;
     if (scan_request != NULL)
@@ -1486,16 +1041,10 @@ vm_cfg80211_indicate_scan_done(struct vm_wdev_priv *pwdev_priv,
 
         DPRINTF(AML_DEBUG_SCAN,"%s <%s> scan_request=%p\n", __func__, pwdev_priv->wnet_vif->vm_ndev->name, scan_request);
 
-#ifdef  CONFIG_P2P
-        if (pwdev_priv->wnet_vif->vm_p2p_support)
-        {
-            vm_p2p_scanend(&(pwdev_priv->p2p));
-        }
-#endif
     }
     else
     {
-        OS_SPIN_UNLOCK(&pwdev_priv->scan_req_lock); /* H-8 FIX: unlock on NULL path too */
+        OS_SPIN_UNLOCK(&pwdev_priv->scan_req_lock); 
     }
 
     return;
@@ -1530,9 +1079,6 @@ void vm_cfg80211_indicate_connect(struct wlan_net_vif *wnet_vif)
     DPRINTF(AML_DEBUG_CFG80211, "%s %d <%s>\n", __func__, __LINE__, VMAC_DEV_NAME(wnet_vif));
 
     if ((pwdev->iftype != NL80211_IFTYPE_STATION)
-#ifdef  CONFIG_P2P
-       && (pwdev->iftype != NL80211_IFTYPE_P2P_CLIENT)
-#endif       //CONFIG_P2P
       )
     {
         DPRINTF(AML_DEBUG_CFG80211, "%s %d ERROR type=%d wnet_vif->vm_opmode = %d\n",
@@ -1645,9 +1191,6 @@ void vm_cfg80211_indicate_disconnect(struct wlan_net_vif *wnet_vif)
     DPRINTF(AML_DEBUG_CFG80211, "%s %d <%s>\n", __func__, __LINE__, VMAC_DEV_NAME(wnet_vif));
 
     if ((pwdev->iftype != NL80211_IFTYPE_STATION)
-#ifdef CONFIG_P2P
-        && (pwdev->iftype != NL80211_IFTYPE_P2P_CLIENT)
-#endif
        )
     {
         DPRINTF(AML_DEBUG_ERROR, "%s %d ERROR type=%d\n", __func__, __LINE__, pwdev->iftype);
@@ -1702,12 +1245,7 @@ void vm_cfg80211_indicate_sta_assoc(const struct wifi_station *sta)
     int index = 0;
     DPRINTF(AML_DEBUG_CFG80211, "%s %d <%s>\n", __func__, __LINE__, VMAC_DEV_NAME(wnet_vif));
     memset(&sinfo, 0, sizeof(struct station_info));
-    //sinfo.generation = 0;
-    //sinfo.filled = 0;
-    //sinfo.signal = 0;
-
-    //sinfo.assoc_req_ies = NULL;   //not ready for kernel=2.6.34
-    //sinfo.assoc_req_ies_len = 0;  //not ready for kernel=2.6.34
+    
 #ifndef KERNEL_VERSION_SPECIFIC_AML_ICS_308
     buf = ZMALLOC(AML_SCAN_IE_LEN_MAX,"buf", GFP_ATOMIC);
     if (!buf)
@@ -1717,7 +1255,7 @@ void vm_cfg80211_indicate_sta_assoc(const struct wifi_station *sta)
     }
 
     #if LINUX_VERSION_CODE > KERNEL_VERSION(3,14,29)
-        //sinfo.filled |= STATION_INFO_ASSOC_REQ_IES;
+        
     #else
         sinfo.filled |= STATION_INFO_ASSOC_REQ_IES;
     #endif
@@ -1752,44 +1290,11 @@ void vm_cfg80211_indicate_sta_assoc(const struct wifi_station *sta)
         pbuf += ielen;
         len += ielen;
     }
-#ifdef CONFIG_P2P
-    for (index = 0; index < MAX_P2PIE_NUM; index++)
-    {
-        if (sta->sta_p2p_ie[index])
-        {
-            DPRINTF(AML_DEBUG_CFG80211, "%s %d cp sta_p2p_ie\n", __func__, __LINE__);
-            ielen = wifi_mac_copy_ie(pbuf, sta->sta_p2p_ie[index], SCANINFO_IE_DATA_LENGTH);
-            pbuf += ielen;
-            len += ielen;
-        }
-    }
-#endif//CONFIG_P2P
-#ifdef CONFIG_WFD
-    if (sta->sta_wfd_ie)
-    {
-        DPRINTF(AML_DEBUG_CFG80211, "%s %d cp sta_p2p_ie\n", __func__, __LINE__);
-        ielen = wifi_mac_copy_ie(pbuf, sta->sta_wfd_ie, SCANINFO_IE_DATA_LENGTH);
-        pbuf += ielen;
-        len += ielen;
-    }
-#endif//CONFIG_WFD
-#ifdef CONFIG_WAPI
-    if (sta->sta_wai_ie)
-    {
-        DPRINTF(AML_DEBUG_CFG80211, "%s %d cp sta_wai_ie\n", __func__, __LINE__);
-        ielen = wifi_mac_copy_ie(pbuf, sta->sta_wai_ie, SCANINFO_IE_DATA_LENGTH);
-        pbuf += ielen;
-        len += ielen;
-    }
-#endif
     sinfo.assoc_req_ies = buf;
     sinfo.assoc_req_ies_len = len;
 #endif
 	exit:
     cfg80211_new_sta(dev, sta->sta_macaddr, &sinfo, GFP_ATOMIC);
-
-    //not ready for kernel=2.6.34
-    //cfg80211_rx_mgmt(dev, freq, buf, len, gfp);
 
     FREE(buf,"buf");
     DPRINTF(AML_DEBUG_CFG80211, "%s %d\n", __func__, __LINE__);
@@ -1856,9 +1361,7 @@ static struct wireless_dev * vm_cfg80211_add_vif(struct wiphy *wiphy,
         case NL80211_IFTYPE_P2P_GO:
             DPRINTF(AML_DEBUG_CFG80211,
                 "<%s>: %s %d %s\n", wnet_vif->vm_ndev->name,__func__, __LINE__,name);
-            //ndev = wifimac->wm_p2p_vmac;
-            //p2p-p2p0-1
-            // wifimac->wm_nops.wm_vmac_create(wifimac, name, 2,  nl80211_iftype_2_drv_opmode(type),  NULL);
+            
             ndev = vm_cfg80211_add_p2p_go_if(wnet_vif,name,type);
             if (ndev)
             {
@@ -1907,9 +1410,6 @@ vm_cfg80211_del_vif(struct wiphy *wiphy,
         }
         if (ndev == pwdev_priv->pGo_ndev)
         {
-#ifdef NEW_WIPHY
-            wiphy_free(pwdev_priv->pGo_wdev->wiphy);
-#endif//NEW_WIPHY
             FREE((unsigned char*)pwdev_priv->pGo_wdev,pwdev_priv->ifname_go);
             DPRINTF(AML_DEBUG_CFG80211, "%s remove pGo_ndev interface \n", __func__);
             pwdev_priv->pGo_ndev =  NULL;
@@ -1982,12 +1482,6 @@ vm_cfg80211_change_vif(struct wiphy *wiphy,
         goto exit;
     }
 
-#ifdef CONFIG_P2P
-    if (type == NL80211_IFTYPE_AP) {
-        wnet_vif->vm_p2p_support = 0;
-    }
-#endif
-
     pwdev->iftype = type;
     ndev->ieee80211_ptr->iftype = type;
 
@@ -1998,27 +1492,6 @@ vm_cfg80211_change_vif(struct wiphy *wiphy,
         return  ret;
     }
 
-    /* v15j: keep ndev->type in sync with iftype on the primary vif.
-     *
-     * Stock driver leaves ndev->type = ARPHRD_ETHER even when iftype is
-     * NL80211_IFTYPE_MONITOR, which means:
-     *   - tcpdump on w522a reports `EN10MB (Ethernet)` instead of
-     *     `IEEE802_11_RADIOTAP`, so it can never see 802.11 frames;
-     *   - aireplay-ng / mdk4 / wifite refuse to open the device for
-     *     injection (they check the ARPHRD via osdep_linux to confirm
-     *     monitor mode).
-     *
-     * Switching the netdev hwtype field is only safe while the iface
-     * is down -- which it always is at this point because iw / nl80211
-     * userspace requires the link to be down before .change_virtual_intf
-     * is dispatched (CAP_NET_ADMIN check in net/wireless/nl80211.c).
-     * We still gate with netif_running() defensively.
-     *
-     * The matching ndo_start_xmit fast-path lives in
-     * wifi_mac_xmit.c::wifi_mac_hardstart and routes radiotap-prefixed
-     * frames through wifi_mac_inject_radiotap() -> vm_cfg80211_send_mgmt
-     * -> firmware drv_ops.tx_start.
-     */
     if (!netif_running(ndev)) {
         if (type == NL80211_IFTYPE_MONITOR) {
             if (ndev->type != ARPHRD_IEEE80211_RADIOTAP) {
@@ -2042,24 +1515,8 @@ vm_cfg80211_change_vif(struct wiphy *wiphy,
     }
 
     oldnetworkType = wnet_vif->vm_opmode;
-#ifdef CONFIG_P2P
-    DPRINTF(AML_DEBUG_CFG80211, "%s %d old opmode=%d, new opmode=%d, p2p support %d\n",
-            __func__, __LINE__, oldnetworkType, networkType, wnet_vif->vm_p2p_support);
-#else
     DPRINTF(AML_DEBUG_CFG80211, "%s %d old opmode=%d, new opmode=%d, p2p support 0\n",
             __func__, __LINE__, oldnetworkType, networkType);
-#endif
-
-#ifdef  CONFIG_P2P
-    if (wnet_vif->vm_p2p_support)
-    {
-        DPRINTF(AML_DEBUG_CFG80211, "%s %d old p2p_role=%d\n",
-            __func__, __LINE__, vm_p2p_role(wnet_vif->vm_p2p));
-        vm_p2p_set_role(wnet_vif->vm_p2p, NL80211_IFTYPE_2_p2p_role(type));
-        DPRINTF(AML_DEBUG_CFG80211, "%s %d new p2p_role=%d\n",
-            __func__, __LINE__, vm_p2p_role(wnet_vif->vm_p2p));
-    }
-#endif
 
     chan_dbg(wnet_vif->vm_wmac->wm_curchan, "x1", 1800);
 
@@ -2120,7 +1577,6 @@ vm_cfg80211_scan(struct wiphy *wiphy, struct cfg80211_scan_request *request)
         ndev->name, __func__, wnet_vif->vm_opmode, wnet_vif->vm_state, wnet_vif->vm_mainsta->connect_status,
         nssids, wifimac->recovery_stat, wnet_vif->vm_phase_flags, wifimac->wm_flags, wifimac->wm_scan->scan_CfgFlags);
 
-
     if (wnet_vif->vm_opmode == WIFINET_M_STA) {
         if ((wnet_vif->vm_phase_flags & PHASE_DISCONNECTING)
             || (wifimac->recovery_stat != WIFINET_RECOVERY_END)
@@ -2136,48 +1592,47 @@ vm_cfg80211_scan(struct wiphy *wiphy, struct cfg80211_scan_request *request)
             wifi_mac_notify_scan_done(wnet_vif);
             return 0;
         }
+
+        if (wnet_vif->vm_state == WIFINET_S_CONNECTED) {
+            
+            pr_info_ratelimited("W522A: cfg80211 scan: complete-without-radio on connected STA vid=%d\n",
+                wnet_vif->wnet_vif_id);
+
+            OS_SPIN_LOCK(&pwdev_priv->scan_req_lock);
+            if (pwdev_priv->scan_request == NULL) {
+                pwdev_priv->scan_request = request;
+            }
+            OS_SPIN_UNLOCK(&pwdev_priv->scan_req_lock);
+
+            wifi_mac_notify_scan_done(wnet_vif);
+            return 0;
+        }
     }
 
     if (wnet_vif->vm_opmode == WIFINET_M_HOSTAP) {
-        pr_info("v15f scan: reject on HOSTAP vif vid=%d state=%d\n",
+        
+        if (wnet_vif->vm_state == WIFINET_S_CONNECTED) {
+            pr_info("W522A: scan: reject on running HOSTAP vif vid=%d state=%d\n",
+                wnet_vif->wnet_vif_id, wnet_vif->vm_state);
+
+            OS_SPIN_LOCK(&pwdev_priv->scan_req_lock);
+            if (pwdev_priv->scan_request == NULL) {
+                pwdev_priv->scan_request = request;
+            }
+            OS_SPIN_UNLOCK(&pwdev_priv->scan_req_lock);
+
+            wifi_mac_notify_scan_done(wnet_vif);
+            return 0;
+        }
+        pr_info("W522A: scan: allow on HOSTAP vif vid=%d state=%d (pre-bringup)\n",
             wnet_vif->wnet_vif_id, wnet_vif->vm_state);
-
-        OS_SPIN_LOCK(&pwdev_priv->scan_req_lock);
-        if (pwdev_priv->scan_request == NULL) {
-            pwdev_priv->scan_request = request;
-        }
-        OS_SPIN_UNLOCK(&pwdev_priv->scan_req_lock);
-
-        wifi_mac_notify_scan_done(wnet_vif);
-        return 0;
     }
-
-#ifdef CONFIG_P2P
-    /*in order to p2p handshark protect from station scanning */
-    if ((wnet_vif->vm_p2p_support == 0) && wifimac->wm_p2p_connection_protect) {
-        if (time_after(jiffies, wifimac->wm_p2p_connection_protect_period)) {
-            wifimac->wm_p2p_connection_protect = 0;
-
-        } else {
-            ERROR_DEBUG_OUT("rejected scan due to p2p negotiation\n");
-            return -EINVAL;
-        }
-    }
-
-    if ((atomic_read(&wifimac->wm_nrunning) == 1) && (wifimac->is_miracast_connect == 1) &&
-        (drv_priv->drv_wnet_vif_table[NET80211_P2P_VMAC] != NULL) &&
-        (drv_priv->drv_wnet_vif_table[NET80211_P2P_VMAC]->vm_state == WIFINET_S_CONNECTED)) {
-        DPRINTF(AML_DEBUG_WARNING, "rejected wlan0 scan due to is_miracast_connect\n");
-        return -EINVAL;
-    }
-#endif
 
     if (wifimac->wm_flags & WIFINET_F_CHANSWITCH) {
         DPRINTF(AML_DEBUG_WARNING, "%s(%d), rejected wlan0 scan due to channel switch\n",__func__,__LINE__);
         return -EINVAL;
     }
 
-    /*need thinking more, maybe there are bugs happen*/
     if (IS_APSTA_CONCURRENT(aml_wifi_get_con_mode()) && (atomic_read(&wifimac->wm_nrunning) == 2) &&
         !concurrent_check_is_vmac_same_pri_channel(wifimac)) {
       DPRINTF(AML_DEBUG_WARNING, "%s(%d), rejected wlan0 scan due to softap working\n",__func__,__LINE__);
@@ -2213,9 +1668,6 @@ vm_cfg80211_scan(struct wiphy *wiphy, struct cfg80211_scan_request *request)
 
     if (request->ie && (request->ie_len > 0)) {
         DPRINTF(AML_DEBUG_SCAN,"%s %d ie_len=%zd\n", __func__, __LINE__, request->ie_len);
-#ifdef  CONFIG_P2P
-        vm_change_p2pie_listenchannel(wnet_vif->vm_p2p,request->ie, request->ie_len);
-#endif
         wifi_mac_save_app_ie(probereq_app_ie, (unsigned char *)request->ie, request->ie_len);
 
     } else {
@@ -2242,13 +1694,6 @@ vm_cfg80211_scan(struct wiphy *wiphy, struct cfg80211_scan_request *request)
         lssidlen += ssids[i].ssid_len;
     }
 
-#ifdef CONFIG_P2P
-    if (wnet_vif->vm_p2p_support)
-    {
-        vm_p2p_scanstart(wiphy, ndev, request);
-        concurrent_channel_protection(wnet_vif, 1000);
-    }
-#endif //CONFIG_P2P
     DPRINTF(AML_DEBUG_CFG80211, "%s lnssids %d, lssidlen %d, n_channels:%d\n", __func__, lnssids, lssidlen, request->n_channels);
 
     if(wnet_vif->vm_state == WIFINET_S_INIT){
@@ -2263,19 +1708,8 @@ vm_cfg80211_scan(struct wiphy *wiphy, struct cfg80211_scan_request *request)
     }
     else
     {
-#ifdef CONFIG_P2P
-        if (wnet_vif->vm_p2p_support) {
-            vm_scan_user_set_chan(wnet_vif, request);
-            ret_startscan =  wifi_mac_start_scan(wnet_vif, WIFINET_SCANCFG_CHANSET | WIFINET_SCANCFG_ACTIVE
-                | WIFINET_SCANCFG_NOPICK | WIFINET_SCANCFG_USERREQ| WIFINET_SCANCFG_FLUSH, lnssids, lssids);
-
-        } else {
-#endif
             ret_startscan =  wifi_mac_start_scan(wnet_vif, WIFINET_SCANCFG_ACTIVE | WIFINET_SCANCFG_NOPICK
                 | WIFINET_SCANCFG_USERREQ | WIFINET_SCANCFG_FLUSH, 0, wnet_vif->vm_des_ssid);
-#ifdef CONFIG_P2P
-        }
-#endif
     }
 
     if (ret_startscan == 0)
@@ -2337,7 +1771,6 @@ static int vm_cfg80211_set_wiphy_params(struct wiphy *wiphy, unsigned int change
     return 0;
 }
 
-//for update channel params
 static int
 vm_cfg80211_update_wiphy_params(struct wiphy *wiphy)
 {
@@ -2357,10 +1790,8 @@ vm_cfg80211_update_wiphy_params(struct wiphy *wiphy)
         ERROR_DEBUG_OUT("chandef->chan NULL\n");
         return -1;
     } else {
-        //TODO
+        
     }
-
-    //chan_dbg(wnet_vif->vm_wmac->wm_curchan, "x2", 2084);
 
     return 0;
 }
@@ -2373,7 +1804,6 @@ vm_cfg80211_join_ibss(struct wiphy *wiphy,
     struct wlan_net_vif *wnet_vif = wiphy_to_adapter(wiphy);
     struct ieee80211_channel *chan;
 
-
     DPRINTF(AML_DEBUG_CFG80211, "<%s>:<%s>  %s++ %d\n",
             wnet_vif->vm_ndev->name,dev->name, __func__, __LINE__);
 
@@ -2383,7 +1813,6 @@ vm_cfg80211_join_ibss(struct wiphy *wiphy,
         return -EOPNOTSUPP;
     }
     chan = params->chandef.chan;
-
 
     if (chan && chan->center_freq)
     {
@@ -2446,7 +1875,6 @@ vm_cfg80211_leave_ibss(struct wiphy *wiphy, struct net_device *dev)
     return 0;
 }
 
-
 static int
 vm_cfg80211_set_tx_power(struct wiphy *wiphy,
     struct wireless_dev *wdev,
@@ -2476,7 +1904,7 @@ vm_cfg80211_set_tx_power(struct wiphy *wiphy,
         return -EINVAL;
     }
 
-    txpower_dbm = clamp_t(unsigned int, txpower_dbm, 1, 30);
+    txpower_dbm = clamp_t(unsigned int, txpower_dbm, 1, 20);
     wifimac->drv_priv->drv_ops.drv_set_txPwrLimit(wifimac->drv_priv,
         txpower_dbm, txpower_dbm);
 
@@ -2546,9 +1974,7 @@ vm_set_wep_key (struct wlan_net_vif *wnet_vif,
         k->wk_keylen = key_len;
         memcpy(k->wk_key, key, key_len);
         memset(k->wk_key + key_len, 0, WIFINET_KEYBUF_SIZE - key_len);
-        //if (aml_debug & AML_DEBUG_CFG80211) {
-        //        dump_memory_internal(k->wk_key, WIFINET_KEYBUF_SIZE+16);
-        //}
+        
         if (!wifi_mac_security_setkey(wnet_vif, k, wnet_vif->vm_myaddr, NULL))
         {
             ret = -EINVAL;
@@ -2897,7 +2323,6 @@ static int vm_cfg80211_set_default_mgmt_key(struct wiphy *wiphy,
     return 0;
 }
 
-
 static int
 vm_cfg80211_set_power_mgmt(struct wiphy *wiphy,
     struct net_device *dev,bool enabled, int timeout)
@@ -3002,7 +2427,6 @@ static int vm_cfg80211_connect(struct wiphy *wiphy, struct net_device *dev,
     wnet_vif->vm_chan_roaming_scan_flag = 0;
     g_auto_gain_base = 0;
 
-    /*if change AP,change roaming_ssid and clean roaming candidate channel*/
     if(!wnet_vif->vm_wmac->wm_scan->roaming_ssid.len
         || memcmp(wnet_vif->vm_wmac->wm_scan->roaming_ssid.ssid, lsme->ssid, wnet_vif->vm_wmac->wm_scan->roaming_ssid.len) != 0) {
         pr_debug("clean roaming candidate channels \n");
@@ -3188,10 +2612,6 @@ static int vm_cfg80211_connect(struct wiphy *wiphy, struct net_device *dev,
             }
         }
 
-#ifdef CONFIG_P2P
-        vm_p2p_set_wpsp2pie(dev, (unsigned char *)lsme->ie ,lsme->ie_len,P2P_ASSOC_REQ_IE);
-#endif
-
     } else {
         wnet_vif->vm_opt_ie_len = 0;
     }
@@ -3256,7 +2676,6 @@ vm_cfg80211_disconnect(struct wiphy *wiphy,
     DPRINTF(AML_DEBUG_CFG80211, "%s %d <%s> reason_code=%d\n",
             __func__, __LINE__, dev->name, reason_code);
 
-
     if (!IS_UP(dev))
     {
         ret = -EINVAL;
@@ -3292,11 +2711,6 @@ vm_cfg80211_disconnect(struct wiphy *wiphy,
             DPRINTF(AML_DEBUG_CFG80211, "%s %d sta mode\n", __func__, __LINE__);
             mgmt_arg = WIFINET_REASON_AUTH_LEAVE;
             wifi_mac_send_mgmt(wnet_vif->vm_mainsta, WIFINET_FC0_SUBTYPE_DEAUTH, (void *)&mgmt_arg);
-#ifdef CONFIG_P2P
-            if (wnet_vif->vm_p2p_support) {
-                wifi_mac_top_sm(wnet_vif, WIFINET_S_SCAN, 0);
-            }
-#endif
 
             while (total_delay < 1000 && ((wifimac->wm_runningmask & BIT(wnet_vif->wnet_vif_id))
                 || (!drv_priv->hal_priv->hal_ops.hal_tx_empty()))) {
@@ -3330,7 +2744,6 @@ vm_cfg80211_suspend(struct wiphy *wiphy, struct cfg80211_wowlan *wow)
     if (wow && (wow->n_patterns > WOW_MAX_PATTERNS))
         return -EINVAL;
 
-    /* wnet_vif_id 1(p2p0) just follow wlan0 operations */
     if (wnet_vif->wnet_vif_id == 1)
         return 0;
 
@@ -3354,7 +2767,6 @@ static int vm_cfg80211_resume(struct wiphy *wiphy)
 
     DPRINTF(AML_DEBUG_CFG80211, "%s %d\n", __func__, __LINE__);
 
-    /* wnet_vif_id 1(p2p0) just follow wlan0 operations */
     if (wnet_vif->wnet_vif_id == 1)
         return 0;
 
@@ -3380,7 +2792,7 @@ aml_vm_legacy_24g_rate_map(unsigned int kernel_rate)
 		case 2:
 			return 0x01;
 		case 4:
-			return 0x02;//actually 5.5
+			return 0x02;
 		case 8:
 			return 0x03;
 		case 16:
@@ -3411,23 +2823,23 @@ aml_vm_legacy_5g_rate_map(unsigned int kernel_rate)
 	switch(kernel_rate)
 	{
 		case 1:
-			return 0x04;//6M;
+			return 0x04;
 		case 2:
-			return 0x05;//9M;
+			return 0x05;
 		case 4:
-			return 0x06;//12M;
+			return 0x06;
 		case 8:
-			return 0x07;//18M;
+			return 0x07;
 		case 16:
-			return 0x08;//24M;
+			return 0x08;
 		case 32:
-			return 0x09;//36M;
+			return 0x09;
 		case 64:
-			return 0x0a;//48M;
+			return 0x0a;
 		case 128:
-			return 0x0b;//54M;
+			return 0x0b;
 		default:
-			//pr_debug("Legacy 5G Warning: Not supported rate.\n");
+			
 			return 0;
 	}
 }
@@ -3454,7 +2866,7 @@ aml_vm_ht_rate_map(unsigned int kernel_rate)
 		case 128:
 			return 0x0087;
 		default:
-			//pr_debug("HT Warning: Not supported rate: %d\n",kernel_rate);
+			
 			return 0;
 	}
 }
@@ -3485,58 +2897,54 @@ aml_vm_vht_rate_map(unsigned int kernel_rate)
 		case 512:
 			return 0x00c9;
 		default:
-			//pr_debug("VHT Warning: Not supported rate: %d\n",kernel_rate);
+			
 			return 0;
 	}
 }
-
-
 
 static unsigned int
 legacy_k2dot11_rate_map(unsigned int kernel_rate)
 {
 
-    //For 11b: (0x82 -0x80) * 500K =  1M
-    //For 11g:  0xc * 500k = 6M
     unsigned int ret = 0;
     pr_debug("rate 0x%x %s(%d)\n", kernel_rate, __func__, __LINE__);
     switch (kernel_rate)
     {
         case BIT(0):
-            ret =  0x02;// 1M
+            ret =  0x02;
             break;
         case BIT(1):
-            ret =  0x04;// 2M
+            ret =  0x04;
             break;
         case BIT(2):
-            ret =  0x0b;//5.5M
+            ret =  0x0b;
             break;
         case BIT(3):
-            ret =  0x16;//11M
+            ret =  0x16;
             break;
         case BIT(4):
-            ret =  0x0c;//6M
+            ret =  0x0c;
             break;
         case BIT(5):
-            ret =  0x12;//9M
+            ret =  0x12;
             break;
         case BIT(6):
-            ret =  0x18;//12M
+            ret =  0x18;
             break;
         case BIT(7):
-            ret =  0x24; //18M
+            ret =  0x24; 
             break;
         case BIT(8):
-            ret =  0x30; //24M
+            ret =  0x30; 
             break;
         case BIT(9):
-            ret =  0x48;// 36M
+            ret =  0x48;
             break;
         case BIT(10):
-            ret =  0x60;// 48M
+            ret =  0x60;
             break;
         case BIT(11):
-            ret =  0x6c;// 54M
+            ret =  0x6c;
             break;
         default:
             ERROR_DEBUG_OUT("Legacy 2.4G Not supported rate 0x%x\n", kernel_rate);
@@ -3573,7 +2981,17 @@ int vm_cfg80211_set_bitrate_mask(struct wiphy *wiphy,
     memset(ht_ratemask, 0, sizeof(ht_ratemask));
     memset(vht_ratemask, 0, sizeof(vht_ratemask));
 
-    /* Legacy/HT/VHT rate setting */
+    if (wnet_vif->vm_opmode == WIFINET_M_HOSTAP &&
+        mask->control[NL80211_BAND_2GHZ].legacy == 0 &&
+        mask->control[NL80211_BAND_2GHZ].ht_mcs[0] == 0 &&
+        mask->control[NL80211_BAND_2GHZ].vht_mcs[0] == 0 &&
+        mask->control[NL80211_BAND_5GHZ].legacy == 0 &&
+        mask->control[NL80211_BAND_5GHZ].ht_mcs[0] == 0 &&
+        mask->control[NL80211_BAND_5GHZ].vht_mcs[0] == 0) {
+        pr_debug("W522A: AP bitrate mask empty, keep auto rate\n");
+        return 0;
+    }
+
 	for (band = 0; band <= NL80211_BAND_5GHZ; band++)
 	{
 		if ( band == NL80211_BAND_2GHZ )
@@ -3590,13 +3008,12 @@ int vm_cfg80211_set_bitrate_mask(struct wiphy *wiphy,
 			vht_ratemask[band] = aml_vm_vht_rate_map(mask->control[band].vht_mcs[0]);
 		}
 	}
-    /*For debug use only*/
-    /*Get the bit rate*/
+    
     if ( 1 == mask->control[0].legacy )
     {
         if ( legacy_ratemask[0] != 4095 && legacy_ratemask[0] != 255 )
 		{
-            final_bit_rate = protocol_rate;  // T.B.D
+            final_bit_rate = protocol_rate;  
             if (aml_wifi_is_enable_rf_test())
                 final_bit_rate = legacy_ratemask[0];
 
@@ -3610,10 +3027,10 @@ int vm_cfg80211_set_bitrate_mask(struct wiphy *wiphy,
             && legacy_ratemask[0] != 255 )
         {
             wifi_mac_config(wifimac, CHIP_PARAM_AMPDU, 0);
-            //wifi_mac_config(wifimac, CHIP_PARAM_AMPDU_RX, 0);
+            
             wifi_mac_config(wifimac, CHIP_PARAM_AMSDU_ENABLE, 0);
 
-            final_bit_rate = protocol_rate;  // T.B.D
+            final_bit_rate = protocol_rate;  
             if (aml_wifi_is_enable_rf_test())
                 final_bit_rate = legacy_ratemask[0];
 
@@ -3623,12 +3040,12 @@ int vm_cfg80211_set_bitrate_mask(struct wiphy *wiphy,
 
     wifi_mac_config(wifimac, CHIP_PARAM_AMSDU_ENABLE, DEFAULT_TXAMSDU_EN);
     wifi_mac_config(wifimac, CHIP_PARAM_AMPDU, DEFAULT_TXAMPDU_EN);
-    //wifi_mac_config(wifimac, CHIP_PARAM_AMPDU_RX, DEFAULT_RXAMPDU_EN);
+    
     if ( legacy_ratemask[1] != 0
         && legacy_ratemask[1] != 4095
         && legacy_ratemask[1] != 255 )
     {
-        final_bit_rate = protocol_rate; // T.B.D
+        final_bit_rate = protocol_rate; 
         if (aml_wifi_is_enable_rf_test())
             final_bit_rate = legacy_ratemask[1];
 
@@ -3709,12 +3126,6 @@ static int _iv_cfg80211_add_set_beacon(struct wiphy *wiphy, struct net_device *d
     unsigned char center_chan = 0;
     unsigned char concurrent_set_channel = 1;
     struct wifi_channel *main_vmac_chan = NULL;
-
-#ifdef CONFIG_P2P
-#ifdef CONFIG_CONCURRENT_MODE
-#endif
-    struct wifi_mac_p2p *p2p = wiphy_to_p2p(wiphy);
-#endif
 
     DPRINTF(AML_DEBUG_BEACON, "%s %d <%s> head=%p head_len=%zd tail=%p tail_len=%zd \n",
         __func__, __LINE__, dev->name, linfo->head, linfo->head_len, linfo->tail, linfo->tail_len);
@@ -3825,31 +3236,14 @@ static int _iv_cfg80211_add_set_beacon(struct wiphy *wiphy, struct net_device *d
         if (ht_cap_ie) {
             htcap_tmp = READ_16L(ht_cap_ie + sizeof(unsigned short));
 
-#ifdef CONFIG_P2P
-            if (wnet_vif->vm_p2p_support) {
-                wnet_vif->vm_mac_mode = WIFINET_MODE_11GN;
-
-            } else {
-#endif
                 if (pri_chan > 14) {
                     wnet_vif->vm_mac_mode = WIFINET_MODE_11GN;
 
                 } else {
-                    wnet_vif->vm_mac_mode = WIFINET_MODE_11BGN;
+                    
+                    wnet_vif->vm_mac_mode = WIFINET_MODE_11GN;
                 }
-#ifdef CONFIG_P2P
-            }
-#endif
 
-            /*
-             * v17j AP-SGI-CONFIG-GATE:
-             * wifi_mac_setup() enables SHORTGI by default as a device
-             * capability. In AP mode hostapd may intentionally omit SGI from
-             * the beacon/probe HT capab (for this SDIO chip SGI often causes
-             * high RTT and TX loss). The old code only ORed SGI bits here and
-             * never cleared the default, so ht_capab=[] still left minstrel
-             * sampling SGI groups. Treat the AP IE as authoritative.
-             */
             wifimac->wm_flags_ext &= ~(WIFINET_FEXT_SHORTGI_ENABLE |
                                         WIFINET_FEXT_SHORTGI20 |
                                         WIFINET_FEXT_SHORTGI40);
@@ -3864,25 +3258,14 @@ static int _iv_cfg80211_add_set_beacon(struct wiphy *wiphy, struct net_device *d
                 wifimac->wm_flags_ext |= WIFINET_FEXT_SHORTGI40;
            }
 
-            /*For setting channel bandwidth*/
-            /* v15p: do NOT downgrade vm_bandwidth here.
-             *
-             * Pre-v15p this block unconditionally reset vm_bandwidth
-             * to WIDTH40 or WIDTH20 based on the HT cap IE bit, which
-             * clobbered the wider BW that vm_cfg80211_start_ap() had
-             * already set from cfg80211_ap_settings->chandef. Result:
-             * AP started in BW80 from chandef -> beacon parse here ->
-             * BW40 (or worse, BW20 if hostapd's HT cap IE in the AP
-             * blob didn't have SUPPORTCBW40 set for any reason). Only
-             * promote: never demote a BW that was set above. The HT_OP
-             * IE handler below remains authoritative for the secondary
-             * channel offset of the HT40 mode. */
-            if (htcap_tmp & WIFINET_HTCAP_SUPPORTCBW40) {
-                if (wnet_vif->vm_bandwidth < WIFINET_BWC_WIDTH40)
-                    wnet_vif->vm_bandwidth = WIFINET_BWC_WIDTH40;
+            if (wnet_vif->vm_opmode != WIFINET_M_HOSTAP) {
+                if (htcap_tmp & WIFINET_HTCAP_SUPPORTCBW40) {
+                    if (wnet_vif->vm_bandwidth < WIFINET_BWC_WIDTH40)
+                        wnet_vif->vm_bandwidth = WIFINET_BWC_WIDTH40;
 
-            } else if (wnet_vif->vm_bandwidth == 0) {
-                wnet_vif->vm_bandwidth = WIFINET_BWC_WIDTH20;
+                } else if (wnet_vif->vm_bandwidth == 0) {
+                    wnet_vif->vm_bandwidth = WIFINET_BWC_WIDTH20;
+                }
             }
 
             if (htcap_tmp & WIFINET_HTCAP_LDPC) {
@@ -3901,11 +3284,7 @@ static int _iv_cfg80211_add_set_beacon(struct wiphy *wiphy, struct net_device *d
             unsigned int extend_rate_ie_len = 0;
 
             DPRINTF(AML_DEBUG_ERROR, "%s(%d) no ht cap found, set to legacy mode.\n", __func__, __LINE__);
-            /* v15p: only force WIDTH20 when nothing else has been set.
-             * vm_cfg80211_start_ap() may legitimately have asked for
-             * BW40/80 via chandef even when hostapd omitted the HT cap
-             * from the AP tail blob (rare but seen with custom hostapd
-             * builds). Honour the request unless we are truly legacy. */
+            
             if (wnet_vif->vm_bandwidth == 0)
                 wnet_vif->vm_bandwidth = WIFINET_BWC_WIDTH20;
 
@@ -3941,18 +3320,6 @@ static int _iv_cfg80211_add_set_beacon(struct wiphy *wiphy, struct net_device *d
                  }
              }
 
-
-            /*parse primary channel offset*/
-            /* v15p: HT_OP secondary-offset is authoritative for the HT
-             * secondary channel position, but BW promotion logic is
-             * "monotonic" only:
-             *   - EXTOFFSET_NA   => no HT40 secondary; do NOT force
-             *                       WIDTH20 if start_ap() set WIDTH80
-             *                       from a VHT chandef.
-             *   - ABOVE/BELOW    => need at least HT40; promote when
-             *                       we are currently at WIDTH20.
-             * This matches what the VHT OP IE parser below does for 80
-             * MHz: it only ever moves vm_bandwidth upward. */
             switch (ht_op_ie[3] & (BIT(0)|BIT(1))) {
                 case WIFINET_HTINFO_EXTOFFSET_NA:
                     if (wnet_vif->vm_bandwidth <= WIFINET_BWC_WIDTH20) {
@@ -3978,11 +3345,7 @@ static int _iv_cfg80211_add_set_beacon(struct wiphy *wiphy, struct net_device *d
                     ERROR_DEBUG_OUT("ht_op secondary channel offset: Not supported!!\n");
                     break;
             }
-            /* scnd_chn_offset still tracks the value carried in the IE
-             * because TX FIFO / PHY routines key off it for HT40+/HT40-
-             * tone allocation. start_ap() pre-populates it from chandef
-             * but the IE wins (hostapd is final source of truth for the
-             * exact bit layout in the beacon). */
+            
             wnet_vif->scnd_chn_offset = (ht_op_ie[3] & (BIT(0)|BIT(1)));
 
         } else {
@@ -3990,7 +3353,6 @@ static int _iv_cfg80211_add_set_beacon(struct wiphy *wiphy, struct net_device *d
             DPRINTF(AML_DEBUG_ERROR, "%s(%d) no ht op IE found.\n", __func__, __LINE__);
         }
 
-        /*Parse and dump vht cap and OP IE*/
         {
             unsigned char *vht_cap_ie = NULL;
             unsigned int vht_cap_ie_len = 0;
@@ -4004,7 +3366,6 @@ static int _iv_cfg80211_add_set_beacon(struct wiphy *wiphy, struct net_device *d
                 DPRINTF(AML_DEBUG_BEACON,"%s(%d),dump vht cap,len: %d\n",
                         __func__,__LINE__,vht_cap_ie_len);
 
-                /*short GI, currently only parse SHORT-GI-80 item*/
                 if ((vht_cap_ie[2] >> 5) & 0x1) {
                     sta->sta_vhtcap |= WIFINET_VHTCAP_SHORTGI_80;
 
@@ -4012,7 +3373,6 @@ static int _iv_cfg80211_add_set_beacon(struct wiphy *wiphy, struct net_device *d
                     sta->sta_vhtcap &= ~WIFINET_VHTCAP_SHORTGI_80;
                 }
 
-                /*RXLDPC*/
                 if ((vht_cap_ie[2] >> 4) & 0x1) {
                     sta->sta_vhtcap |= WIFINET_VHTCAP_RX_LDPC;
                     wifimac->wm_flags |= WIFINET_F_LDPC;
@@ -4026,13 +3386,11 @@ static int _iv_cfg80211_add_set_beacon(struct wiphy *wiphy, struct net_device *d
                 DPRINTF(AML_DEBUG_CFG80211, "%s(%d) no vht cap ie found.\n", __func__, __LINE__);
             }
 
-            /*Parse and dump vht OP IE*/
             vht_op_ie = (struct wifi_mac_ie_vht_opt *)vm_get_ie(iebuf,ielen,NULL,(unsigned int *)&vht_op_ie_len,WIFINET_ELEMID_VHTOP,0);
             if ((vht_op_ie != NULL) && (vht_op_ie->vht_op_chwidth > VHT_OPT_CHN_WD_2040M)) {
                 DPRINTF(AML_DEBUG_BEACON,"\n%s(%d),dump vht_op_ie, len: %d, prim_ch %d, cf_ch %d\n",
                     __func__,__LINE__,vht_op_ie_len, pri_chan, vht_op_ie->vht_op_ch_freq_seg1);
 
-                /*bandwidth/mode/channel offset*/
                 pr_debug("%s(%d):chan %d, cntr_seg1 %d\n", __func__, __LINE__, pri_chan, vht_op_ie->vht_op_ch_freq_seg1);
                 center_chan = vht_op_ie->vht_op_ch_freq_seg1;
                 if (vht_op_ie->vht_op_chwidth == VHT_OPT_CHN_WD_80M) {
@@ -4058,45 +3416,11 @@ static int _iv_cfg80211_add_set_beacon(struct wiphy *wiphy, struct net_device *d
         pr_debug("%s vm_mac_mode %d, offset %d, vm_bandwidth:%d, center_chan:%d\n", __func__,
             wnet_vif->vm_mac_mode, wnet_vif->scnd_chn_offset, wnet_vif->vm_bandwidth, center_chan);
 
-#ifdef CONFIG_P2P
-    vm_p2p_set_state(p2p, NET80211_P2P_STATE_LISTEN);
-#ifdef CONFIG_CONCURRENT_MODE
-    concurrent_channel_protection(wnet_vif, 3000);
-
-    if (wifi_mac_is_others_wnet_vif_running(wnet_vif) == true) {
-        main_vmac_chan = wifi_mac_get_main_vmac_channel(wifimac);
-        if (main_vmac_chan == WIFINET_CHAN_ERR) {
-            ret = -EINVAL;
-            goto exit_malloc;
-        }
-
-        if ((main_vmac_chan->chan_pri_num == pri_chan)
-             && (main_vmac_chan->chan_bw == wnet_vif->vm_bandwidth)
-             && (center_chan == wifi_mac_Mhz2ieee(main_vmac_chan->chan_cfreq1, 0))) {
-
-            concurrent_set_channel = 0;//no need set channel again due to bw
-            wnet_vif->vm_curchan = wifi_mac_find_chan(wifimac, pri_chan, wnet_vif->vm_bandwidth, center_chan);
-
-            if (wnet_vif->vm_curchan == WIFINET_CHAN_ERR) {
-                DPRINTF(AML_DEBUG_ERROR,"WARNING<%s>:: %s %d can't support set this channel\n",
-                    (wnet_vif)->vm_ndev->name, __func__, __LINE__);
-                ret = -EINVAL;
-                goto exit_malloc;
-            }
-        }
-    } else {
-        /*no other vmac running, no need set concurrent channel*/
-        concurrent_set_channel = 0;
-    }
-#endif
-#endif  /*#ifdef CONFIG_P2P*/
-
-        /*Forcely refresh */
         if (IS_APSTA_CONCURRENT(aml_wifi_get_con_mode()) && concurrent_set_channel)
         {
             struct wlan_net_vif *main_wnet_vif = wifi_mac_running_main_wnet_vif(wifimac);
             if (main_wnet_vif != NULL) {
-                /*sta connect to 5G ap, softap need update channel/band/mac_mode as sta*/
+                
                 wnet_vif->vm_curchan = main_vmac_chan;
                 wnet_vif->vm_bandwidth = main_vmac_chan->chan_bw;
                 wnet_vif->vm_mac_mode = main_wnet_vif->vm_mac_mode;
@@ -4130,7 +3454,7 @@ static int _iv_cfg80211_add_set_beacon(struct wiphy *wiphy, struct net_device *d
             if ((vmac_chan != WIFINET_CHAN_ERR) && vmac_chan != wnet_vif->vm_curchan) {
                 wifi_mac_add_work_task(wifimac, vm_cfg80211_chan_switch_notify_task, NULL, (SYS_TYPE)wifimac, (SYS_TYPE)wnet_vif, 0, (SYS_TYPE)vmac_chan, 0);
             }
-            /* find channel info from channel list by primary channel & bandwidth & center channel */
+            
             if (!wifi_mac_set_wnet_vif_channel(wnet_vif,  pri_chan, wnet_vif->vm_bandwidth, center_chan, CHANNEL_CONNECT_FLAG | CHANNEL_RESTORE_FLAG)) {
                 ret = -EINVAL;
                 goto exit_malloc;
@@ -4238,56 +3562,6 @@ static int _iv_cfg80211_add_set_beacon(struct wiphy *wiphy, struct net_device *d
         WIFINET_BEACON_UNLOCK(wifimac);
     }
 
-#ifdef CONFIG_P2P
-    {
-        const unsigned char *wpsie = NULL;
-        uint wpsielen = 0;
-
-        const unsigned char *p2pie = NULL;
-        uint p2pielen = 0;
-
-        const unsigned char *wdfie = NULL;
-        uint wdfielen = 0;
-
-        WIFINET_BEACON_LOCK(wifimac);
-        wpsie = vm_get_ie(iebuf, ielen, NULL, &wpsielen, WIFINET_ELEMID_VENDOR, WSC_OUI_BE);
-        if (wpsie && wpsielen)
-        {
-            struct wifi_mac_app_ie_t *wps_app_ie = &wnet_vif->vm_p2p->wps_beacon_ie;
-            wifi_mac_save_app_ie(wps_app_ie,wpsie,wpsielen);
-            DPRINTF(AML_DEBUG_BEACON, "%s %d found wpsie=%p wpsielen=%d \n",
-                    __func__, __LINE__, wpsie, wpsielen);
-        }
-
-        p2pie = vm_get_ie(iebuf, ielen, NULL, &p2pielen, WIFINET_ELEMID_VENDOR, P2P_OUI_BE);
-        if (p2pie && p2pielen)
-        {
-            struct wifi_mac_app_ie_t *p2p_app_ie =
-                &wnet_vif->vm_p2p->p2p_app_ie[WIFINET_APPIE_FRAME_BEACON];
-
-            wifi_mac_save_app_ie(p2p_app_ie,p2pie,p2pielen);
-            DPRINTF(AML_DEBUG_BEACON, "%s %d found p2pie=%p p2pielen=%d\n",
-                    __func__, __LINE__, p2pie, p2pielen);
-        }
-
-#ifdef CONFIG_WFD
-        wdfie = vm_get_wfd_ie(iebuf, ielen,NULL, &wdfielen);
-        if ((wdfie != NULL)&&(wdfielen !=0))
-        {
-            struct wifi_mac_app_ie_t *wfd_app_ie =
-                &wnet_vif->vm_p2p->wfd_app_ie[WIFINET_APPIE_FRAME_BEACON];
-
-            wnet_vif->vm_p2p->wfd_info.wfd_enable = 1;
-            wifi_mac_save_app_ie(wfd_app_ie,wdfie,wdfielen);
-            DPRINTF(AML_DEBUG_BEACON, "%s %d found wdf =%p wdfielen=%d\n",
-                    __func__, __LINE__, p2pie, p2pielen);
-        }
-#endif
-        vm_p2p_update_beacon_app_ie(wnet_vif);
-        WIFINET_BEACON_UNLOCK(wifimac);
-    }
-#endif //CONFIG_P2P
-
     {
         const struct wifi_mac_wme_param *wmmie = NULL;
         unsigned int wmmielen = 0;
@@ -4297,7 +3571,7 @@ static int _iv_cfg80211_add_set_beacon(struct wiphy *wiphy, struct net_device *d
             struct wifi_mac_wme_state *wme = &wnet_vif->vm_wmac->wm_wme[wnet_vif->wnet_vif_id];
             DPRINTF(AML_DEBUG_BEACON, "%s %d found wmmie=%p wmmielen=%d\n",
                     __func__, __LINE__, wmmie, wmmielen);
-            // dump_memory_internal(wmmie,wmmielen);
+            
             if (wifimac->wm_caps & WIFINET_C_UAPSD)
             {
                 WIFINET_BEACON_LOCK(wifimac);
@@ -4323,7 +3597,7 @@ static int _iv_cfg80211_add_set_beacon(struct wiphy *wiphy, struct net_device *d
                 int wme_updata_flag = 0;
                 const struct wifi_mac_wme_acparams *acparam = NULL;
                 struct wmeParams *lconfigacparam = NULL;
-                // struct wmeParams *lchanacparam = NULL;
+                
                 DPRINTF(AML_DEBUG_BEACON, "%s %d is wmmparam\n", __func__, __LINE__);
                 WIFINET_BEACON_LOCK(wifimac);
                 for (ac=0; ac<WME_NUM_AC; ac++)
@@ -4417,36 +3691,16 @@ static int vm_cfg80211_start_ap(struct wiphy *wiphy, struct net_device *ndev,
         settings->hidden_ssid, settings->auth_type);
 
     if (settings->chandef.chan) {
-        pr_debug("chandef center_freq:%d, hw_value:%d band:%d width:%d cf1:%d, at %s, %d\n",
+        pr_info("W522A: chandef: center_freq=%d hw_value=%d band=%d width=%d cf1=%d cf2=%d (called from %s:%d)\n",
             settings->chandef.chan->center_freq, settings->chandef.chan->hw_value,
             settings->chandef.chan->band, settings->chandef.width,
-            settings->chandef.center_freq1, __func__, __LINE__);
+            settings->chandef.center_freq1, settings->chandef.center_freq2,
+            __func__, __LINE__);
         if (wifi_mac_if_dfs_channel(wifimac, (int)settings->chandef.chan->hw_value) == 1) {
             ERROR_DEBUG_OUT("Soft AP don't support in DFS channel \n");
             return -EINVAL;
         }
 
-        /* v15p: honour cfg80211_ap_settings->chandef.width.
-         *
-         * Pre-v15p the driver ignored chandef.{width,center_freq1} entirely
-         * and relied on _iv_cfg80211_add_set_beacon() parsing the HT/VHT
-         * IEs hostapd embeds in the beacon. That works only when:
-         *   - hostapd is built with the matching HT/VHT capability bits;
-         *   - the running kernel's mac80211 forwarded those IEs unchanged;
-         *   - and the chip happens to have the right BW programmed already
-         *     (default from wifi_mac_setup() is WIDTH80).
-         *
-         * In practice on Armbian 6.6+ this chain breaks: hostapd negotiates
-         * HT40/VHT80 with NL80211_CMD_START_AP through chandef, but the
-         * beacon IEs it then asks the driver to TX often degrade to HT20
-         * because the wiphy advertised RX_STBC=3-streams (mask, not value)
-         * and the IE in the AP-tail blob never gets the HT40+ bit set.
-         * Result: AP came up on 20 MHz only, ~3 Mbit/s upload.
-         *
-         * Fix: apply the chandef the kernel handed us, the way cfg80211
-         * intends. _iv_cfg80211_add_set_beacon() below still parses the
-         * beacon, but its parse logic has been adjusted (v15p) to NOT
-         * downgrade a BW we already set from chandef. */
         {
             int pri_chan = settings->chandef.chan->hw_value;
             int center_chan = pri_chan;
@@ -4472,17 +3726,14 @@ static int vm_cfg80211_start_ap(struct wiphy *wiphy, struct net_device *ndev,
                 break;
             case NL80211_CHAN_WIDTH_80:
                 bw = WIFINET_BWC_WIDTH80;
-                /* For 80 MHz HT-INFO still carries a HT40 secondary
-                 * offset (the channel immediately above/below pri).
-                 * Hostapd builds the IE; we just remember the offset. */
+                
                 scnd = (pri_chan & 4) ?
                         WIFINET_HTINFO_EXTOFFSET_BELOW :
                         WIFINET_HTINFO_EXTOFFSET_ABOVE;
                 break;
             case NL80211_CHAN_WIDTH_80P80:
             case NL80211_CHAN_WIDTH_160:
-                /* Chip nominally supports up to 80 MHz; degrade
-                 * gracefully rather than refuse the AP start. */
+                
                 pr_warn("%s: bw %d not supported in AP mode, "
                         "downgrading to 80 MHz\n",
                         __func__, settings->chandef.width);
@@ -4504,11 +3755,6 @@ static int vm_cfg80211_start_ap(struct wiphy *wiphy, struct net_device *ndev,
             wnet_vif->vm_bandwidth = bw;
             wnet_vif->scnd_chn_offset = scnd;
 
-            /* Try to program the radio for the requested chan/bw.
-             * If the channel list lacks the exact (pri,bw,center)
-             * triple (e.g. regdomain trimmed it), wifi_mac_find_chan()
-             * returns NULL inside wifi_mac_set_wnet_vif_channel() and
-             * we fall back to whatever wifi_mac_setup() initialised. */
             if (!wifi_mac_set_wnet_vif_channel(wnet_vif, pri_chan, bw,
                                                center_chan,
                                                CHANNEL_CONNECT_FLAG |
@@ -4517,8 +3763,7 @@ static int vm_cfg80211_start_ap(struct wiphy *wiphy, struct net_device *ndev,
                         "bw=%d center=%d failed; trying HT40\n",
                         __func__, pri_chan, bw, center_chan);
                 if (bw == WIFINET_BWC_WIDTH80) {
-                    /* Retry as HT40 with the secondary offset we
-                     * already computed above. */
+                    
                     int retry_center =
                         (scnd == WIFINET_HTINFO_EXTOFFSET_ABOVE) ?
                             pri_chan + 2 : pri_chan - 2;
@@ -4562,23 +3807,11 @@ static int vm_cfg80211_start_ap(struct wiphy *wiphy, struct net_device *ndev,
     else
         wnet_vif->vm_flags &= ~WIFINET_F_HIDESSID;
 
-#ifdef CONFIG_P2P
-    wnet_vif->vm_p2p->go_hidden_mode = (wnet_vif->vm_flags & WIFINET_F_HIDESSID) >> WIFINET_F_HIDESSID_TO_BIT0_OFST;
-#endif
     ret = _iv_cfg80211_add_set_beacon(wiphy, ndev, &settings->beacon,settings->dtim_period) ;
-    /* v16c (B20): tasklet_init() zeroes the tasklet state. If start_ap is
-     * called while a previous AP-mode tasklet is still pending (rapid
-     * hostapd restart, or start_ap raced against an unfinished stop_ap),
-     * re-init clobbers t->count / t->state and can produce double-execute
-     * or skipped invocations. Pair with an explicit tasklet_kill() to
-     * guarantee no in-flight work survives the re-init.  Cheap if nothing
-     * is pending.  Symmetric with the tasklet_kill in vm_cfg80211_stop_ap. */
+    
     tasklet_kill(&drv_priv->forward_tasklet);
     tasklet_init(&drv_priv->forward_tasklet, drv_forward_tasklet, (unsigned long)(SYS_TYPE)wnet_vif);
-    /* v16c (B20): pre-v16c re-init'd the buffer queue spinlock on every
-     * start_ap. If the previous run left buffered skbs (start_ap without
-     * a preceding stop_ap), the head was wiped without freeing the chain,
-     * leaking sk_buffs. Flush before re-init. */
+    
     wifi_mac_buffer_txq_flush(&wnet_vif->vm_forward_buffer_queue);
     WIFINET_SAVEQ_INIT(&(wnet_vif->vm_forward_buffer_queue), "wnet_vif_forward_buffer_queue");
     if ((settings->ssid && settings->ssid_len) && ((wnet_vif->vm_des_ssid[0].len != settings->ssid_len)
@@ -4637,11 +3870,6 @@ static int vm_cfg80211_stop_ap(struct wiphy *wiphy, struct net_device *ndev, uns
 {
     struct wlan_net_vif *wnet_vif = wiphy_to_adapter(wiphy);
     struct drv_private *drv_priv = drv_get_drv_priv();
-#ifdef CONFIG_P2P
-    if (wnet_vif == wnet_vif->vm_wmac->drv_priv->drv_wnet_vif_table[NET80211_P2P_VMAC]) {
-        wnet_vif->vm_p2p_support = 1;
-    }
-#endif
     DPRINTF(AML_DEBUG_CFG80211, " %s(%d): <%s>\n", __func__, __LINE__, ndev->name);
     wifi_mac_top_sm(wnet_vif, WIFINET_S_INIT,0);
     wifi_mac_buffer_txq_flush(&wnet_vif->vm_forward_buffer_queue);
@@ -4696,7 +3924,7 @@ static void _del_station(void *arg, struct wifi_station *sta)
         wifi_mac_pwrsave_state_change(sta, 0);
 
         if (sta_flag && wnet_vif->vm_opmode == WIFINET_M_HOSTAP) {
-            //do nothing
+            
         } else {
             if (sta->sta_flags_ext & WIFINET_NODE_REASSOC) {
                 reason = WLAN_REASON_PREV_AUTH_NOT_VALID;
@@ -4789,7 +4017,24 @@ vm_cfg80211_change_station(struct wiphy *wiphy, struct net_device *ndev,
         return ret;
     }
 
-    DPRINTF(AML_DEBUG_CFG80211, "%s(%d) change_station not implemented\n", __func__, __LINE__);
+    if (params->sta_flags_mask & BIT(NL80211_STA_FLAG_AUTHORIZED)) {
+        if (params->sta_flags_set & BIT(NL80211_STA_FLAG_AUTHORIZED))
+            wifi_mac_sta_auth(sta);
+        else
+            wifi_mac_StationUnauthorize(sta);
+
+        printk_ratelimited(KERN_INFO
+            "W522A: change-station vid=%d peer=%pM authorized=%d flags=0x%x mask=0x%x set=0x%x\n",
+            wnet_vif->wnet_vif_id, sta->sta_macaddr,
+            !!(params->sta_flags_set & BIT(NL80211_STA_FLAG_AUTHORIZED)),
+            sta->sta_flags, params->sta_flags_mask, params->sta_flags_set);
+    } else {
+        printk_ratelimited(KERN_INFO
+            "W522A: change-station vid=%d peer=%pM mask=0x%x set=0x%x flags=0x%x\n",
+            wnet_vif->wnet_vif_id, sta->sta_macaddr,
+            params->sta_flags_mask, params->sta_flags_set, sta->sta_flags);
+    }
+
     return 0;
 }
 
@@ -4867,7 +4112,7 @@ vm_cfg80211_get_station(struct wiphy *wiphy, struct net_device *dev,
 #else
 vm_cfg80211_get_station(struct wiphy *wiphy, struct net_device *dev,
         u8 *mac, struct station_info *sinfo)
-#endif // endif
+#endif 
 {
     int ret = 0;
     struct wlan_net_vif *wnet_vif = wiphy_to_adapter(wiphy);
@@ -4901,7 +4146,7 @@ vm_cfg80211_get_station(struct wiphy *wiphy, struct net_device *dev,
     sinfo->filled |= STATION_INFO_SIGNAL;
     sinfo->signal =  sta->sta_avg_bcn_rssi;
     if (sinfo->signal > -10) {
-        //DPRINTF(AML_DEBUG_ERROR, "%s signal exceeds scope:%d\n", __func__, sinfo->signal);
+        
         sinfo->signal = -10;
     }
 
@@ -4918,7 +4163,6 @@ vm_cfg80211_get_station(struct wiphy *wiphy, struct net_device *dev,
     sinfo->txrate.flags = rate_flags;
     sinfo->txrate.nss = 1;
     sinfo->txrate.bw = sta->sta_vendor_bw == 0 ? 0 : sta->sta_vendor_bw == 1 ? 3 : 4;
-
 
     sinfo->filled |= STATION_INFO_RX_BITRATE;
     rate_flags = 0;
@@ -4944,7 +4188,6 @@ vm_cfg80211_get_station(struct wiphy *wiphy, struct net_device *dev,
     return ret;
 }
 
-
 static int
 vm_cfg80211_dump_station(
     struct wiphy *wiphy, struct net_device *ndev,
@@ -4953,7 +4196,6 @@ vm_cfg80211_dump_station(
     DPRINTF(AML_DEBUG_CFG80211, "%s %d <%s>\n", __func__, __LINE__, ndev->name);
     return -ENOENT;
 }
-
 
 static void vm_cancel_remain_channel(struct wlan_net_vif *wnet_vif)
 {
@@ -4971,104 +4213,6 @@ vm_cfg80211_remain_on_channel(
     int err = 0;
     unsigned char p2p_mode = 0;
 
-#ifdef CONFIG_P2P
-    int target_channel;
-    struct net_device *ndev = wdev_to_ndev(wdev);
-    struct wlan_net_vif *wnet_vif = wiphy_to_adapter(wiphy);
-    struct wifi_mac_p2p *p2p = wiphy_to_p2p(wiphy);
-    struct wifi_mac *wifimac = wnet_vif->vm_wmac;
-    //struct wireless_dev * sta_dev = wiphy_to_wdev(wiphy);
-    unsigned char restore_duration = (duration % 100);
-    struct drv_private* drv_priv = drv_get_drv_priv();
-    struct vm_wdev_priv *pwdev_priv = wdev_to_priv(wnet_vif->vm_wdev);
-
-    DPRINTF(AML_DEBUG_CFG80211, "<%s> %s  channel->center_freq=%d duration=%dms\n",
-        ndev->name, __func__, channel->center_freq,  duration);
-
-    p2p_mode = (wnet_vif->wnet_vif_id == NET80211_P2P_VMAC);
-
-   // if ((p2p->wnet_vif == NULL) || (wnet_vif->vm_p2p_support == 0)) {
-    //    ERROR_DEBUG_OUT("wnet_vif->vm_p2p_support==0 error!!!\n");
-    //    err = -EFAULT;
-   //     goto exit;
-   // }
-    if (drv_priv->drv_wnet_vif_table[(wnet_vif->wnet_vif_id+1)%2] != NULL)
-    {
-        struct wlan_net_vif *temp_vif = drv_priv->drv_wnet_vif_table[(wnet_vif->wnet_vif_id+1)%2];
-        if (temp_vif->wnet_vif_id == 1 && temp_vif->remain_on_channel)
-        {
-            vm_p2p_cancel_remain_channel(temp_vif->vm_p2p);
-            pr_debug("remain_on_channel: <%s> line 4498\n",temp_vif->vm_ndev->name);
-            temp_vif->remain_on_channel = 0;
-        }
-        else if (temp_vif->wnet_vif_id == 0 && temp_vif->remain_on_channel)
-        {
-            vm_cancel_remain_channel(temp_vif);
-            pr_debug("remain_on_channel: <%s> line 4504\n",temp_vif->vm_ndev->name);
-            temp_vif->remain_on_channel = 0;
-        }
-    }
-
-    if (duration > AML_MAX_REMAIN_ON_CHANNEL_DURATION)
-    {
-        DPRINTF(AML_DEBUG_WARNING, "%s %d duration=%d\n", __func__, __LINE__, duration);
-        duration = AML_MAX_REMAIN_ON_CHANNEL_DURATION;
-    }
-
-    if (wifi_mac_pwrsave_is_wnet_vif_sleeping(wnet_vif) == 0)
-    {
-        wifi_mac_pwrsave_wakeup(wnet_vif, WKUP_FROM_REMAIN_ACTIVE);
-    }
-
-    preempt_scan(ndev, 100, 100);
-    target_channel = ieee80211_frequency_to_channel(channel->center_freq);
-
-    if (p2p->wnet_vif->vm_flags & WIFINET_F_NOSCAN)
-    {
-        DPRINTF(AML_DEBUG_WARNING, "%s %d center_freq %d ,multiple remainchan, should not happen\n",
-            __func__, __LINE__, channel->center_freq);
-        vm_p2p_cancel_remain_channel(p2p);
-    }
-    memcpy(&p2p->remain_on_ch_channel, channel, sizeof(struct ieee80211_channel));
-    p2p->remain_on_ch_cookie = *cookie ;
-
-#ifdef CONFIG_CONCURRENT_MODE
-    concurrent_channel_protection(wnet_vif, 600);
-
-    if (restore_duration < 2)
-    {
-        restore_duration = (++p2p->p2p_listen_count % 2 + 2);
-
-    }
-    else if (restore_duration > 5)
-    {
-        restore_duration = (++p2p->p2p_listen_count % 4 + 1);
-    }
-
-    if (p2p->p2p_listen_count == 12)
-    {
-        restore_duration = 5;
-        p2p->p2p_listen_count = 0;
-    }
-#endif
-    p2p->work_channel = wifi_mac_find_chan(wifimac, target_channel, WIFINET_BWC_WIDTH20, target_channel);
-
-    if (wifi_mac_is_wm_running(wifimac) == true && wnet_vif->vm_p2p_support == 1)
-    {
-        p2p->need_restore_bsschan = REASON_RESOTRE_BSSCHAN_REMAIN;
-        wifi_mac_scan_notify_leave_or_back(wnet_vif, 1);
-        p2p->p2p_flag |= P2P_WAIT_SWITCH_CHANNEL;
-    } else {
-        wifi_mac_ChangeChannel(wifimac, p2p->work_channel, 0, wnet_vif->wnet_vif_id, wnet_vif->vm_opmode);
-    }
-    pr_debug("p2p_case: duration %d\n", restore_duration * 100);
-    cfg80211_ready_on_channel(p2p->wnet_vif->vm_wdev, *cookie, channel,
-    vm_p2p_discover_listen(p2p, target_channel, restore_duration * 100), GFP_KERNEL);
-
-    wnet_vif->remain_on_channel = 1;
-
-exit:
-#endif //#ifdef CONFIG_P2P
     return err;
 }
 
@@ -5077,43 +4221,6 @@ static int vm_cfg80211_cancel_remain_on_channel(struct wiphy *wiphy,
         unsigned long long cookie)
 {
     unsigned char p2p_mode = 0;
-#ifdef CONFIG_P2P
-    struct wifi_mac_p2p *p2p = wiphy_to_p2p(wiphy);
-    struct wlan_net_vif *wnet_vif = wiphy_to_adapter(wiphy);
-    struct net_device *dev = wdev_to_ndev(wdev);
-
-    p2p_mode = (wnet_vif->wnet_vif_id == NET80211_P2P_VMAC);
-
-    if (p2p_mode)
-    {
-        /*if(wnet_vif->vm_p2p_support == 0)
-        {
-            DPRINTF(AML_DEBUG_WARNING|AML_DEBUG_SCAN,
-                "<%s>:%s %d wnet_vif->vm_p2p_support==0 error!!!\n",
-                wnet_vif->vm_ndev->name,__func__, __LINE__);
-            return 0;
-        }*/
-        DPRINTF(AML_DEBUG_CFG80211, "%s %d <%s>\n", __func__, __LINE__, dev->name);
-        vm_p2p_cancel_remain_channel(p2p);
-    }
-    else
-    {
-        /*int cnt = 0;
-        if (wnet_vif->pub_state > WIFINET_PUB_INIT && wnet_vif->pub_state < WIFINET_PUB_GAS_RSP)
-        {
-            while (wnet_vif->pub_state != WIFINET_PUB_GAS_RSP && cnt < 50) {
-                msleep(20);
-                cnt++;
-            }
-        }
-        AML_OUTPUT("cnt %d, pub_state %d\n", cnt, wnet_vif->pub_state);*/
-        DPRINTF(AML_DEBUG_CFG80211, "%s %d <%s>\n", __func__, __LINE__, dev->name);
-
-        vm_cancel_remain_channel(wnet_vif);
-    }
-
-    wnet_vif->remain_on_channel = 0;
-#endif //#ifdef CONFIG_P2P
 
     return 0;
 }
@@ -5143,19 +4250,10 @@ int vm_cfg80211_send_mgmt(struct wlan_net_vif *wnet_vif, const unsigned char *bu
         DPRINTF(AML_DEBUG_CFG80211,"%s %d:mac<%s>\n", __func__, __LINE__,ether_sprintf(wh->i_addr1));
         sta = wifi_mac_get_sta_node(&wnet_vif->vm_sta_tbl, wnet_vif, wh->i_addr1);
     }
-    /* v16b: hard NULL-guard. wifi_mac_find_mgmt_tx_sta() and
-     * wifi_mac_get_sta_node() can both legitimately return NULL when
-     * userspace (hostapd, wpa_supplicant, aireplay-ng) tries to send
-     * a management frame to a destination that is not yet known to
-     * the driver (e.g. broadcast-deauth before STA is associated,
-     * action frame to a peer we haven't seen). Pre-v16b the code
-     * dereferenced sta->sta_wnet_vif on the very next line, which
-     * was a null-ptr panic. wifi_mac_tx_mgmt_frm() further
-     * dereferences sta->sta_flags_ext, so we cannot continue with
-     * sta == NULL. Drop the frame and free the skb instead. */
+    
     if (sta == NULL) {
         DPRINTF(AML_DEBUG_CFG80211 | AML_DEBUG_ERROR,
-                "v16b send_mgmt: no sta for a1=%pM fc0=0x%02x; dropping\n",
+                "W522A: send_mgmt: no sta for a1=%pM fc0=0x%02x; dropping\n",
                 wh->i_addr1, wh->i_fc[0]);
         wifi_mac_free_skb(skb);
         return -ENOENT;
@@ -5172,11 +4270,6 @@ int vm_cfg80211_send_mgmt(struct wlan_net_vif *wnet_vif, const unsigned char *bu
     *(unsigned short *)&wh->i_dur[0] = 0;
     *(unsigned short *)wh->i_seq = 0;
 
-    /* v16b: pre-v16b a `printk(KERN_INFO ...)` printed every 32nd
-     * call. With hostapd PS-Poll / Probe Response storms or
-     * monitor-mode injection this floods dmesg; demoted to pr_debug
-     * to keep production output clean. Bring back via dyndebug if
-     * needed for diagnostics. */
     {
         static unsigned long _sm_cnt;
         if ((_sm_cnt++ & 0x1f) == 0) {
@@ -5196,12 +4289,6 @@ int vm_cfg80211_notify_mgmt_rx(struct wlan_net_vif *wnet_vif, unsigned short cha
 {
     struct ieee80211_supported_band *band;
     struct wireless_dev *wdev = wnet_vif->vm_wdev;
-#ifdef CONFIG_P2P
-    struct wifi_mac_p2p *p2p = wdev_to_p2p(wdev);
-    struct wifi_mac_p2p_pub_act_frame * p2p_pub_act = NULL;
-    struct wifi_mac_p2p_action_frame *p2p_act = NULL;
-    unsigned char *p2p_noa;
-#endif
     int freq;
     struct net_device *dev = NULL;
     struct wifi_frame *wh = (struct wifi_frame *)data;
@@ -5209,10 +4296,6 @@ int vm_cfg80211_notify_mgmt_rx(struct wlan_net_vif *wnet_vif, unsigned short cha
     struct wifi_mac *wifimac = wnet_vif->vm_wmac;
     struct wifi_channel *main_vmac_chan = NULL;
     dev = wnet_vif->vm_ndev;
-
-    //if (wnet_vif->vm_curchan && (channel != wnet_vif->vm_curchan->chan_pri_num)) {
-        //channel = wnet_vif->vm_curchan->chan_pri_num;
-    //}
 
     if (channel <= CFG_CH_MAX_2G_CHANNEL)
         band = wdev->wiphy->bands[IEEE80211_BAND_2GHZ];
@@ -5222,7 +4305,7 @@ int vm_cfg80211_notify_mgmt_rx(struct wlan_net_vif *wnet_vif, unsigned short cha
     freq = ieee80211_channel_to_frequency(channel, band->band);
     if (!WIFINET_IS_ACTION(wh)
         || (WIFINET_IS_ACTION(wh)
-        /*&& is_need_to_print((unsigned char *)data + sizeof(struct wifi_frame))*/)) {
+        )) {
         DPRINTF(AML_DEBUG_CFG80211, "%s %d <%s> fc0=0x%x, fc1=0x%x, channel:%d, freq=%d\n",
             __func__, __LINE__, VMAC_DEV_NAME(wnet_vif), wh->i_fc[0], wh->i_fc[1], channel, freq);
     }
@@ -5237,111 +4320,10 @@ int vm_cfg80211_notify_mgmt_rx(struct wlan_net_vif *wnet_vif, unsigned short cha
     }
 
     if (WIFINET_IS_ACTION(wh)) {
-#ifdef CONFIG_P2P
-        vm_p2p_parse_negotiation_frames(p2p, data, &len, false);
-        p2p_pub_act = (struct wifi_mac_p2p_pub_act_frame *)((unsigned char *)data + sizeof(struct wifi_frame));
-        p2p_act = (struct wifi_mac_p2p_action_frame *)((unsigned char *)data + sizeof(struct wifi_frame));
-        pub_gas_act = (struct wifi_mac_pub_gas_act_frame *)((unsigned char *)data + sizeof(struct wifi_frame));
-        if ((p2p_pub_act->category == AML_CATEGORY_PUBLIC)
-            && (p2p_pub_act->action == WIFINET_ACT_PUBLIC_P2P)) {
-            if (p2p_pub_act->oui_type == OUI_TYPE_P2P) {
-                switch (p2p_pub_act->subtype) {
-                    case P2P_GO_NEGO_RESP:
-                    case P2P_INVITE_RESP:
-                    case P2P_PROVISION_DISC_RESP:
-                        if (p2p_pub_act->dialog_token == p2p->action_dialog_token) {
-                            DPRINTF(AML_DEBUG_WARNING, "%s dialog_token:%d, send_tx_status_flag;%d\n", __func__, p2p_pub_act->dialog_token, p2p->send_tx_status_flag);
-                            if (p2p->send_tx_status_flag) {
-                                os_timer_ex_cancel(&wnet_vif->vm_actsend, CANCEL_SLEEP);
-                                p2p->action_dialog_token = 0;
-                                p2p->action_pkt_len = 0;
-                            }
-
-                        } else {
-                            if (wnet_vif->vm_p2p->action_pkt_len) {
-                                DPRINTF(AML_DEBUG_WARNING, "%s send %d again\n", __func__, p2p_pub_act->subtype);
-                                vm_cfg80211_send_mgmt(wnet_vif, wnet_vif->vm_p2p->action_pkt, wnet_vif->vm_p2p->action_pkt_len);
-                            }//else duplicate
-                            goto _exit;
-                        }
-                        break;
-
-                    default:
-                        break;
-                }
-
-            }
-            else if (p2p_pub_act->oui_type == OUI_TYPE_DPP)
-            {
-                unsigned char dpp_action_subtype = *((char*)data + sizeof(struct wifi_frame) + 7);
-                AML_OUTPUT("DPP RX ACTION->%s\n", dpp_pub_action_str[dpp_action_subtype]);
-                switch (dpp_action_subtype)
-                {
-                    case 0:
-                        wnet_vif->pub_state = WIFINET_DPP_AUTH_REQ;
-                        break;
-                    case 1:
-                        wnet_vif->pub_state = WIFINET_DPP_AUTH_RSP;
-                        break;
-                    case 2:
-                        wnet_vif->pub_state = WIFINET_DPP_AUTH_CNF;
-                        break;
-                    default:
-                        break;
-                }
-            }
-        }
-        else if ((pub_gas_act->category == AML_CATEGORY_PUBLIC)
-              && ((pub_gas_act->action == WIFINET_ACT_PUBLIC_GAS_REQ) || (pub_gas_act->action == WIFINET_ACT_PUBLIC_GAS_RSP)))
-        {
-            unsigned char tag_len = *((char*)data + sizeof(struct wifi_frame) + 5);
-            AML_OUTPUT("GAS ACTION,action code:%d\n", pub_gas_act->action);
-            if ((tag_len >= 8)
-                && (*((char*)data + sizeof(struct wifi_frame) + 7) == 0xdd)
-                && (*((char*)data + sizeof(struct wifi_frame) + 8) == 0x05)
-                && (*((char*)data + sizeof(struct wifi_frame) + 9) == 0x50)
-                && (*((char*)data + sizeof(struct wifi_frame) + 10) == 0x6f)
-                && (*((char*)data + sizeof(struct wifi_frame) + 11) == 0x9a)
-                && (*((char*)data + sizeof(struct wifi_frame) + 12) == 0x1a)
-                && (*((char*)data + sizeof(struct wifi_frame) + 13) == 0x01)) {
-                pr_debug("[DPP Configuration]\n");
-                }
-            switch (pub_gas_act->action)
-            {
-                case WIFINET_ACT_PUBLIC_GAS_REQ:
-                    wnet_vif->pub_state = WIFINET_PUB_GAS_REQ;
-                    break;
-                case WIFINET_ACT_PUBLIC_GAS_RSP:
-                    wnet_vif->pub_state = WIFINET_PUB_GAS_RSP;
-                    break;
-                default:
-                    break;
-            }
-        }
-        else if ((p2p_act->category == AML_CATEGORY_P2P) && (p2p_act->subtype == P2P_PRESENCE_RESP)) {
-            if (p2p_act->dialog_token == p2p->action_dialog_token) {
-                DPRINTF(AML_DEBUG_WARNING, "%s, rx P2P_PRESENCE_RESP, dialog_token:%d\n", __func__, p2p_act->dialog_token);
-                p2p_noa = vm_p2p_get_p2pie_noa_ie(p2p, p2p_act->elts, &len);
-                if (p2p_noa && (wnet_vif->vm_state == WIFINET_S_CONNECTED)
-                    && vm_p2p_chk_p2p_role(p2p, NET80211_P2P_ROLE_CLIENT)) {
-                    vm_p2p_client_parse_noa_ie(p2p, (const unsigned char *)p2p_noa);
-                }
-                os_timer_ex_cancel(&wnet_vif->vm_actsend, CANCEL_SLEEP);
-                p2p->action_dialog_token = 0;
-                p2p->action_pkt_len = 0;
-            } else {
-                if (wnet_vif->vm_p2p->action_pkt_len) {
-                    DPRINTF(AML_DEBUG_WARNING, "%s send %d again\n", __func__, p2p_act->subtype);
-                    vm_cfg80211_send_mgmt(wnet_vif, wnet_vif->vm_p2p->action_pkt, wnet_vif->vm_p2p->action_pkt_len);
-                }//else duplicate
-                goto _exit;
-            }
-        }
-#endif
     }
     else if (WIFINET_IS_MGM(wh))
     {
-        //mgmt_frame = (unsigned char *)((wl_event_rx_frame_data_t *)rxframe + 1);
+        
     }
     else
     {
@@ -5353,13 +4335,6 @@ int vm_cfg80211_notify_mgmt_rx(struct wlan_net_vif *wnet_vif, unsigned short cha
         DPRINTF(AML_DEBUG_CFG80211, "%s %d call cfg80211_rx_mgmt\n", __func__, __LINE__);
     }
 
-    /**
-     * enum nl80211_rxmgmt_flags - flags for received management frame.
-     *
-     * Used by cfg80211_rx_mgmt()
-     *
-     * @NL80211_RXMGMT_FLAG_ANSWERED: frame was answered by device/driver.
-     */
     #if LINUX_VERSION_CODE > KERNEL_VERSION(3,14,29)
         cfg80211_rx_mgmt(wnet_vif->vm_wdev, freq, 0, data, len, 0);
     #else
@@ -5405,13 +4380,7 @@ static int vm_cfg80211_mgmt_tx_p2p(struct wiphy *wiphy, struct wireless_dev *wde
     wifimac = wnet_vif->vm_wmac;
     dev = ndev;
     center_freq = params->chan->center_freq;
-#ifdef CONFIG_P2P
-    p2p = wiphy_to_p2p(wiphy);
-    if (p2p == NULL || p2p->wnet_vif == NULL)
-        return -EINVAL;
-#else
     return -EOPNOTSUPP;
-#endif
 
     p2p_act = (struct wifi_mac_p2p_action_frame *)(params->buf + sizeof(struct wifi_frame));
     p2p_pub_act = (struct wifi_mac_p2p_pub_act_frame *)(params->buf + sizeof(struct wifi_frame));
@@ -5419,7 +4388,7 @@ static int vm_cfg80211_mgmt_tx_p2p(struct wiphy *wiphy, struct wireless_dev *wde
         if (is_need_process_p2p_action((unsigned char*)params->buf)) {
             pr_debug("%s, Need to send action frame in the connected state, params->len=%d\n", __func__, params->len);
         } else {
-            return 0;//no need to send mgmt after connected,if so, disconnect first
+            return 0;
         }
     }
 
@@ -5451,7 +4420,7 @@ static int vm_cfg80211_mgmt_tx_p2p(struct wiphy *wiphy, struct wireless_dev *wde
             memcpy(wextmlme.addr.sa_data, wh->i_addr1, ETH_ALEN);
             wextmlme.reason_code = 0;
             wextmlme.cmd =IW_MLME_DEAUTH;
-            //wifi_mac_wext_Setwmine(vmac->vm_dev,NULL,NULL,&wextmlme);
+            
             DPRINTF(AML_DEBUG_CFG80211, "Disconnect STA : %s\n",ether_sprintf(wh->i_addr1));
         }
         goto exit;
@@ -5460,11 +4429,6 @@ static int vm_cfg80211_mgmt_tx_p2p(struct wiphy *wiphy, struct wireless_dev *wde
     os_timer_ex_cancel(&wnet_vif->vm_mgtsend, CANCEL_SLEEP);
     os_timer_ex_cancel(&wnet_vif->vm_actsend, CANCEL_SLEEP);
     target_channel = ieee80211_frequency_to_channel(center_freq);
-
-#ifdef CONFIG_CONCURRENT_MODE
-    concurrent_channel_protection(wnet_vif, 1500);
-    concurrent_channel_restore(target_channel,wnet_vif, 1500);
-#endif
 
     if ((wifimac->wm_curchan != WIFINET_CHAN_ERR)) {
         if (target_channel != wifimac->wm_curchan->chan_pri_num) {
@@ -5551,9 +4515,6 @@ static int vm_cfg80211_mgmt_tx_p2p(struct wiphy *wiphy, struct wireless_dev *wde
             p2p->cookie = *cookie;
             p2p->action_pkt_len = params->len;
             p2p->raw_action_pkt_len = params->len;
-#ifdef CTS_VERIFIER_GAS
-            p2p->action_code = p2p_pub_act->action;
-#endif
             p2p->action_dialog_token = p2p_act->dialog_token;
             p2p->act_pkt_retry_count = 0;
             p2p->tx_status_flag = WIFINET_TX_STATUS_NOSET;
@@ -5576,19 +4537,8 @@ static int vm_cfg80211_mgmt_tx_p2p(struct wiphy *wiphy, struct wireless_dev *wde
         goto exit;
     }
 
-#ifdef CTS_VERIFIER_GAS
-    if (p2p_pub_act->action == WIFINET_ACT_PUBLIC_GAS_REQ) {
-        wnet_vif->vm_p2p->p2p_flag &= (~P2P_GAS_RSP);
-    }
-#endif
     do {
         msleep(5);
-#ifdef CTS_VERIFIER_GAS
-        if ((p2p_pub_act->action == WIFINET_ACT_PUBLIC_GAS_REQ)
-            && (wnet_vif->vm_p2p->p2p_flag & P2P_GAS_RSP)) {
-            break;
-        }
-#endif
     } while (p2p->tx_status_flag != WIFINET_TX_STATUS_SUCC
             && p2p->act_pkt_retry_count <= DEFAULT_P2P_ACTION_RETRY_TIMES
             && !p2p->send_tx_status_flag);
@@ -5700,17 +4650,7 @@ static int vm_cfg80211_mgmt_tx(struct wiphy *wiphy, struct wireless_dev *wdev,
     struct wlan_net_vif *wnet_vif = wiphy_to_adapter(wiphy);
 
     if ((wnet_vif->vm_opmode == WIFINET_M_STA) || (wnet_vif->vm_opmode == WIFINET_M_P2P_CLIENT) || (wnet_vif->vm_opmode == WIFINET_M_HOSTAP)) {
-#ifdef CONFIG_P2P
-        p2p_support = wnet_vif->vm_p2p_support;
-        if (p2p_support) {
-            ret = vm_cfg80211_mgmt_tx_p2p(wiphy, wdev, params, cookie);
-
-        } else {
-            ret = vm_cfg80211_mgmt_tx_sta(wiphy, wdev, params, cookie);
-        }
-#else
         ret = vm_cfg80211_mgmt_tx_sta(wiphy, wdev, params, cookie);
-#endif
     }
     pr_debug("vm_cfg80211_mgmt_tx: opmode %d, p2p_support %d, ret %d\n", wnet_vif->vm_opmode, p2p_support, ret);
 
@@ -5724,10 +4664,6 @@ vm_cfg80211_assoc(struct wiphy *wiphy, struct net_device *dev,
     DPRINTF(AML_DEBUG_CFG80211, "%s %d <%s>\n", __func__, __LINE__, dev->name);
     return 0;
 }
-
-//-++
-
-
 
 static int
 vm_cfg80211_set_txq_params(struct wiphy *wiphy, struct net_device *dev,
@@ -5757,28 +4693,7 @@ vm_cfg80211_set_txq_params(struct wiphy *wiphy, struct net_device *dev,
             return 0;
     }
     wmep->wmep_aifsn = params->aifs;
-    /*
-     * v15r AP-QoS FIX: convert raw cfg80211 CW values into log2-domain.
-     *
-     * `WME_PARAM_LOGCWMIN_GET()` / `WME_PARAM_LOGCWMAX_GET()` are designed
-     * to extract the low / high nibble of the *packed* ECW byte used in
-     * the 802.11 IE (a single byte with logCWmin in the low 4 bits and
-     * logCWmax in the high 4 bits). `params->cwmin` and `params->cwmax`
-     * delivered by cfg80211, however, are full u16 contention-window
-     * *values* (typical AP values: 15, 31, 1023). Two bugs piled on top:
-     *
-     *   1. Applying the nibble-extraction masks to the raw u16 values
-     *      throws away every meaningful bit and yields garbage. Example:
-     *      cwmin=15 -> & 0x0f = 15; cwmax=1023 -> & 0xf0 >> 4 = 15. Every
-     *      AC ends up with the same logcwmin / logcwmax = 15 regardless
-     *      of what hostapd asked for, killing AC differentiation.
-     *
-     *   2. The two assignments were swapped: `logcwmax` was populated
-     *      from `cwmin` and vice-versa.
-     *
-     * The correct conversion of an 802.11 contention-window value to its
-     * log2-form is `ilog2(value + 1)` (the values are always 2^n - 1).
-     */
+    
     wmep->wmep_logcwmin = (params->cwmin > 0) ? ilog2(params->cwmin + 1) : 0;
     wmep->wmep_logcwmax = (params->cwmax > 0) ? ilog2(params->cwmax + 1) : 0;
     wmep->wmep_txopLimit = params->txop;
@@ -5844,9 +4759,21 @@ vm_cfg80211_get_channel(struct wiphy *wiphy, struct wireless_dev *wdev,
         return -1;
     }
 
+    if (temp_chan->chan_pri_num == 0) {
+        /* curchan exists but isn't established yet (polled before AP/STA
+         * bring-up completes, or AP start failed). Userspace (NetworkManager,
+         * hostapd, iw) polls get_channel many times per second; emitting
+         * pr_err here floods the serial console, which pins the CPU pushing
+         * UART bytes -> DVFS hunting (sys_pll_dco didn't lock) -> audible coil
+         * whine, and starves the SDIO data path (throughput collapse).
+         * Return quietly: "no channel yet" is not an error worth logging. */
+        return -1;
+    }
+
     cfg_chan = ieee80211_get_channel(wiphy, wifi_mac_Ieee2mhz(temp_chan->chan_pri_num, 0));
     if (cfg_chan == NULL) {
-        ERROR_DEBUG_OUT("no such pri_chan:%d\n", temp_chan->chan_pri_num);
+        pr_err_ratelimited("W522A: get_channel: no cfg80211 channel for pri=%d\n",
+                           temp_chan->chan_pri_num);
         return -1;
     }
 
@@ -5862,6 +4789,18 @@ vm_cfg80211_get_channel(struct wiphy *wiphy, struct wireless_dev *wdev,
         return -1;
     }
     chandef->center_freq1 = temp_chan->chan_cfreq1;
+
+    /* If the driver-built chandef is internally inconsistent (e.g. center_freq1
+     * doesn't match the width / control freq), cfg80211 throws a WARN_ON inside
+     * nl80211_send_chandef() every time userspace (iw, NetworkManager) dumps the
+     * interface. Validate here and fall back to a guaranteed-valid 20 MHz def on
+     * the control channel instead of handing cfg80211 a bad chandef. */
+    if (!cfg80211_chandef_valid(chandef)) {
+        pr_warn_ratelimited("W522A: get_channel: invalid chandef chan=%d bw=%d "
+            "cf1=%d — downgrading to 20MHz\n",
+            temp_chan->chan_pri_num, temp_chan->chan_bw, temp_chan->chan_cfreq1);
+        cfg80211_chandef_create(chandef, cfg_chan, NL80211_CHAN_NO_HT);
+    }
 
     chan_dbg(temp_chan, "x3", 4623);
     return 0;
@@ -5923,7 +4862,7 @@ vm_cfg80211_set_noack_map(struct wiphy *wiphy,struct net_device *dev,
 static int
 vm_cfg80211_start_p2p_device(struct wiphy *wiphy,struct wireless_dev *wdev)
 {
-#ifdef CONFIG_P2P //TODO
+#ifdef CONFIG_P2P 
     struct wlan_net_vif *wnet_vif = wiphy_to_adapter(wiphy);
     struct vm_wdev_priv *pwdev_priv = wdev_to_priv(wdev);
     struct wifi_mac_p2p *p2p = &pwdev_priv->p2p;
@@ -5943,7 +4882,7 @@ vm_cfg80211_start_p2p_device(struct wiphy *wiphy,struct wireless_dev *wdev)
 static void
 vm_cfg80211_stop_p2p_device(struct wiphy *wiphy, struct wireless_dev *wdev)
 {
-#ifdef CONFIG_P2P //TODO
+#ifdef CONFIG_P2P 
     struct wlan_net_vif *wnet_vif = wiphy_to_adapter(wiphy);
     struct vm_wdev_priv *pwdev_priv = wdev_to_priv(wdev);
     struct wifi_mac_p2p *p2p = &pwdev_priv->p2p;
@@ -5962,16 +4901,6 @@ vm_cfg80211_set_mcast_rate(struct wiphy *wiphy, struct net_device *dev,
     DPRINTF(AML_DEBUG_CFG80211, "%s(%d) callback not supported\n", __func__, __LINE__);
     return -1;
 }
-
-#if 0
-static int
-vm_cfg80211_start_radar_detection(struct wiphy *wiphy, struct net_device *dev,
-                                  struct cfg80211_chan_def *chandef, unsigned int cac_time_ms)
-{
-    pr_debug("no support yet %s\n", __func__);
-    return -1;
-}
-#endif
 
 static int
 vm_cfg80211_set_coalesce(struct wiphy *wiphy, struct cfg80211_coalesce *coalesce)
@@ -5998,57 +4927,11 @@ vm_cfg80211_get_antenna(struct wiphy *wiphy,
     DPRINTF(AML_DEBUG_CFG80211, "%s(%d) callback not supported\n", __func__, __LINE__);
     return -1;
 }
-#if 0
-static int
-vm_cfg80211_auth(struct wiphy *wiphy, struct net_device *dev,
-                    struct cfg80211_auth_request *req)
-{
-    int rc = -EINVAL;
-    int auth_value = WIFINET_AUTH_NONE;
-    struct wlan_net_vif *wnet_vif = wiphy_to_adapter(wiphy);
-    struct wifi_mac *wifimac = wnet_vif->vm_wmac;
-
-    pr_debug("-<running> %s %d\n",__func__,__LINE__);
-    pr_debug("----auth_type:%d\n", req->auth_type);
-    switch (req->auth_type)
-    {
-        case NL80211_AUTHTYPE_OPEN_SYSTEM:
-            wnet_vif->vm_flags &= ~(WIFINET_F_WPA|WIFINET_F_PRIVACY);
-            auth_value = WIFINET_AUTH_OPEN;
-            break;
-        case NL80211_AUTHTYPE_SHARED_KEY:
-            wnet_vif->vm_flags &= ~WIFINET_F_WPA;
-            wnet_vif->vm_flags |= WIFINET_F_PRIVACY;
-            auth_value = WIFINET_AUTH_SHARED;
-            break;
-        case NL80211_AUTHTYPE_FT:
-            break;
-        case NL80211_AUTHTYPE_NETWORK_EAP:
-            wnet_vif->vm_flags &= ~WIFINET_F_WPA;
-            wnet_vif->vm_flags |= WIFINET_F_PRIVACY;
-            auth_value = WIFINET_AUTH_8021X;
-            break;
-        case NL80211_AUTHTYPE_SAE:
-            //used by mesh
-            break;
-        case NL80211_AUTHTYPE_AUTOMATIC:
-            auth_value = WIFINET_AUTH_AUTO;
-            break;
-        default:
-            pr_err("<running> %s %d, unknown auth type\n",__func__,__LINE__);
-            break;
-    }
-    wnet_vif->vm_mainsta->sta_authmode = auth_value;
-    pr_debug("----sta_authmode:%d\n", wnet_vif->vm_mainsta->sta_authmode);
-
-    return rc;
-}
-#endif
 static int
 vm_cfg80211_set_cqm_txe_cfg(struct wiphy *wiphy,struct net_device *dev,
                                unsigned int rate, unsigned int pkts, unsigned int intvl)
 {
-//TODO
+
     ERROR_DEBUG_OUT("not support yet \n");
     return -1;
 }
@@ -6075,12 +4958,6 @@ vm_cfg80211_set_monitor_channel(struct wiphy *wiphy,
         ERROR_DEBUG_OUT("chandef->chan is null/zero\n");
         return -EINVAL;
     }
-
-    /* v15j: previously this callback was a debug-print stub, so
-     * `iw dev <vif> set channel N` (and friends) would silently
-     * do nothing on a monitor interface. Wire it up to the same
-     * channel-set plumbing the AP/STA paths use so monitor mode
-     * can actually tune the radio. */
 
     pri_chan = ieee80211_frequency_to_channel(chan->center_freq);
 
@@ -6171,9 +5048,6 @@ static int vm_cfg80211_external_auth(struct wiphy *wiphy, struct net_device *dev
 }
 #endif
 
-/*Modify order of the interfaces according to the definition in linux kernel
-** those commented were not supported currently in our driver.
-*/
 static struct cfg80211_ops vm_cfg80211_ops =
 {
     .suspend = vm_cfg80211_suspend,
@@ -6194,7 +5068,7 @@ static struct cfg80211_ops vm_cfg80211_ops =
     .del_station = vm_cfg80211_del_station,
     .change_station = vm_cfg80211_change_station,
     .get_station = vm_cfg80211_get_station,
-    .dump_station = vm_cfg80211_dump_station,//same to get station
+    .dump_station = vm_cfg80211_dump_station,
     .change_bss = vm_cfg80211_change_bss,
     .set_txq_params = vm_cfg80211_set_txq_params,
     .set_monitor_channel = vm_cfg80211_set_monitor_channel,
@@ -6240,116 +5114,55 @@ static struct cfg80211_ops vm_cfg80211_ops =
 #endif
 };
 
-/*
-* Added by Xuexing.yang@ for enable VHT features
-* Date: 06/05 2017
-*
-*/
 static void vm_cfg80211_init_vht_capab(struct ieee80211_sta_vht_cap *vht_cap, enum ieee80211_band band)
 {
     pr_debug("%s(%d)\n",__func__,__LINE__);
 
-    /* v15t: VHT (802.11ac) is only defined for the 5 GHz band. The
-     * W522A / Amlogic W155S1 has no TurboQAM-style 2.4 GHz VHT
-     * extension. Pre-v15t the function ignored the `band` argument
-     * and set vht_supported = true on 2.4 GHz too, which made the
-     * driver inject a VHT Capabilities IE into 2.4 GHz Probe Reqs
-     * and Assoc Reqs. Some APs (notably newer OpenWrt/hostapd
-     * builds and certain Mikrotik firmwares) reject an Assoc Req
-     * carrying a VHT IE on a 2.4 GHz channel as malformed and the
-     * STA fails to connect; others silently downgrade rate
-     * negotiation. Leave vht_supported=false on 2.4 GHz so the IE
-     * is omitted. */
     if (band != IEEE80211_BAND_5GHZ) {
         vht_cap->vht_supported = false;
         return;
     }
 
     vht_cap->vht_supported = true;
-    #if 0 /*Original added from RTL view, interpreted into kernel language*/
+    #if 0 
     vht_cap->cap =
-    (3 << 0) | // MaxMPDU Len: 0/1/2/3 is 3895/7991/11454/reserved octets
-    (0 << 2) | // ChanWidth: 0 is only80, 1 is 160, 2 is 160+8080, 3 is reserved
-    (0 << 4) | // RxLDPC   : 0 is not support, 1 is support
-    (1 << 5) | // ShortGI_for_80: 1 is support
-    (0 << 6) | // ShortGI 160&8080: 0 is NOT support
-    (0 << 7) | // Tx STBC : 0 is no supported
-    (1 << 8) | // Rx STBC : 0 is no supported , 1 is one sps, 2/3/4 is 2-4 sps. 5/6/7 is reserved.
-    (0 << 11) | // SU beamformer:
-    (1 << 12) | // SU Beamformee:
-    (1 << 13) | // Beamformee STS Capability: Rx SPS -1
-    (0 << 16) | // Number of sounding dimensions
-    (0 << 19) | // MU beamformer Capable
-    (0 << 20) | // MU beamformee Capable
-    (0 << 21) | // VHT TXOP PS
-    (0 << 22) | // HTC-VHT Capable: variable HT control field
-    (7 << 23) | // Max AMPDU length Exponent
-    (0 << 26) | // VHT link Adaptation Capable
-    (0 << 28) | // Rx Antenna Pattern Consistency
-    (0 << 29) | // Tx Antenna Pattern Consistency
-    (0 << 30);  // Reserved.
+    (3 << 0) | 
+    (0 << 2) | 
+    (0 << 4) | 
+    (1 << 5) | 
+    (0 << 6) | 
+    (0 << 7) | 
+    (1 << 8) | 
+    (0 << 11) | 
+    (1 << 12) | 
+    (1 << 13) | 
+    (0 << 16) | 
+    (0 << 19) | 
+    (0 << 20) | 
+    (0 << 21) | 
+    (0 << 22) | 
+    (7 << 23) | 
+    (0 << 26) | 
+    (0 << 28) | 
+    (0 << 29) | 
+    (0 << 30);  
     #endif
 
-    /* v15p: fix bogus "MASK as value" use.
-     *
-     * Pre-v15p the cap word ORed in:
-     *   - IEEE80211_VHT_CAP_MAX_MPDU_LENGTH_3895 (0)
-     *   - IEEE80211_VHT_CAP_MAX_MPDU_LENGTH_7991 (1)
-     *   - IEEE80211_VHT_CAP_MAX_MPDU_LENGTH_11454 (2)
-     * which are mutually exclusive enum values for the same 2-bit field
-     * (bits 0..1). ORing 1|2 = 3 -> "reserved", an undefined value that
-     * some peers interpreted as MaxMPDU = 3895 (worst case) and some
-     * tossed the whole cap. Use just the maximum we want.
-     *
-     *   - IEEE80211_VHT_CAP_BEAMFORMEE_STS_MASK (0x1c000 mask, bits 13..15)
-     *     was OR'd as if it were a value, claiming 7+1 = 8 STS (we have 1).
-     *     Some APs see "STS=8 on a 1-stream device" and refuse to enable
-     *     SU beamforming. Set to 1 STS (value 0).
-     *
-     *   - IEEE80211_VHT_CAP_MAX_A_MPDU_LENGTH_EXPONENT_MASK was also OR'd
-     *     as if it were a value, claiming exponent 7 = 1 048 575 octets.
-     *     The chip can do 1 MB AMPDU on paper so this is actually OK,
-     *     but switch to the explicit named value for clarity.
-     *
-     *   - IEEE80211_VHT_CAP_TXSTBC and IEEE80211_VHT_CAP_HTC_VHT were
-     *     missing although the chip supports both; without them rate
-     *     control on the AP side picks lower rates for STA-uplink. */
     vht_cap->cap =  IEEE80211_VHT_CAP_MAX_MPDU_LENGTH_11454 |
                     IEEE80211_VHT_CAP_RXLDPC |
+                    IEEE80211_VHT_CAP_SHORT_GI_80 |
                     IEEE80211_VHT_CAP_TXSTBC |
                     IEEE80211_VHT_CAP_RXSTBC_1 |
                     IEEE80211_VHT_CAP_SU_BEAMFORMEE_CAPABLE |
-                    /* 1 STS = field value 0 */
+
                     (0u << IEEE80211_VHT_CAP_BEAMFORMEE_STS_SHIFT) |
                     IEEE80211_VHT_CAP_HTC_VHT |
-                    /* AMPDU length exponent 7 -> 2^(13+7)-1 = 1 MiB */
+
                     (7u << IEEE80211_VHT_CAP_MAX_A_MPDU_LENGTH_EXPONENT_SHIFT);
 
     vht_cap->vht_mcs.tx_highest = cpu_to_le16(292);
     vht_cap->vht_mcs.rx_highest = cpu_to_le16(292);
-    /*
-     * v15r VHT-MCS MAP FIX: each 2-bit field in tx/rx_mcs_map describes
-     * one spatial stream (bits 0..1 = NSS1, bits 2..3 = NSS2, ...,
-     * bits 14..15 = NSS8). Allowed values:
-     *   0 = supports MCS 0..7
-     *   1 = supports MCS 0..8
-     *   2 = supports MCS 0..9
-     *   3 = stream not supported
-     *
-     * The pre-v15r driver wrote just `IEEE80211_VHT_MCS_SUPPORT_0_9`
-     * (numeric value 2) into the whole u16, which decodes as:
-     *   NSS1 = MCS 0..9, NSS2..NSS8 = MCS 0..7.
-     * That advertises *eight spatial streams* on a hardware that only
-     * has one chain. APs doing capability-based rate selection then
-     * attempt 2/3/4-stream MIMO modulations to us, every TX fails, and
-     * the AP falls back to legacy 11g rates -> massive download loss
-     * (especially visible on VHT80, where the AP otherwise wants to
-     * burst MCS9 single-stream to us at 433 Mbps).
-     *
-     * Correct map for the stability profile: NSS1 -> MCS 0..7,
-     * NSS2..NSS8 -> not supported (3).
-     * vht_mcs_map is __le16 in the kernel struct so use cpu_to_le16().
-     */
+    
     vht_cap->vht_mcs.tx_mcs_map = cpu_to_le16(
             IEEE80211_VHT_MCS_SUPPORT_0_7 |
             (IEEE80211_VHT_MCS_NOT_SUPPORTED <<  2) |
@@ -6361,7 +5174,6 @@ static void vm_cfg80211_init_vht_capab(struct ieee80211_sta_vht_cap *vht_cap, en
             (IEEE80211_VHT_MCS_NOT_SUPPORTED << 14));
     vht_cap->vht_mcs.rx_mcs_map = vht_cap->vht_mcs.tx_mcs_map;
 }
-/*End of adding*/
 
 static void vm_cfg80211_init_ht_capab(struct ieee80211_sta_ht_cap *ht_cap, enum ieee80211_band band)
 {
@@ -6369,25 +5181,6 @@ static void vm_cfg80211_init_ht_capab(struct ieee80211_sta_ht_cap *ht_cap, enum 
 
     ht_cap->ht_supported = true;
 
-    /* v13c PERF FIX: advertise SM Power Save = "Disabled" instead of the
-     * default "Static". The two HT-CAP bits at offset 2..3 advertise the
-     * client's spatial-multiplexing power-save mode to the AP:
-     *   00 = Static SMPS (single chain, AP uses single-stream rates)
-     *   11 = Disabled    (no PS, AP free to use full rate)
-     * Without this OR the field comes through as 00 = Static, even though
-     * the rest of the driver (wifi_mac_if.c::wifi_mac_setup) sets
-     * WIFINET_HTCAP_DISABLE_SMPS internally. The AP (Xiaomi router) sees
-     * Static and rate-controls us conservatively to MCS 3 (54 Mbps),
-     * while mt7601u right next to us advertises Disabled (0x017e) and
-     * gets MCS 7 (150 Mbps SGI) from the same AP at the same signal.
-     * IEEE80211_HT_CAP_SM_PS == 0x000C, which is the full-mask value
-     * meaning bits 2..3 = 11 = Disabled. */
-    /* v15p: HT-CAP RX_STBC field (bits 8..9) is a 2-bit value, not a
-     * flag. Pre-v15p we OR'd IEEE80211_HT_CAP_RX_STBC (0x0300 mask),
-     * which advertised "3 streams" while the chip has 1 stream. APs
-     * doing strict capability checks (some Mikrotik / OpenWrt builds)
-     * silently fell back to non-STBC modulations and reduced TX rates.
-     * Set the field to 1 = "1 spatial stream STBC supported". */
     ht_cap->cap = IEEE80211_HT_CAP_SUP_WIDTH_20_40 |
                   IEEE80211_HT_CAP_SGI_40 | IEEE80211_HT_CAP_SGI_20 |
                   IEEE80211_HT_CAP_LDPC_CODING |
@@ -6395,32 +5188,12 @@ static void vm_cfg80211_init_ht_capab(struct ieee80211_sta_ht_cap *ht_cap, enum 
                   (1u << IEEE80211_HT_CAP_RX_STBC_SHIFT) |
                   IEEE80211_HT_CAP_MAX_AMSDU |
                   IEEE80211_HT_CAP_SM_PS;
-    /* v15t: IEEE80211_HT_CAP_DSSSCCK40 advertises DSSS/CCK modulation
-     * when operating at HT40, which is only meaningful on 2.4 GHz
-     * (5 GHz uses OFDM only). Pre-v15t the flag was set on both
-     * bands; some 5 GHz APs see "DSSS/CCK in HT40" in our HT IE on a
-     * 5 GHz channel and treat it as malformed -> they fall back to
-     * HT20 or refuse HT40, costing roughly half the 11n PHY rate. */
+    
     if (band == IEEE80211_BAND_2GHZ)
         ht_cap->cap |= IEEE80211_HT_CAP_DSSSCCK40;
 
-    /* v15p: 64K is the legacy 11n max; 11n with VHT-style A-MPDU bursts
-     * uses the higher IEEE80211_HT_MAX_AMPDU_*. The chip's A-MPDU window
-     * is 1 MiB worth of MPDUs (matches the VHT exponent above) but the
-     * mac80211 HT field only ranges up to 64 KiB so we cap there. */
     ht_cap->ampdu_factor = IEEE80211_HT_MAX_AMPDU_64K;
-    /* v16a: ampdu_density is the *minimum* spacing between MPDUs that
-     * we (the STA) require the AP to leave when it bursts an A-MPDU
-     * to us. Higher values mean fewer MPDUs fit in a given TXOP so
-     * RX-side throughput drops. The pre-v16a comment had this backwards
-     * (it advertised \"8 us\" supposedly for mt7601u/Atheros
-     * compatibility, but we are the STA, not the AP — the AP's chipset
-     * is irrelevant here, and 8 us actively hurts RX throughput).
-     *
-     * Modern Wi-Fi chips advertise ≤ 4 us routinely; the W155S1 RX
-     * pipe handles 4 us easily. Use IEEE80211_HT_MPDU_DENSITY_4 to let
-     * the AP pack MPDUs tighter, restoring ≈ 1.5× the bursted RX rate
-     * on long A-MPDUs. */
+    
     ht_cap->ampdu_density = IEEE80211_HT_MPDU_DENSITY_4;
     ht_cap->mcs.tx_params = IEEE80211_HT_MCS_TX_DEFINED;
 
@@ -6431,13 +5204,6 @@ static void vm_cfg80211_init_ht_capab(struct ieee80211_sta_ht_cap *ht_cap, enum 
     ht_cap->mcs.rx_highest = MAX_BIT_RATE_40MHZ_MCS7;
 }
 
-/**
- * @brief get the event id of the events array
- *
- * @param event     vendor event
- *
- * @return    index of events array
- */
 static int
 vm_get_event_id(int event)
 {
@@ -6451,19 +5217,6 @@ vm_get_event_id(int event)
 	return event_max;
 }
 
-/**
- * @brief vendor command to set parameters through nl80211
- *      to communicate with iw application
- *
- * @param wiphy       A pointer to wiphy struct
- * @param wdev     A pointer to wireless_dev struct
- * @param data     a pointer to data
- * @param  len     data length
- *
- * @return     0: success  1: fail
- * @Author     Boatman Yang(xuexing.yang@amlogic.com)
- * @Date       05/10 2017
- */
 extern struct sts_cfg_data g_sts_cfg;
 
 unsigned int irr_para_reg_addr[] ={
@@ -6534,8 +5287,6 @@ static int reply_get_efuse_data(struct wiphy *wiphy, unsigned int offset) {
     if (!reply)
         return -ENOMEM;
 
-    /* We use offset as attribute value. It is easiest way for
-     * userspace to parse response. */
     if (nla_put_u32(reply, offset, data)) {
         kfree_skb(reply);
         return -ENOBUFS;
@@ -6550,7 +5301,7 @@ int vm_cfg80211_vnd_cmd_set_para(struct wiphy *wiphy, struct wireless_dev *wdev,
     unsigned char opcode = 0;
     unsigned int usr_data_arr[8] = {0};
     unsigned int usr_data = 0;
-    unsigned int usr_data_ext = 0; //for complex cmd use, for example register write
+    unsigned int usr_data_ext = 0; 
     unsigned int reg_val = 0;
     unsigned char  vmc_tmp_addr[6]= {0x00,0x01,0x02,0x03,0x04,0x05};
     unsigned char* opt_data = NULL;
@@ -6613,7 +5364,7 @@ int vm_cfg80211_vnd_cmd_set_para(struct wiphy *wiphy, struct wireless_dev *wdev,
                 usr_data = usr_data_arr[0] << 24 | usr_data_arr[1] << 16 | usr_data_arr[2] << 8 | usr_data_arr[3];
                 break;
 
-            case 7: //write vmac macaddress
+            case 7: 
                 vmc_tmp_addr[0] = iwVendorCmd->first_eight_byte>>8 & 0x000000ff;
                 vmc_tmp_addr[1] = iwVendorCmd->first_eight_byte>>16 & 0x000000ff;
                 vmc_tmp_addr[2] = iwVendorCmd->first_eight_byte>>24 & 0x000000ff;
@@ -6791,16 +5542,16 @@ int vm_cfg80211_vnd_cmd_set_para(struct wiphy *wiphy, struct wireless_dev *wdev,
         case VM_NL80211_VENDER_SUBCMD_GETREG:
             if (((usr_data >> 24) & 0xff) == 0xff ) {
 #ifdef USE_T902X_RF
-                reg_val = rf_i2c_read(usr_data & 0x00ffffff); //access t902x rf reg
+                reg_val = rf_i2c_read(usr_data & 0x00ffffff); 
 #endif
             } else if (((usr_data >> 24) & 0xf0) == 0xf0 ) {
 #ifdef USE_T902X_RF
-                reg_val = rf_i2c_read(usr_data & 0xffffffff); //access t902x rf reg
+                reg_val = rf_i2c_read(usr_data & 0xffffffff); 
 #endif
             } else {
                 reg_val = wnet_vif->vif_ops.read_word(usr_data);
             }
-            pr_debug("Drv info: Reg data=&0x%08x\n",reg_val);//do not remove me!!!!!
+            pr_debug("Drv info: Reg data=&0x%08x\n",reg_val);
             record_reg_value(usr_data, reg_val);
             break;
 
@@ -6808,12 +5559,12 @@ int vm_cfg80211_vnd_cmd_set_para(struct wiphy *wiphy, struct wireless_dev *wdev,
             pr_debug("Cfg80211: Reg addr: val:0x%08x,val:0x%08x\n",usr_data,usr_data_ext);
             if (((usr_data >> 24) & 0xff) == 0xff) {
 #ifdef USE_T902X_RF
-                rf_i2c_write( usr_data & 0x00ffffff,usr_data_ext );//access t902x rf reg
+                rf_i2c_write( usr_data & 0x00ffffff,usr_data_ext );
 #endif
 
             } else if (((usr_data >> 24) & 0xf0) == 0xf0) {
 #ifdef USE_T902X_RF
-                rf_i2c_write( usr_data & 0xffffffff,usr_data_ext );//access t902x rf reg
+                rf_i2c_write( usr_data & 0xffffffff,usr_data_ext );
 #endif
             } else {
                 wnet_vif->vif_ops.write_word(usr_data , usr_data_ext);
@@ -6840,7 +5591,6 @@ int vm_cfg80211_vnd_cmd_set_para(struct wiphy *wiphy, struct wireless_dev *wdev,
        batch_dump_reg(wiphy, irr_para_reg_addr, 8);
      break;
 
-
     case VM_NL80211_PHY_STATISTIC:
         wifimac->drv_priv->drv_ops.phy_stc();
         break;
@@ -6864,7 +5614,7 @@ int vm_cfg80211_vnd_cmd_set_para(struct wiphy *wiphy, struct wireless_dev *wdev,
         break;
 
     case VM_NL80211_VENDER_BCN_INTERVAL:
-        /* change firmware bcn intvl, JUST for power save test. */
+        
         {
             int bcn_intvl = usr_data * 100;
             unsigned int regdata = 0;
@@ -6875,7 +5625,6 @@ int vm_cfg80211_vnd_cmd_set_para(struct wiphy *wiphy, struct wireless_dev *wdev,
             wifimac->drv_priv->drv_ops.Phy_beaconinit(wifimac->drv_priv,
                 wnet_vif->wnet_vif_id, bcn_intvl);
 
-            /* change max sleep time */
             if (usr_data != 0)
             {
                 regdata = wnet_vif->vif_ops.read_word(RG_AON_A37);
@@ -7028,28 +5777,6 @@ err:
         wnet_vif->vif_ops.pt_rx_stop();
         break;
 
-#ifdef WIFI_CAPTURE
-    case VM_NL80211_SET_CAP_GAIN:
-        pr_debug("set gain = 0x%08x\n",ntohl(vnd_if->vnd_com_cmd.data));
-        dut_set_gain(ntohl(vnd_if->vnd_com_cmd.data));
-        break;
-
-   case VM_NL80211_SET_BCAP_NAME:
-        pr_debug("bcap name = 0x%08x\n",ntohl(vnd_if->vnd_com_cmd.data));
-        dut_set_bcap_log_name(ntohl(vnd_if->vnd_com_cmd.data));
-       break;
-
-    case VM_NL80211_VDR_SUBCMD_START_CAPTURE:
-        pr_debug("Drv info: Reg addr=0x%08x\n",ntohl(vnd_if->vnd_com_cmd.data));
-        dut_start_capture(ntohl(vnd_if->vnd_com_cmd.data));
-        break;
-
-    case VM_NL80211_VDR_SUBCMD_STOP_CAPTURE:
-        pr_debug("Drv info: Reg addr=0x%08x\n",usr_data);
-        dut_stop_capture();
-        break;
-#endif
-
     case VM_NL80211_POWER_SAVE_INTERVAL:
         if (wnet_vif->vm_pwrsave.ips_sta_psmode == WIFINET_PWRSAVE_NONE)
         {
@@ -7129,7 +5856,7 @@ err:
         break;
 
 #if defined(SU_BF) || defined(MU_BF)
-    /* for beamforming test. remove it after finishing beamforming debug */
+    
     case VM_NL80211_VENDER_BEAMFORMING:
 
         if ((usr_data & 0xFF) > 4)
@@ -7170,18 +5897,6 @@ err:
         break;
 #endif
 
-#ifdef WIFI_CAPTURE
-        case VM_NL80211_VDR_SUBCMD_BT_START_CAPTURE:
-            pr_debug("Drv info: Reg addr=0x%08x\n",ntohl(vnd_if->vnd_com_cmd.data));
-            dut_bt_start_capture(ntohl(vnd_if->vnd_com_cmd.data));
-            break;
-
-        case VM_NL80211_VDR_SUBCMD_BT_STOP_CAPTURE:
-            pr_debug("Drv info: Reg addr=0x%08x\n",usr_data);
-            dut_bt_stop_capture();
-            break;
-#endif
-
     case VM_NL80211_SCAN_TIME_IDLE:
         if (usr_data) {
             wnet_vif->vm_scan_time_idle = (unsigned char)usr_data;
@@ -7207,7 +5922,7 @@ err:
 
     case VM_NL80211_PRINT_VERSION:
         print_driver_version();
-        pr_debug("driver version: %s\n", DRIVERVERSION);
+        pr_debug("W522A: driver version: %s\n", DRIVERVERSION);
         break;
 
      case VM_NL80211_SET_EN_COEX:
@@ -7216,7 +5931,7 @@ err:
         break;
 
     case VM_NL80211_SET_COEXIST_MAX_MISS_BCN_CNT:
-        //pr_debug("%s, set max bcn miss cnt= %d\n ", __func__, usr_data);
+        
         wifimac->drv_priv->hal_priv->hal_ops.phy_set_coexist_max_miss_bcn(usr_data);
         break;
 
@@ -7246,27 +5961,20 @@ err:
         wnet_vif->vif_ops.write_word(RG_COEX_IRQ_END_TIME, usr_data);
         break;
 
-
      case VM_NL80211_SET_COEXIST_SCAN_PRI_RANGE:
-         /*
-            bit31-bit16 : minimal  priority
-            bit15:bit0: max priority
-        */
+         
        wifimac->drv_priv->hal_priv->hal_ops.phy_set_coexist_scan_priority_range(usr_data);
        break;
 
     case VM_NL80211_SET_COEXIST_BE_BK_NOQOS_PRI_RANGE:
-       /*
-            bit31-bit16 : minimal  priority
-            bit15:bit0: max priority
-        */
+       
         wifimac->drv_priv->hal_priv->hal_ops.phy_set_coexist_be_bk_noqos_priority_range(usr_data);
         break;
 
     case VM_NL80211_GET_EFUSE_DATA:
         ret = reply_get_efuse_data(wiphy, usr_data);
         break;
-    /* add host print fw log. */
+    
     case VM_NL80211_GET_FW_LOG:
         wifimac->drv_priv->hal_priv->hal_ops.hal_set_fwlog_cmd(opt_data[1]);
         break;
@@ -7277,7 +5985,6 @@ err:
     }
     return ret;
 }
-
 
 const struct wiphy_vendor_command vendor_commands[] = {
 	{
@@ -7340,12 +6047,6 @@ static int vm_cfg80211_preinit_wiphy(struct wlan_net_vif *wnet_vif, struct wiphy
 #if defined(CONFIG_PM) && (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0) && \
         LINUX_VERSION_CODE < KERNEL_VERSION(4, 12, 0))
     wiphy->flags |= WIPHY_FLAG_SUPPORTS_SCHED_SCAN;
-#ifdef PNO_SUPPORT
-    wiphy->max_sched_scan_ssids = MAX_PNO_LIST_COUNT;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 2, 0)
-    wiphy->max_match_sets = MAX_PNO_LIST_COUNT;
-#endif
-#endif
 #endif
 
 #if defined(CONFIG_PM)
@@ -7369,7 +6070,6 @@ int wifi_mac_alloc_wdev(struct wlan_net_vif *wnet_vif, struct device *dev)
     struct net_device *netdev = wnet_vif->vm_ndev;
     struct vm_wdev_priv *pwdev_priv;
 
-
     wdev = (struct wireless_dev *)ZMALLOC(sizeof(struct wireless_dev),"wdev", GFP_KERNEL);
     if (!wdev) {
         ERROR_DEBUG_OUT("ERROR ENOMEM\n");
@@ -7377,22 +6077,19 @@ int wifi_mac_alloc_wdev(struct wlan_net_vif *wnet_vif, struct device *dev)
         return ret;
     }
 
-    /*alloc a cfg80211_register_dev and set ops for cfg80211 framework,
-    the 'sizeof(struct vm_wdev_priv)' is sized for our private data. And return wireless hw descriptor. */
     wdev->wiphy = wiphy_new(&vm_cfg80211_ops, sizeof(struct vm_wdev_priv));
     if (!wdev->wiphy) {
         ERROR_DEBUG_OUT("ERROR ENOMEM\n");
         ret = -ENOMEM;
         goto out_err_new;
     }
-    /*set wdev->wiphy.parent = dev */
+    
     set_wiphy_dev(wdev->wiphy, dev);
 
     wnet_vif->vm_wdev = wdev;
-    /*set wireless device to net device */
+    
     netdev->ieee80211_ptr = wdev;
 
-    /*get 'private' data area from wiphy */
     pwdev_priv = wdev_to_priv(wdev);
     pwdev_priv->pmon_ndev = NULL;
     pwdev_priv->pGo_ndev = NULL;
@@ -7415,28 +6112,18 @@ int wifi_mac_alloc_wdev(struct wlan_net_vif *wnet_vif, struct device *dev)
     os_timer_ex_initialize(&pwdev_priv->connect_timeout, CFG80211_CONNECT_TIMER_OUT,
         vm_cfg80211_connect_timeout_timer, wnet_vif);
 
-    /*set net dev for wireless device */
     wdev->netdev = netdev;
     ret = vm_cfg80211_preinit_wiphy(wnet_vif, wdev->wiphy);
     if (ret < 0)
         goto out_err_register;
 
-#ifdef CONFIG_P2P
-    vm_p2p_attach(wnet_vif);
-#endif
-
-    /*set wireless interface type */
-#ifdef CONFIG_P2P
-    wdev->iftype = drv_opmode_2_nl80211_iftype(wnet_vif->vm_opmode, wnet_vif->vm_p2p->p2p_role);
-#else
     wdev->iftype = NL80211_IFTYPE_STATION;
-#endif
 
     wdev->wiphy->addresses = (struct mac_address *)wnet_vif->vm_myaddr;
     wdev->wiphy->n_addresses = 1;
     AML_OUTPUT("%p %d wdev->iftype  %d\n",
             wdev->wiphy->addresses,wdev->wiphy->n_addresses,wdev->iftype );
-    /*register wireless device. */
+    
     ret = wiphy_register(wdev->wiphy);
 
     if (ret < 0)
@@ -7495,12 +6182,9 @@ void vm_wdev_free(struct wireless_dev *wdev, unsigned char vid)
             unregister_netdev(pwdev_priv->pGo_ndev);
         if (pwdev_priv->pGo_ndev->reg_state == NETREG_UNREGISTERED)
             free_netdev(pwdev_priv->pGo_ndev);
-#ifdef NEW_WIPHY
-        wiphy_free(pwdev_priv->pGo_wdev->wiphy);
-#endif//      #ifdef NEW_WIPHY
         FREE((unsigned char*)pwdev_priv->pGo_wdev,"pwdev_priv->pGo_wdev");
         pwdev_priv->pGo_ndev=NULL;
-        //wiphy_unregister(wdev->wiphy);
+        
     }
     wiphy_unregister(wdev->wiphy);
     aml_spt_band_free(wdev->wiphy->bands[IEEE80211_BAND_2GHZ]);
@@ -7517,7 +6201,6 @@ int vm_cfg80211_up(struct wlan_net_vif *wnet_vif)
     struct wireless_dev *pwdev = wnet_vif->vm_wdev;
     struct wiphy *wiphy = pwdev->wiphy;
 
-    /* start chip */
     {
         struct wifi_mac *wifimac = wnet_vif->vm_wmac;
 
@@ -7542,12 +6225,6 @@ int vm_cfg80211_up(struct wlan_net_vif *wnet_vif)
         vm_cfg80211_init_vht_capab(&bands->vht_cap, IEEE80211_BAND_5GHZ);
     }
 
-#ifdef CONFIG_P2P
-    if (wnet_vif->vm_p2p_support) {
-        vm_p2p_up(wnet_vif);
-    }
-#endif
-
     return 0;
 }
 
@@ -7560,13 +6237,6 @@ void vm_cfg80211_down(struct wlan_net_vif *wnet_vif)
     wnet_vif->vm_phase_flags = 0;
     vm_cfg80211_indicate_scan_done(pwdev_priv, true);
 
-#ifdef CONFIG_P2P
-    if (wnet_vif->vm_p2p_support) {
-        vm_p2p_down(wnet_vif);
-    }
-#endif
-
-    /* stop chip */
     {
         struct wifi_mac *wifimac = wnet_vif->vm_wmac;
 
@@ -7641,7 +6311,7 @@ void vm_wlan_net_vif_mode_change(struct wlan_net_vif *wnet_vif,struct vm_wlan_ne
     AML_OUTPUT("<running> %s %d \n",__func__,__LINE__);
     wnet_vif->wnet_vif_replaycounter++;
     if (wnet_vif->vm_ndev->flags & IFF_RUNNING) {
-        /*RUNNING ,For the settings to take effect, need to restart the wifi*/
+        
         AML_OUTPUT("<running> %s %d mode change need stop open\n",__func__,__LINE__);
         wifi_mac_stop(wnet_vif->vm_ndev);
         vm_wlan_net_vif_detach_ex(wnet_vif);
@@ -7651,7 +6321,7 @@ void vm_wlan_net_vif_mode_change(struct wlan_net_vif *wnet_vif,struct vm_wlan_ne
 
     } else {
         AML_OUTPUT("<running> %s %d mode change not need stop open\n",__func__,__LINE__);
-        /*Not RUNNING ,Just need to set and wait for the upper layer to be up*/
+        
         vm_wlan_net_vif_detach_ex(wnet_vif);
         vm_wlan_net_vif_attach_ex(wnet_vif,cp);
         wifi_mac_security_vattach(wnet_vif);
@@ -7690,7 +6360,6 @@ int wifi_mac_save_app_ie(struct wifi_mac_app_ie_t *app_ie, const unsigned char *
     app_ie->ie = ie;
     app_ie->length = app_buflen;
 
-    /*free old IE buffer*/
     if (tmpPtr)
         FREE(tmpPtr, "wifi_mac_save_app_ie.ie");
 
@@ -7729,7 +6398,6 @@ int  netdev_setcsum( struct net_device *dev,int data)
     return 0;
 }
 
-
 int wifi_mac_preempt_scan(struct wifi_mac *wifimac, int max_grace, int max_wait)
 {
     int total_delay = 0;
@@ -7764,24 +6432,15 @@ int wifi_mac_preempt_scan(struct wifi_mac *wifimac, int max_grace, int max_wait)
     return ready;
 }
 
-
 char preempt_scan(struct net_device *dev, int max_grace, int max_wait)
 {
     struct wlan_net_vif *wnet_vif = netdev_priv(dev);
     struct wifi_mac *wifimac = wnet_vif->vm_wmac;
 
-#ifdef CONFIG_P2P
-    if((wnet_vif->vm_p2p_support == 0) && wifimac->wm_p2p_connection_protect) {
-        ERROR_DEBUG_OUT("rejected preempt scan due to p2p scan protection\n");
-        return -1;
-    }
-#endif //#ifdef CONFIG_P2P
-
     wifi_mac_preempt_scan(wifimac, max_grace, max_wait);
 
     return 0;
 }
-
 
 void batch_dump_reg(struct wiphy *wiphy,unsigned int addr[], unsigned int addr_num)
 {
@@ -7793,13 +6452,13 @@ void batch_dump_reg(struct wiphy *wiphy,unsigned int addr[], unsigned int addr_n
         if(((addr[i] >> 24) & 0xff) == 0xff )
         {
 #ifdef USE_T902X_RF
-         reg_val = rf_i2c_read(addr[i] & 0x00ffffff); //access t902x rf reg
+         reg_val = rf_i2c_read(addr[i] & 0x00ffffff); 
 #endif
         }
         else if(((addr[i]  >> 24) & 0xf0) == 0xf0 )
         {
 #ifdef USE_T902X_RF
-            reg_val = rf_i2c_read(addr[i] & 0xffffffff); //access t902x rf reg
+            reg_val = rf_i2c_read(addr[i] & 0xffffffff); 
 #endif
 
         }
@@ -7812,12 +6471,6 @@ void batch_dump_reg(struct wiphy *wiphy,unsigned int addr[], unsigned int addr_n
     }
 
 }
-
-/* aml_cfg80211_ch_switch_notify and aml_cfg80211_ch_switch_started_notify
- * are macros defined in wifi_cfg80211_compat.h.
- * They use __builtin_choose_expr + __builtin_types_compatible_p to select
- * the correct kernel API call at compile time for any kernel version.
- * No runtime overhead, no version guessing вЂ” GCC checks actual function types. */
 
 void vm_cfg80211_chan_switch_notify_task(SYS_TYPE param1,SYS_TYPE param2, SYS_TYPE param3,SYS_TYPE param4,SYS_TYPE param5)
 {
@@ -7859,7 +6512,7 @@ void vm_cfg80211_chan_switch_notify_task(SYS_TYPE param1,SYS_TYPE param2, SYS_TY
         vmac_chan->chan_bw, vmac_chan->chan_cfreq1, start);
 
     if (start) {
-        aml_cfg80211_ch_switch_started_notify(ndev, &chandef, 0, wnet_vif->vm_wmac->wm_doth_tbtt, 0);/*#define CSA_BLOCK_TX            1*/
+        aml_cfg80211_ch_switch_started_notify(ndev, &chandef, 0, wnet_vif->vm_wmac->wm_doth_tbtt, 0);
     } else {
         aml_cfg80211_ch_switch_notify(ndev, &chandef, 0);
         memset(&(wnet_vif->csa_target.switch_chan) , 0, sizeof(struct wifi_channel));
@@ -7867,4 +6520,4 @@ void vm_cfg80211_chan_switch_notify_task(SYS_TYPE param1,SYS_TYPE param2, SYS_TY
 
     return;
 }
-#endif//CONFIG_AML_CFG80211
+#endif

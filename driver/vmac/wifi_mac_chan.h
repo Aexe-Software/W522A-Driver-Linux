@@ -39,4 +39,4 @@ unsigned char if_southamerica_country(unsigned char *countrycode);
 unsigned char wifi_mac_p2p_home_channel_enabled(struct wlan_net_vif *wnet_vif);
 bool wifi_mac_get_chandef(struct wifi_channel *vmac_chan, struct cfg80211_chan_def *chandef);
 unsigned char wifi_mac_get_operation_class(struct cfg80211_chan_def chandef);
-#endif//__NET80211_CHAN_H__
+#endif

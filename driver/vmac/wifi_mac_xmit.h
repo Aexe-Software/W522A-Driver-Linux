@@ -34,7 +34,7 @@ struct wifi_mac_csa_wrapper{
 } __packed;
 
 struct wifi_mac_csa_data {
-    //struct ieee80211_header mac_header;
+    
     struct wifi_mac_action_csa_frame extend_csa;
     struct wifi_mac_csa_wrapper csa_wrapper;
 } __packed;

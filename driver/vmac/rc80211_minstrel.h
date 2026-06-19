@@ -1,37 +1,22 @@
-/*
- * Copyright (C) 2008 Felix Fietkau <nbd@openwrt.org>
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- */
 
 #ifndef __RC_MINSTREL_H
 #define __RC_MINSTREL_H
 
 #include "linux/types.h"
 
-#define EWMA_LEVEL	96	/* ewma weighting factor [/EWMA_DIV] */
+#define EWMA_LEVEL	96	
 #define EWMA_DIV	128
-#define SAMPLE_COLUMNS	10	/* number of columns in sample table */
+#define SAMPLE_COLUMNS	10	
 
-
-/* scaled fraction values */
 #define MINSTREL_SCALE  12
 #define MINSTREL_FRAC(val, div) (((val) << MINSTREL_SCALE) / div)
 #define MINSTREL_TRUNC(val) ((val) >> MINSTREL_SCALE)
 
-/* number of highest throughput rates to consider*/
 #define MAX_THR_RATES 4
 
 #define SAMPLE_TBL(_mi, _idx, _col) \
 		_mi->sample_table[(_idx * SAMPLE_COLUMNS) + _col]
 
-/* Maximal size of an A-MSDU that can be transported in a HT BA session */
-
-/*
- * Perform EWMA (Exponentially Weighted Moving Average) calculation
- */
 static inline int
 minstrel_ewma(int old, int new, int weight)
 {
@@ -43,9 +28,6 @@ minstrel_ewma(int old, int new, int weight)
 	return old + incr;
 }
 
-/*
- * Perform EWMV (Exponentially Weighted Moving Variance) calculation
- */
 static inline int
 minstrel_ewmv(int old_ewmv, int cur_prob, int prob_ewma, int weight)
 {
@@ -57,27 +39,21 @@ minstrel_ewmv(int old_ewmv, int cur_prob, int prob_ewma, int weight)
 }
 
 struct minstrel_rate_stats {
-	/* current / last sampling period attempts/success counters */
+	
 	u32 attempts, last_attempts;
 	u32 success, last_success;
 
-	/* total attempts/success counters */
 	u32 att_hist, succ_hist;
 
-	/* statistics of packet delivery probability
-	 *  prob_ewma - exponential weighted moving average of prob
-	 *  prob_ewmsd - exp. weighted moving standard deviation of prob */
 	u16 prob_ewma;
 	u16 prob_ewmv;
 
-	/* maximum retry counts */
 	u8 retry_count;
 	u8 retry_count_rtscts;
 
 	bool retry_updated;
 	int tp_avg;
 };
-
 
 struct ieee80211_sta_aml {
 	u32 supp_rates[NUM_NL80211_BANDS];
@@ -112,7 +88,6 @@ struct ieee80211_sta_aml {
 
 	struct ieee80211_txq *txq[IEEE80211_NUM_TIDS + 1];
 
-	/* must be last */
 	u8 drv_priv[] __aligned(sizeof(void *));
 };
 
@@ -122,7 +97,6 @@ static inline int rate_supported_aml(struct ieee80211_sta_aml *sta,
 {
 	return (sta == NULL || sta->supp_rates[band] & BIT(index));
 }
-
 
 static inline s8
 rate_lowest_index_aml(struct ieee80211_supported_band *sband,
@@ -134,11 +108,8 @@ rate_lowest_index_aml(struct ieee80211_supported_band *sband,
 		if (rate_supported_aml(sta, sband->band, i))
 			return i;
 
-	/* and return 0 (the lowest index) */
 	return 0;
 }
-
-
 
 struct minstrel_rate {
 	int bitrate;
@@ -178,7 +149,6 @@ struct minstrel_sta_info {
     struct minstrel_rate *r;
     bool prev_sample;
 
-    /* sampling table */
     u8 *sample_table;
 
 #ifdef CONFIG_MAC80211_DEBUGFS
@@ -224,7 +194,7 @@ struct minstrel_rate_control_ops {
 };
 
 extern  struct minstrel_rate_control_ops mac80211_minstrel;
-/* Recalculate success probabilities and counters for a given rate using EWMA */
+
 void minstrel_calc_rate_stats(struct minstrel_rate_stats *mrs);
 int minstrel_get_tp_avg(struct minstrel_rate *mr, int prob_ewma);
 struct minstrel_rate_control_ops* get_rate_control_ops(void);

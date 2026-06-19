@@ -4,7 +4,7 @@
 #include "wifi_drv_main.h"
 
 #define ADDBA_EXCHANGE_ATTEMPTS 10
-#define ADDBA_TIMEOUT 1500 /* ms */
+#define ADDBA_TIMEOUT 1500 
 
 #define BITS_PER_BYTE 8
 #define OFDM_PLCP_BITS 22
@@ -14,8 +14,8 @@
 #define L_SIG 4
 #define HT_SIG 8
 #define HT_STF 4
-#define SYMBOL_TIME(_ns) ((_ns) << 2)            // ns * 4 us
-#define SYMBOL_TIME_HALFGI(_ns) (((_ns) * 18 + 4) / 5)  // ns * 3.6 us
+#define SYMBOL_TIME(_ns) ((_ns) << 2)            
+#define SYMBOL_TIME_HALFGI(_ns) (((_ns) * 18 + 4) / 5)  
 #define NUM_SYMBOLS_PER_USEC(_usec) (_usec >> 2)
 #define NUM_SYMBOLS_PER_USEC_HALFGI(_usec) (((_usec*5)-4)/18)
 #define IS_11B_RATE(_r) ((_r) <= WIFI_11B_11M)
@@ -78,8 +78,7 @@ void drv_tx_complete(struct drv_private *drv_priv, struct drv_txdesc *ptxdesc, i
 int drv_aggr_check(struct drv_private *drv_priv, void * nsta, unsigned char tid_index);
 int drv_aggr_tid( struct drv_private *drv_priv, void * nsta, unsigned char tid_index);
 int drv_aggr_allow_to_send(struct drv_private *drv_priv, void * nsta, unsigned char tid_index);
-/* v15s: widened maxampdu from `unsigned short` to `unsigned int`; see
- * wifi_mac_sta.h sta_maxampdu for rationale. */
+
 void drv_set_ampduparams(struct drv_private *drv_priv, void *, unsigned int maxampdu, unsigned int mpdudensity);
 void drv_addba_req_setup(struct drv_private *drv_priv, void *, unsigned char tid_index, struct wifi_mac_ba_parameterset *baparamset,
     unsigned short *batimeout, struct wifi_mac_ba_seqctrl *basequencectrl, unsigned short buffersize);
@@ -98,6 +97,5 @@ int drv_hal_tx_frm_pause(struct drv_private *drv_priv, int pause);
 unsigned int drv_low_add_worktask( struct drv_private *drv_priv,void *func,void *func_cb,
     SYS_TYPE param1,SYS_TYPE param2,SYS_TYPE param3, SYS_TYPE param4,SYS_TYPE param5);
 unsigned int drv_lookup_rate(struct drv_private *drv_priv, struct aml_driver_nsta *drv_sta,   struct aml_ratecontrol *txdesc_rateinfo);
-
 
 #endif

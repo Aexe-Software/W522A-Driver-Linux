@@ -1,7 +1,6 @@
 
 #include "wifi_debug.h"
 
-
 void address_print( unsigned char* address )
 {
     PUTX8(1, address[0] );
@@ -101,9 +100,6 @@ void address_read( unsigned char* cursor, unsigned char* address )
     *address++ = *cursor++;
 }
 
-
-
-
  unsigned short READ_16L( const unsigned char* address )
 {
 #ifdef CTRL_BYTE
@@ -112,7 +108,6 @@ void address_read( unsigned char* cursor, unsigned char* address )
     return * (unsigned short *)address ;
 #endif
 }
-
 
  void WRITE_16L( unsigned char* address, unsigned short value )
 {
@@ -124,7 +119,6 @@ void address_read( unsigned char* cursor, unsigned char* address )
 #endif
 }
 
-
 unsigned int READ_32L( const unsigned char* address )
 {
 #ifdef CTRL_BYTE
@@ -135,7 +129,6 @@ unsigned int READ_32L( const unsigned char* address )
 
 #endif
 }
-
 
  void WRITE_32L( unsigned char* address, unsigned int value )
 {
@@ -155,13 +148,11 @@ unsigned short READ_16B( const unsigned char* address )
     return address[1] | ( address[0] << 8 );
 }
 
-
 void WRITE_16B( unsigned char* address, unsigned short value )
 {
     address[1] = ( value >> 0 ) & 0xFF;
     address[0] = ( value >> 8 ) & 0xFF;
 }
-
 
  unsigned int READ_32B( const unsigned char* address )
 {
@@ -176,7 +167,6 @@ void WRITE_16B( unsigned char* address, unsigned short value )
     address[0] = ( value >> 24 ) & 0xFF;
 }
 
-
 void ie_dbg(unsigned char *ie ) 
 {
     int i = 0;
@@ -187,6 +177,3 @@ void ie_dbg(unsigned char *ie )
         DPRINTF(AML_DEBUG_DEBUG, "%s %d ie 0x%x\n", __func__, __LINE__, ie[i]);
     }
 }
-
-
-

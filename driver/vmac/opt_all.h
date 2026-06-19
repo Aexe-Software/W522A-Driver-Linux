@@ -22,7 +22,6 @@ DECLARE_PER_CPU(unsigned long, aml_common_lock_flags);
 #define  OS_DMAA2DDRddress(__t)  ((void*)__t)
 #define  OS_DDR2DMAAddress(__t)  ((void*)__t)
 
-/*Start of HAL_FPGA_VER*/
 #if defined (HAL_FPGA_VER)
 
 #define OS_LOCK                	spinlock_t
@@ -45,23 +44,7 @@ DECLARE_PER_CPU(unsigned long, aml_common_lock_flags);
 
 #define COMMON_LOCK_INIT() spin_lock_init(&(g_hal_priv).com_spinlock)
 #define COMMON_LOCK_DESTROY()
-/*
- * v17n IRQ-state fix:
- *
- * The old COMMON_LOCK used spin_lock_irqsave() with the saved IRQ flags stored
- * in g_hal_priv.com_spinlock_flag. That field is shared by every caller, so a
- * second context can overwrite the flags before the first COMMON_UNLOCK runs.
- * Under heavy aggregation/recovery this left hal_work_thread returning with
- * hard IRQs disabled ("work_thread ... exited with irqs disabled") and then
- * the next SDIO/MMC release path could oops in queued_spin_lock_slowpath.
- *
- * v17m tried spin_lock_bh(), but CO_SharedFifoGet() is also called from
- * hrtimer/softirq paths. That tripped __local_bh_enable_ip() warnings.
- *
- * Keep the original irqsave semantics, but store the flags per-CPU. IRQs are
- * disabled while the lock is held, so the unlock runs on the same CPU and reads
- * the matching saved state without the cross-context overwrite bug.
- */
+
 #define COMMON_LOCK() do { \
     unsigned long *__aml_flags = this_cpu_ptr(&aml_common_lock_flags); \
     spin_lock_irqsave(&(g_hal_priv).com_spinlock, *__aml_flags); \
@@ -96,13 +79,11 @@ DECLARE_PER_CPU(unsigned long, aml_common_lock_flags);
         }
 
 #endif
-/*End of HAL_FPGA_VER*/
 
 #if !defined(NOT_AMLOGIC_PLATFORM)
 #define pr_debug(fmt, ...) pr_info(fmt, ##__VA_ARGS__)
 #endif
 
-/*Start of HAL_SIM_VER*/
 #if defined (HAL_SIM_VER)
 
 #define MAX_SKB_NUM	      1000
@@ -121,9 +102,9 @@ DECLARE_PER_CPU(unsigned long, aml_common_lock_flags);
 #define  module_exit(a);
 
 #define OS_TQ_STRUCT 				tasklet_struct
-#define OS_INIT_TQUEUE(a,b,c)		//tasklet_init((a), (b), (unsigned long)(c))
-#define OS_SCHEDULE_TQUEUE(a)		hi_top_task((unsigned long)hal_get_priv() );//tasklet_schedule((a))
-#define OS_FREE_TQUEUE(a)			//tasklet_kill((a))
+#define OS_INIT_TQUEUE(a,b,c)		
+#define OS_SCHEDULE_TQUEUE(a)		hi_top_task((unsigned long)hal_get_priv() );
+#define OS_FREE_TQUEUE(a)			
 #define OS_SKBBUF_DATA(_skb) ((_skb)->data)
 #define OS_SKBBUF_LEN(_skb)	 ((_skb)->data_len)
 #define OS_MDELAY(_u)				sv_delay(FW_ID, _u);
@@ -157,28 +138,21 @@ struct tasklet_struct{
 #define	COMMON_LOCK()
 #define	COMMON_UNLOCK()
 
-#define	AML_TXLOCK_INIT()			//spin_lock_init(&(g_hal_priv).tx_spinlock)
+#define	AML_TXLOCK_INIT()			
 #define	AML_TXLOCK_DESTROY()
-#define	AML_TXLOCK_LOCK() 			//spin_lock_bh(&(g_hal_priv).tx_spinlock);
-#define	AML_TXLOCK_UNLOCK()		//spin_unlock_bh(&(g_hal_priv).tx_spinlock);
+#define	AML_TXLOCK_LOCK() 			
+#define	AML_TXLOCK_UNLOCK()		
 
 #ifndef _LINUX_IRQRETURN_H
 #define _LINUX_IRQRETURN_H
 
-/**
- *  * enum irqreturn
- *  * @IRQ_NONE		interrupt was not from this device
- *  * @IRQ_HANDLED		interrupt was handled by this device
- *  * @IRQ_WAKE_THREAD	handler requests to wake the handler thread
- *  */
 enum irqreturn {
 	IRQ_NONE,
 	IRQ_HANDLED,
 	IRQ_WAKE_THREAD,
 };
 
-
-#endif /*End of _LINUX_IRQRETURN_H */
+#endif 
 
 struct net_device {
         int  device;
@@ -216,26 +190,26 @@ static void * OS_SKBBUF_FREE(struct sk_buff * skb)
 }
 
 #define dev_kfree_skb(skb)    OS_SKBBUF_FREE(skb)
-/*skb_pull*/
+
 static void * OS_SKBBUF_PULL(struct sk_buff * skb, unsigned int len )
 {
         skb->data_len -= len;
         skb->data+=len;
         return skb->data;
 }
-/*skb_put*/
+
 static void * OS_SKBBUF_PUT(struct sk_buff * skb, unsigned int len )
 {
         skb->data_len += len;
 
         return skb->data+skb->data_len-len;
- //       return skb->data;
+ 
 }
 
-#ifndef BITS_TO_LONGS /* Older kernels define this already */
+#ifndef BITS_TO_LONGS 
 #define BITS_PER_BYTE           				8
 #define BITS_TO_LONGS(nr)				((nr)/32)
-#endif /*End of BITS_TO_LONGS*/
+#endif 
 
 #define  set_bit(a,m)	((*((m)+(a)/(BITS_PER_BYTE * sizeof(unsigned long)))) \
 				|= BIT((a)%(BITS_PER_BYTE * sizeof(unsigned long))))
@@ -280,6 +254,6 @@ static unsigned char test_bit(int id,unsigned long * _map)
 
 extern void real_sdio_init(int vid);
 #define  HI_DRIVER_INIT()		real_sdio_init(FW_ID);
-#endif /*End of HAL_SIM_VER*/
+#endif 
 
-#endif /*End of _AML_OPT_ALL_H_ */
+#endif 

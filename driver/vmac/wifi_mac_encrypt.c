@@ -1,17 +1,3 @@
-/*
- ****************************************************************************************
- *
- * Copyright (C) Amlogic 2010-2014
- *
- * Project: 11N 80211 mac  layer Software
- *
- * Description:
- *     wifi_mac layer encrypt/decrypt module
- *
- *
- ****************************************************************************************
- */
-
 
 #include "wifi_mac_com.h"
 
@@ -99,21 +85,6 @@ static int wifi_mac_security_delkey(struct wlan_net_vif *wnet_vif, struct wifi_m
     if (wnet_vif == NULL || key == NULL || sta == NULL)
         return 0;
 
-    /* FIX (v12): atomically claim wk_cipher via cmpxchg. This serialises
-     * concurrent disconnect paths racing on the same key:
-     *   thread A: vm_cfg80211_del_key (workqueue cfg80211_event_work,
-     *             from __cfg80211_disconnected on AP switch)
-     *   thread B: nsta_cleanup / wifi_mac_free_sta_from_list
-     *             (vm_main_sta replace at start_bss_ex_task)
-     *
-     * v13d: the v12 READ_ONCE+WRITE_ONCE pair is NOT a single-winner
-     * primitive — both threads can observe the same non-NULL value
-     * before either WRITE_ONCEs NULL, then both proceed to dispatch
-     * cipher->wm_detach(key) and the second one races a use-after-free
-     * inside the cipher detach (free + memset), producing follow-on
-     * Oops with pc=0x2 / pc=0x100000000. Use cmpxchg so only the
-     * first thread "owns" the slot; the loser returns 0 cleanly.
-     */
     {
         unsigned long old = (unsigned long)READ_ONCE(key->wk_cipher);
         if (old == 0)
@@ -124,15 +95,6 @@ static int wifi_mac_security_delkey(struct wlan_net_vif *wnet_vif, struct wifi_m
         cipher = (const struct wifi_mac_security *)old;
     }
 
-    /* v13d: the cipher pointer captured above must be one of the static,
-     * read-only cipher tables defined later in this file. If the key
-     * struct was corrupted (for example by a prior use-after-free or
-     * stack-stale pointer), wk_cipher can hold an arbitrary value whose
-     * wm_detach byte happens to be ~NULL but is not a valid function
-     * pointer (the original Oops captured pc=0x100000000, the latest
-     * pc=0x2). Validating against the small known set of cipher tables
-     * before dispatching the indirect call eliminates that crash class.
-     */
     if (cipher != &wifi_mac_cipher_none &&
         cipher != &wifi_mac_cipher_wep &&
         cipher != &wifi_mac_cipher_tkip &&
@@ -146,13 +108,6 @@ static int wifi_mac_security_delkey(struct wlan_net_vif *wnet_vif, struct wifi_m
     DPRINTF(AML_DEBUG_KEY, "%s: delete key sta %p cipher %p\n",
             __func__, sta, cipher);
 
-    /* FIX (v12): bounds-check the hardware key index. Valid values are
-     * 0..WIFINET_WEP_NKID-1 for hardware slots, plus WIFINET_KEYIX_NONE
-     * (== (u8)-1, treated as "no hw slot allocated"). Anything else is
-     * a corrupted struct (we have seen 0xfe and other garbage values in
-     * concurrent-free traces); skip the key_delete dispatch instead of
-     * indexing past per-cipher slot tables in the HAL.
-     */
     key_index = key->wk_keyix;
     if (key_index != WIFINET_KEYIX_NONE) {
         if (key_index < WIFINET_WEP_NKID) {
@@ -164,10 +119,6 @@ static int wifi_mac_security_delkey(struct wlan_net_vif *wnet_vif, struct wifi_m
         }
     }
 
-    /* FIX (v12): validate the snapshotted cipher and its wm_detach
-     * before the indirect call. wifi_mac_cipher_none has wm_detach set,
-     * but a partially-initialised slot (during teardown) may not.
-     */
     if (cipher->wm_detach != NULL)
         cipher->wm_detach(key);
 
@@ -181,10 +132,6 @@ int wifi_mac_sec_delt_key(struct wlan_net_vif *wnet_vif, struct wifi_mac_key *ke
 {
     int status;
 
-    /* FIX (v12): validate args at the public entry point. The cfg80211
-     * disconnect path (cfg80211_event_work workqueue) can call us with a
-     * stale sta lookup if the table is being torn down in parallel.
-     */
     if (wnet_vif == NULL || key == NULL || sta == NULL)
         return 0;
 
@@ -267,7 +214,7 @@ struct wifi_mac_key *wifi_mac_security_encap(struct wifi_station *sta, struct sk
     }
     cip = READ_ONCE(k->wk_cipher);
     if (cip == NULL || cip == &wifi_mac_cipher_none) {
-        /* key was concurrently deleted (delkey raced with TX path) */
+        
         wnet_vif->vif_sts.sts_tx_key_err++;
         return NULL;
     }
@@ -293,7 +240,7 @@ wifi_mac_security_decap(struct wifi_station *sta, struct sk_buff *skb, int hdrle
     struct wifi_mac_key *k;
     struct wifi_frame *wh;
     const struct wifi_mac_security *cip;
-    // const unsigned char *vm_p;
+    
     unsigned char keyid;
 
     if (os_skb_get_pktlen(skb) < sizeof(struct wifi_frame) )
@@ -330,7 +277,7 @@ wifi_mac_security_decap(struct wifi_station *sta, struct sk_buff *skb, int hdrle
         struct wifi_skb_callback *cb = (struct wifi_skb_callback *)skb->cb;
 
         if (cip == NULL || cip == &wifi_mac_cipher_none) {
-            /* key was concurrently deleted (delkey raced with RX path) */
+            
             wnet_vif->vif_sts.sts_rx_decap++;
             return NULL;
         }
@@ -348,12 +295,9 @@ wifi_mac_security_decap(struct wifi_station *sta, struct sk_buff *skb, int hdrle
     }
 }
 
-
 #ifndef _BYTE_ORDER
 #error "Don't know native byte order"
 #endif
-
-
 
 static void *
 wep_attach(struct wlan_net_vif *wnet_vif, struct wifi_mac_key *k)
@@ -371,7 +315,6 @@ wep_setkey(struct wifi_mac_key *k)
 {
     return 1;
 }
-
 
 static int
 wep_encap(struct wifi_mac_key *k, struct sk_buff *skb, unsigned char keyid)
@@ -474,7 +417,6 @@ ccmp_decap(struct wifi_mac_key *k, struct sk_buff *skb, int hdrlen)
     return 1;
 }
 
-
 static int
 ccmp_demic(struct wifi_mac_key *k, struct sk_buff *skb, int hdrlen, int force)
 {
@@ -503,34 +445,28 @@ none_setkey(struct wifi_mac_key *k)
 static int
 none_encap(struct wifi_mac_key *k, struct sk_buff *skb, unsigned char keyid)
 {
-    // struct WIFINET_VMAC *vmac = k->wk_private;
-
-
+    
     return 0;
 }
 
 static int
 none_decap(struct wifi_mac_key *k, struct sk_buff *skb, int hdrlen)
 {
-    // struct WIFINET_VMAC *vmac = k->wk_private;
-
-
+    
     return 0;
 }
 
 static int
 none_enmic(struct wifi_mac_key *k, struct sk_buff *skb, int force)
 {
-    // struct WIFINET_VMAC *vmac = k->wk_private;
-
+    
     return 0;
 }
 
 static int
 none_demic(struct wifi_mac_key *k, struct sk_buff *skb, int hdrlen, int force)
 {
-    // struct WIFINET_VMAC *vmac = k->wk_private;
-
+    
     return 0;
 }
 
@@ -629,7 +565,6 @@ tkip_enmic(struct wifi_mac_key *k, struct sk_buff *skb0, int force)
     return 1;
 }
 
-
 static int
 tkip_decap(struct wifi_mac_key *k, struct sk_buff *skb, int hdrlen)
 {
@@ -637,13 +572,12 @@ tkip_decap(struct wifi_mac_key *k, struct sk_buff *skb, int hdrlen)
     return 1;
 }
 
-
 static int
 tkip_demic(struct wifi_mac_key *k, struct sk_buff *skb0, int hdrlen, int force)
 {
 
     struct wlan_net_vif *wnet_vif = k->wk_private;
-    // struct WIFINET_MAC *wifimac = vmac->vm_wmpriv;
+    
     struct sk_buff *skb;
     size_t pktlen;
     struct wifi_frame *wh ;
@@ -683,27 +617,20 @@ tkip_demic(struct wifi_mac_key *k, struct sk_buff *skb0, int hdrlen, int force)
     return 1;
 }
 
-
 static inline unsigned int rotl(unsigned int val, int bits)
 {
     return (val << bits) | (val >> (32 - bits));
 }
-
 
 static inline unsigned int rotr(unsigned int val, int bits)
 {
     return (val >> bits) | (val << (32 - bits));
 }
 
-
 static inline unsigned int xswap(unsigned int val)
 {
     return ((val & 0x00ff00ff) << 8) | ((val & 0xff00ff00) >> 8);
 }
-
-
-
-
 
 static inline unsigned int get_le32_split(unsigned char b0, unsigned char b1, unsigned char b2, unsigned char b3)
 {
@@ -714,7 +641,6 @@ static inline unsigned int get_le32(const unsigned char *p)
 {
     return get_le32_split(p[0], p[1], p[2], p[3]);
 }
-
 
 static inline void put_le32(unsigned char *p, unsigned int v)
 {
@@ -879,23 +805,6 @@ const struct wifi_mac_security wifi_mac_cipher_none =
     .wm_demic   = none_demic,
 };
 
-#ifdef CONFIG_WAPI
-const struct wifi_mac_security wifi_mac_cipher_wpi =
-{
-    .wm_name    = "wpi",
-    .wm_cipher  = WIFINET_CIPHER_WPI,
-    .wm_header  = WIFINET_WAPI_EXHDR_LEN,
-    .wm_trailer = WIFINET_WAPI_MIC_LEN,
-    .wm_miclen  = 0,
-    .wm_attach  = wpi_attach,
-    .wm_detach  = wpi_detach,
-    .wm_setkey  = wpi_setkey,
-    .wm_encap   = wpi_encap,
-    .wm_decap   = wpi_decap,
-    .wm_enmic   = wpi_enmic,
-    .wm_demic   = wpi_demic,
-};
-#else
 const struct wifi_mac_security wifi_mac_cipher_wpi =
 {
     .wm_name    = "wpi",
@@ -911,7 +820,6 @@ const struct wifi_mac_security wifi_mac_cipher_wpi =
     .wm_enmic   = none_enmic,
     .wm_demic   = none_demic,
 };
-#endif
 
 const struct wifi_mac_security wifi_mac_cipher_ccmp =
 {
@@ -968,7 +876,7 @@ const struct wifi_mac_security wifi_mac_cipher_tkip  =
     .wm_header  = WIFINET_WEP_IVLEN + WIFINET_WEP_KIDLEN +
     WIFINET_WEP_EXTIVLEN,
     .wm_trailer = WIFINET_WEP_CRCLEN,
-    .wm_miclen  = 0, //WIFINET_WEP_MICLEN,
+    .wm_miclen  = 0, 
     .wm_attach  = tkip_attach,
     .wm_detach  = tkip_detach,
     .wm_setkey  = tkip_setkey,
@@ -1024,15 +932,6 @@ int wifi_mac_key_set(struct wlan_net_vif *wnet_vif, const struct wifi_mac_key *k
     if (cip->wm_cipher >= (sizeof(ciphermap)/sizeof(ciphermap[0])))
         return 0;
 
-    /*
-     * v16x AP-HW-CRYPTO-RESTORE:
-     * CCMP/TKIP encap in this driver only reserves cipher metadata; the real
-     * packet crypto is done by the firmware/HAL key engine.  Forcing installed
-     * keys to CLEAR leaves WPA2 data frames with AES TX descriptors but no AES
-     * key in the firmware table, so the 4-way handshake completes and normal
-     * data/DHCP then dies.  Keep the cipher type selected from the negotiated
-     * key instead.
-     */
     hk.kv_type = ciphermap[cip->wm_cipher];
     hk.kv_len = k->wk_keylen;
     memcpy(hk.kv_val, k->wk_key, k->wk_keylen);
@@ -1103,7 +1002,7 @@ int wifi_mac_key_set(struct wlan_net_vif *wnet_vif, const struct wifi_mac_key *k
     } else {
         DPRINTF(AML_DEBUG_KEY, "<running> %s %d k->wk_keyix = %d\n",
                 __func__,__LINE__,k->wk_keyix);
-        //ASSERT(k->wk_keyix <= WIFINET_WEP_NKID);
+        
         if ((hk.kv_type == HAL_KEY_TYPE_WEP)||(opmode == WIFINET_M_IBSS)) {
             WIFINET_ADDR_COPY(gmac, peermac);
             gmac[0] |= 0x01;

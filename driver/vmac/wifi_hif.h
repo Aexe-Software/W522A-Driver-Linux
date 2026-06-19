@@ -6,13 +6,9 @@
 #define HIF_RD_MAC_REG_MAX (15)
 #define HIF_RD_PHY_REG_MAX (10)
 
-
-//irq
 #define COEX_INFO_BT_LK_INFO          BEACON_RECV_OK_VID0
 #define COEX_BT_EXIST_INF0              BEACON_RECV_OK_VID1
 
-
-/*shijie.chen add, need add to register define file */
 #define BCN_READABLE  BIT(31)
 #define BCN_LEN_MASK  (BIT(17)|BIT(18)|BIT(19))
 
@@ -28,21 +24,18 @@ enum hif_suspend_state
     HIF_SUSPEND_STATE_DEEPSLEEP,
 };
 
-/*1 is  rtl support addr wrapper around, else 0 is not support. */
 #define RTL_WRAPPER_AROUND_ADDR     1
-/*sdio max block count when we use scatter/gather list.*/
+
 #define SDIO_MAX_BLK_CNT    511
-/*enable sdio update host rd/wr pointer by enable corresponding bit in
-    SDIO MISC CTRL or SDIO MISC CTRL2 */
-/* when 1, wrptr is updated by sdio rtl(func4). when 0, is updated by host via send cmd53 */
+
 #define SDIO_UPDATE_HOST_WRPTR     0
-/* when 1, rdptr is updated by sdio rtl(func6). when 0, is updated by host via send cmd53 */
+
 #define SDIO_UPDATE_HOST_RDPTR      1
 
 #define SG_NUM_MAX 16
-#define SG_WRITE 1 //MMC_DATA_WRITE
+#define SG_WRITE 1 
 #define SG_FRAME_MAX (1 * SG_NUM_MAX)
-/* max page num while process a sdio write operation*/
+
 #define SG_PAGE_MAX 80
 #define FUNC4_BLKSIZE PAGE_LEN
 #define FUNC6_BLKSIZE PAGE_LEN
@@ -66,11 +59,10 @@ struct amlw_hif_scatter_item {
 
 struct amlw_hif_scatter_req {
 
-	/* address for the read/write operation */
 	unsigned int addr;
-	/* request flags */
+	
 	unsigned int req;
-	/* total length of entire transfer */
+	
 	unsigned int len;
 
 	void (*complete) (struct sk_buff *);
@@ -116,7 +108,6 @@ struct amlw_hif_ops {
     void (*hi_send_frame)(unsigned char* buf, unsigned char* addr, SYS_TYPE len);
 #endif
 
-    /*bt use*/
     void (*bt_hi_write_sram)(unsigned char* buf, unsigned char* addr, SYS_TYPE len);
     void (*bt_hi_read_sram)(unsigned char* buf, unsigned char* addr, SYS_TYPE len);
     void (*bt_hi_write_word)(unsigned int addr,unsigned int data);
@@ -139,8 +130,7 @@ unsigned int hi_get_vendor_id(void);
 unsigned int hi_get_fw_version(void);
 
 void hi_top_task( unsigned long data);
-void hi_soft_tx_irq(void);
-
+unsigned int hi_soft_tx_irq(void);
 
 void hif_init_ops(void);
 
@@ -173,7 +163,6 @@ int hi_tx_frame(struct hi_tx_desc **pTxDPape, unsigned int mpdu_num, unsigned in
 int hi_sdio_setup_scat_data(struct scatterlist *sg_list, struct hi_tx_desc **pTxDPape,
     unsigned int sg_num, unsigned char func_num);
 
-/*txok status process */
 int tx_status_list_init(struct tx_status_list *tx_status_list, int num);
 void tx_status_node_free(struct tx_status_node *txok_status_node,
     struct tx_status_list *tx_status_list);
@@ -193,4 +182,4 @@ void MAC_WR_REG(unsigned int addr,unsigned int data);
 
 void b2b_rx_throughput_calc(HW_RxDescripter_bit *RxPrivHdr);
 
-#endif //_HI_SDIO_H_
+#endif 

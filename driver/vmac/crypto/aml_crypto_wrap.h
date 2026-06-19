@@ -1,4 +1,12 @@
 #ifndef _AML_CRYTO_WRAP_H_
+
+#ifndef FREE
+#define FREE(ptr, tag) bin_clear_free(ptr, 0)
+#endif
+
+#ifndef ERROR_DEBUG_OUT
+#define ERROR_DEBUG_OUT(fmt, ...) wpa_printf(_MSG_ERROR_, fmt, ##__VA_ARGS__)
+#endif
 #define _AML_CRYTO_WRAP_H_
 
 #include <linux/types.h>
@@ -91,7 +99,6 @@ enum {
 	_MSG_EXCESSIVE_, _MSG_MSGDUMP_, _MSG_DEBUG_, _MSG_INFO_, _MSG_WARNING_, _MSG_ERROR_
 };
 
-
 #ifndef MAC2STR
 #define MAC2STR(a) (a)[0], (a)[1], (a)[2], (a)[3], (a)[4], (a)[5]
 #define MACSTR "%02x:%02x:%02x:%02x:%02x:%02x"
@@ -114,4 +121,4 @@ void bin_clear_free(void *bin, size_t len);
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 0))
 u32 crc32(const u8 *frame, size_t frame_len);
 #endif
-#endif//_AML_CRYTO_WRAP_H_
+#endif

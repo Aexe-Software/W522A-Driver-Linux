@@ -1,4 +1,26 @@
-﻿# w522a-v16v вЂ” Changelog
+# W522A / W155S1 Driver — Changelog
+
+## v2.0 (2026-06-19) — BT + WiFi all work
+
+First fully-working release of the WiFi+BT driver.
+
+**Fixes vs vendor source:**
+- Rate control: `get_fitable_mcs_rate()` now caps/floors the AP TX rate to **MCS6**. The vendor reads a hardcoded `sta_avg_snr=28` (never updated), so it would pick the firmware-deadly MCS8/9 (retry storm). AP auto-rate is now fast AND stable — no `iwpriv set_rate_vht` workaround.
+- VHT80: added `IEEE80211_VHT_CAP_SHORT_GI_80` to the band VHT cap (`vmac/wifi_cfg80211.c`); without it hostapd rejected VHT80 and the AP was invisible.
+
+**Now working:**
+- WiFi AP: 5GHz VHT80 (~60Mbit), 2.4GHz HT40 (~50/50), 2.4GHz HT20 (~26/30).
+- WiFi STA both bands (TX aggregation, real bitrate, ~5ms LAN ping).
+- **Bluetooth A2DP audio added** (`driver/bt/`): hci_uart aml + bluez-alsa, AAC codec.
+- Verified device tree + compiled DTB; new `install.sh` (prebuilt OR build with gcc-15 + autoload); `bt-audio.sh` helper.
+
+**Known firmware limits (traced in code, not driver-fixable):**
+- AP TX aggregation (A-MPDU/A-MSDU) crashes the firmware — kept OFF.
+- 5GHz 40MHz is firmware-dead (DPD/PA calibration for the 5GHz+40MHz combo). 2.4GHz 40MHz works at the same power.
+
+---
+
+# w522a-v16v вЂ” Changelog
 
 ## Current version
 `v17m-devin-...+IRQFLAGS-COMMON-BH+SDIO-LIVE-GUARD`

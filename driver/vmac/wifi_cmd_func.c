@@ -42,9 +42,6 @@ cmd_to_func_table_t cmd_to_func[] =
     {"sta_get_session", aml_sta_get_wfd_session},
     {"wmm_ac_addts",  aml_wmm_ac_addts},
     {"wmm_ac_delts",  aml_wmm_ac_delts},
-#ifdef CONFIG_P2P
-    {"get_p2p_dev_id", aml_get_p2p_device_addr},
-#endif
     {"set_amsdu", aml_set_mac_amsdu},
     {"set_ampdu", aml_set_drv_ampdu},
     {"update_wmm_arg", aml_update_wmm_arg},
@@ -54,7 +51,7 @@ cmd_to_func_table_t cmd_to_func[] =
     {"set_aggr_thr", aml_set_aggr_thresh},
     {"set_hrt_intv", aml_set_hrtimer_interval},
     {"get_ap_ip", aml_get_ap_ip},
-    {"set_roam_2gthr", aml_set_roaming_threshold_2g}, /* wpa_cli driver set_roam_thr_2g -80 */
+    {"set_roam_2gthr", aml_set_roaming_threshold_2g}, 
     {"set_roam_5gthr", aml_set_roaming_threshold_5g},
     {"get_roam_chan", aml_get_roaming_candidate_chans},
     {"set_roam_chan", aml_set_roaming_candidate_chans},
@@ -112,7 +109,6 @@ cmd_to_func_table_t cmd_to_func[] =
     {"", NULL},
 };
 
-/* Returns a char * arr [] and size is the length of the returned array */
 char **aml_cmd_char_phrase(char sep, const char *str, int *size)
 {
     int count = 0;
@@ -131,7 +127,7 @@ char **aml_cmd_char_phrase(char sep, const char *str, int *size)
 
     for (i = 0; i < strlen(str); i++) {
         if (str[i] == sep) {
-            /* kzalloc the memory space of substring length + 1 (for null terminator) */
+            
             ret[j] = (char *)kzalloc((i - lastindex + 1) * sizeof(char), GFP_KERNEL);
             memcpy(ret[j], str + lastindex + 1, i - lastindex - 1);
             j++;
@@ -139,7 +135,6 @@ char **aml_cmd_char_phrase(char sep, const char *str, int *size)
         }
     }
 
-    /* Processing the last substring */
     if (lastindex <= strlen(str) - 1) {
         ret[j] = (char *)kzalloc((strlen(str) - lastindex + 1) * sizeof(char), GFP_KERNEL);
         memcpy(ret[j], str + lastindex + 1, strlen(str) - 1 - lastindex);
@@ -151,9 +146,6 @@ char **aml_cmd_char_phrase(char sep, const char *str, int *size)
     return ret;
 }
 
-/*
- *  cmd: sta_send_bareq 11:22:33:44:55:66 5
- */
 int aml_sta_send_addba_req(struct wlan_net_vif *wnet_vif, char *buf, int len)
 {
     int skip;
@@ -161,11 +153,7 @@ int aml_sta_send_addba_req(struct wlan_net_vif *wnet_vif, char *buf, int len)
     int tid = 0;
 
     skip = strlen("sta_send_bareq") + 1;
-    /* v16c (B19): sscanf "%s" without width specifier — userspace caller
-     * can overflow mac[18] on stack (e.g. `sta_send_bareq AAAAAAAAAAAAAAAAAA 0`).
-     * The result is unused since `wifi_mac_send_addba_req` re-parses buf,
-     * but the overflow happens before that. Bound to buffer size and
-     * check parse result. */
+    
     mac[0] = '\0';
     if (sscanf(buf + skip, "%17s %d", mac, &tid) < 1) {
         pr_warn("%s: cannot parse mac/tid from buf\n", __func__);
@@ -425,7 +413,6 @@ int aml_wpa_get_txaggr_status(struct wlan_net_vif *wnet_vif, char *buf, int len)
     return 0;
 }
 
-
 int aml_get_drv_txaggr_status(struct wlan_net_vif *wnet_vif, char *buf, int len)
 {
     char **arg;
@@ -436,7 +423,6 @@ int aml_get_drv_txaggr_status(struct wlan_net_vif *wnet_vif, char *buf, int len)
 
     arg = aml_cmd_char_phrase(sep, buf, &cmd_arg);
 
-    /* get queue-0 statistics */
     if (likely(!arg[1])) {
         i = 0;
 
@@ -447,7 +433,7 @@ int aml_get_drv_txaggr_status(struct wlan_net_vif *wnet_vif, char *buf, int len)
         pr_debug("\n");
 
     } else {
-        /* get all statistics */
+        
         if (strnicmp(arg[1], "all", strlen("all")) == 0) {
             for (i = 0; i < HAL_NUM_TX_QUEUES; i++) {
                 for (j = 0; j < 16; j++) {
@@ -457,7 +443,7 @@ int aml_get_drv_txaggr_status(struct wlan_net_vif *wnet_vif, char *buf, int len)
                 pr_debug("\n");
             }
         }
-        /* reset */
+        
         if (strnicmp(arg[1], "reset", strlen("reset")) == 0) {
             for (i = 0; i < HAL_NUM_TX_QUEUES; i++) {
                 for (j = 0; j < 16; j++) {
@@ -473,12 +459,8 @@ int aml_get_drv_txaggr_status(struct wlan_net_vif *wnet_vif, char *buf, int len)
 
 int aml_sta_get_wfd_session(struct wlan_net_vif *wnet_vif, char *buf, int len)
 {
-#ifdef CONFIG_P2P
-    pr_debug("%s, wfd_session_id=%s\n", __func__, wnet_vif->vm_p2p->wfd_session_id);
-#else
     if (buf != NULL && len > 0)
         buf[0] = '\0';
-#endif
     return 0;
 }
 
@@ -707,8 +689,8 @@ void wifi_mac_ap_set_11h(unsigned char channel)
         return;
     }
 
-    wifimac->wm_doth_tbtt = 255; /* simple_strtoul(*buf, NULL, 0); */
-    /* wifimac->wm_doth_channel = simple_strtoul(*(buf + 1), NULL, 0); */
+    wifimac->wm_doth_tbtt = 255; 
+    
     wifimac->wm_doth_channel = channel;
     pr_debug("%s, wm_dott_tbtt=%d, wm_doth_channel=%d\n", __func__, wifimac->wm_doth_tbtt, wifimac->wm_doth_channel);
     wifimac->wm_flags |= WIFINET_F_CHANSWITCH;
@@ -954,7 +936,6 @@ int aml_set_short_gi(struct wlan_net_vif *wnet_vif, char *buf, int len)
         wnet_vif->vm_wmac->wm_flags_ext &= ~WIFINET_FEXT_SHORTGI_ENABLE;
         pr_debug("%s: disable short GI done.\n", __func__);
     }
-
 
     FREE(arg, "cmd_arg");
     return 0;
@@ -1236,7 +1217,6 @@ int wifi_mac_set_udp_info(char **buf)
     return 0;
 }
 
-/* set_udp_info dst_port src_port dst_ip in/out */
 int aml_set_udp_info(struct wlan_net_vif *wnet_vif, char *buf, int len)
 {
     int skip = 0, cmd_arg;
@@ -1335,7 +1315,7 @@ int aml_set_device_sn(struct wlan_net_vif *wnet_vif, char* buf, int len)
 
             for (i = 0; i < 16; i++) {
                 if (efuse_data & (1 << i)) {
-                    /* pr_debug("set_dev_sn ===>>> efuse_manual_write: %d 0xf\n", i); */
+                    
                     efuse_manual_write(i, 0xf);
                 }
             }

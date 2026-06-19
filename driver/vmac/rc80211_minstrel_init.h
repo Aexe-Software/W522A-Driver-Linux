@@ -12,24 +12,16 @@ struct aml_rate_adaptation_dev {
     u32 num_rf_chains;
 };
 
-/* HT Capabilities*/
 #define WMI_HT_CAP_RX_STBC_MASK_SHIFT     4
-#define WMI_HT_CAP_ENABLED                0x0001   /* HT Enabled/ disabled */
-#define WMI_HT_CAP_TX_STBC                0x0002   /* B1 TX STBC */
-#define WMI_HT_CAP_DYNAMIC_SMPS           0x0004   /* Dynamic MIMO powersave */
-#define WMI_HT_CAP_HT20_SGI               0x0020   /* Short Guard Interval with HT20 */
+#define WMI_HT_CAP_ENABLED                0x0001   
+#define WMI_HT_CAP_TX_STBC                0x0002   
+#define WMI_HT_CAP_DYNAMIC_SMPS           0x0004   
+#define WMI_HT_CAP_HT20_SGI               0x0020   
 #define WMI_HT_CAP_HT40_SGI               0x0040
-#define WMI_HT_CAP_L_SIG_TXOP_PROT        0x0080   /* L-SIG TXOP Protection */
-#define WMI_HT_CAP_LDPC                   0x0200   /* LDPC supported */
-#define WMI_HT_CAP_RX_STBC                0x0C00   /* B10-B11 RX STBC */
-#define WMI_HT_CAP_MPDU_DENSITY           0x7000   /* MPDU Density */
-
-/*
- * WMI_VHT_CAP_* these maps to ieee 802.11ac vht capability information
- * field. The fields not defined here are not supported, or reserved.
- * Do not change these masks and if you have to add new one follow the
- * bitmask as specified by 802.11ac draft.
- */
+#define WMI_HT_CAP_L_SIG_TXOP_PROT        0x0080   
+#define WMI_HT_CAP_LDPC                   0x0200   
+#define WMI_HT_CAP_RX_STBC                0x0C00   
+#define WMI_HT_CAP_MPDU_DENSITY           0x7000   
 
 #define WMI_VHT_CAP_MAX_MPDU_LEN_MASK            0x00000003
 #define WMI_VHT_CAP_RX_LDPC                      0x00000010
@@ -40,13 +32,8 @@ struct aml_rate_adaptation_dev {
 #define WMI_VHT_CAP_RX_FIXED_ANT                 0x10000000
 #define WMI_VHT_CAP_TX_FIXED_ANT                 0x20000000
 
-/* The following also refer for max HT AMSDU */
 #define WMI_VHT_CAP_MAX_MPDU_LEN_11454           0x00000002
 
-/*
- * Interested readers refer to Rx/Tx MCS Map definition as defined in
- * 802.11ac
- */
 #define WMI_VHT_MAX_SUPP_RATE_MASK           0x1fff0000
 
 #ifdef AUTO_RATE_SIM

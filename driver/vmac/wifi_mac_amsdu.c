@@ -1,23 +1,10 @@
-/*
- ****************************************************************************************
- *
- * Copyright (C) Amlogic 2010-2014
- *
- * Project: 11N 80211 mac  layer Software
- *
- * Description:
- *     wifi_mac amsdu module,bulid amsdu when send,
- *
- *
- ****************************************************************************************
- */
+
 #include "wifi_mac_com.h"
 #include "wifi_debug.h"
 #include "wifi_drv_xmit.h"
 
 struct tasklet_struct amsdu_tasklet;
 
-/*avoid use kalloc to allocate mem. */
 static struct wifi_mac_msdu_node  g_msdu_node [(MAX_MSDU_CNT + 4) * WME_NUM_TID];
 
 static int wifi_mac_msdu_list_init(struct msdu_list * msdu_list, int num)
@@ -197,7 +184,6 @@ void wifi_mac_txamsdu_free_all(struct wifi_mac *wifimac, unsigned char vid)
     WIFINET_AMSDU_TASKLET_UNLOCK(wifimac);
 }
 
-/*shijie.chen add amsdu tasklet to aggregate amsdu and remove amsdu timer*/
 static void wifi_mac_amsdu_tasklet(unsigned long arg)
 {
     struct wifi_mac *wifimac = (struct wifi_mac *)(SYS_TYPE)arg;
@@ -213,11 +199,11 @@ static void wifi_mac_amsdu_tasklet(unsigned long arg)
     while (!list_empty(&wifimac->wm_amsdu_txq))
     {
         amsdutx = list_first_entry(&wifimac->wm_amsdu_txq, struct wifi_mac_amsdu_tx, amsdu_qelem);
-        /*get tid list and send all buffer data firstly and then do dequeue. */
+        
         while (!list_empty(&amsdutx->msdu_list))
         {
             msdu_node = list_first_entry(&amsdutx->msdu_list, struct wifi_mac_msdu_node, msdu_node);
-            /*dequeue from amsdutx->msdu_list and enqueue to msdu_node_list->free_list */
+            
             list_del_init(&msdu_node->msdu_node);
 
             WIFINET_AMSDU_UNLOCK(wifimac);
@@ -227,11 +213,6 @@ static void wifi_mac_amsdu_tasklet(unsigned long arg)
             wifi_mac_msdu_node_free(msdu_node, &(wifimac->msdu_node_list));
         }
 
-        /*
-        No remain msdu in tmp buf.
-        FIXME: if there more than one tid txqs list on 'wm_amsdu_txq',
-        the next tid txqs are held on.
-        */
         if (amsdutx->amsdunum == 0)
         {
             list_del_init(&amsdutx->amsdu_qelem);
@@ -252,7 +233,6 @@ static void wifi_mac_amsdu_tasklet(unsigned long arg)
     }
     WIFINET_AMSDU_UNLOCK(wifimac);
 
-    /*flush remain msdus if exist and live time is timeout*/
     if ((amsdutx != NULL) && (amsdutx->amsdunum > 0))
     {
         now_time = jiffies;
@@ -277,8 +257,25 @@ static void wifi_mac_amsdu_tasklet_ex(unsigned long arg)
 
 int wifi_mac_txamsdu_task(void *arg)
 {
+    struct drv_private **drv_pp = (struct drv_private **)arg;
+    struct drv_private *drv_priv = drv_pp ? *drv_pp : NULL;
+    struct wifi_mac *wifimac = drv_priv ? drv_priv->wmac : NULL;
+    int i;
+
+    if (!wifimac)
+        return OS_TIMER_NOT_REARMED;
+
     tasklet_schedule(&amsdu_tasklet);
-    return OS_TIMER_REARMED;
+
+    if (!list_empty(&wifimac->wm_amsdu_txq))
+        return OS_TIMER_REARMED;
+
+    for (i = 0; i < WME_NUM_TID; i++) {
+        if (wifimac->msdu_cnt[i] != 0)
+            return OS_TIMER_REARMED;
+    }
+
+    return OS_TIMER_NOT_REARMED;
 }
 
 static int wifi_mac_amsdu_check(struct sk_buff *skb)
@@ -328,7 +325,7 @@ static void wifi_mac_amsdu_encap(struct sk_buff *amsdu_buf, struct sk_buff *skb,
 
     eh_inter = (struct ether_header *)(os_skb_data(amsdu_buf)+offset);
 
-    memcpy(eh_inter, eh, sizeof(struct ether_header) - sizeof(eh->ether_type)); //only copy DA,SA fields
+    memcpy(eh_inter, eh, sizeof(struct ether_header) - sizeof(eh->ether_type)); 
     payload = os_skb_get_pktlen(skb) + LLC_SNAPFRAMELEN;
     msdulen = payload - sizeof(struct ether_header);
     eh_inter->ether_type = __constant_htons(msdulen);
@@ -351,7 +348,6 @@ static void wifi_mac_amsdu_encap(struct sk_buff *amsdu_buf, struct sk_buff *skb,
     os_skb_put(amsdu_buf, payload);
 }
 
-/* alloc skb with specific length dynamic to aggregate amsdu.*/
 struct sk_buff *wifi_mac_amsdu_aggr(struct wifi_mac *wifimac, struct wifi_mac_amsdu_tx *amsdutx)
 {
     struct wifi_station *sta = NULL;
@@ -362,7 +358,6 @@ struct sk_buff *wifi_mac_amsdu_aggr(struct wifi_mac *wifimac, struct wifi_mac_am
     struct drv_txdesc *msdu_ptxdesc = NULL;
     struct drv_txdesc *amsdu_ptxdesc = NULL;
 
-    /*no msdu need to aggregate */
     if (amsdutx->amsdunum == 0)
     {
         return NULL;
@@ -428,7 +423,6 @@ struct sk_buff *wifi_mac_amsdu_aggr(struct wifi_mac *wifimac, struct wifi_mac_am
         amsdutx->msdu_tmp_buf[i] = NULL;
     }
 
-    /*get amsdu sub frame num */
     txinfo->amsdunum = amsdutx->amsdunum;
 
     amsdutx->amsdunum = 0;
@@ -446,19 +440,7 @@ struct sk_buff *wifi_mac_amsdu_ex( struct sk_buff *skbbuf)
     unsigned int framelen = 0, amsdu_max_buffer_size = 0, amsdu_max_len = 0;
     int amsdu_deny = 0, tx_amsdu_sub_max = 0, txcnt = 0;
     unsigned long now_time;
-    /* v15r: vendor BSP had `static unsigned int ampdu_max_len = 3212;`
-     * here and clamped amsdu_max_len down to that value on line below.
-     * The variable was never assigned anywhere else, so the cap froze
-     * at 3212 bytes for the lifetime of the module.
-     *
-     * BW80 path above wanted AMSDU_MAX_LEN_BW80 = 7871 bytes; HT path
-     * wanted AMSDU_MAX_LEN = 3936 bytes. Both got floored to 3212.
-     * Effect: A-MSDU TX subframes capped at ~half of the BW80 budget,
-     * so every BW80 download / upload pair pays a constant ~3:7 AMSDU
-     * efficiency loss. The peer's negotiated max_amsdu_length (from
-     * sta_amsdu->amsdu_max_length) is the proper limit and is already
-     * applied in the MIN on the next line. */
-
+    
     drv_priv = wifimac->drv_priv;
     amsdutx = &(sta->sta_amsdu->amsdutx[tid_index]);
 
@@ -477,33 +459,11 @@ struct sk_buff *wifi_mac_amsdu_ex( struct sk_buff *skbbuf)
     }
 
     amsdu_max_len = MIN(sta->sta_amsdu->amsdu_max_length, amsdu_max_len);
-    /* v15r: removed `amsdu_max_len = MIN(amsdu_max_len, ampdu_max_len);`
-     * with `static ampdu_max_len = 3212` - see comment above. */
-
-    /*
-     * v15r A-MSDU SUBFRAME CAP FIX: don't unconditionally clobber the
-     * BW80/HT specific value picked above.
-     *
-     * Vendor BSP had:
-     *   if (txcnt <= 4)
-     *       tx_amsdu_sub_max = DEFAULT_TXAMSDU_SUB_MAX_BW80 / 4;  // = 1
-     *   else
-     *       tx_amsdu_sub_max = DEFAULT_TXAMSDU_SUB_MAX_BW80 / 2;  // = 2
-     *
-     * This always overwrote the value just computed (HT=2, BW80=4) with
-     * 1 or 2. Net effect: BW80 A-MSDU TX could only ever pack 2 subframes
-     * instead of 4, regardless of peer capabilities. With the static
-     * 3212-byte cap (also removed by v15r above) this was a separate
-     * ~50% throughput loss on BW80 A-MSDU paths.
-     *
-     * Trust the BW-aware value chosen above. Keep the txcnt read for
-     * the existing AML_PRINT() debug below.
-     */
+    
     txcnt = wifimac->drv_priv->drv_ops.txlist_all_qcnt(wifimac->drv_priv, wifimac->wm_ac2q[os_skb_get_priority(skbbuf)]);
     amsdu_deny = wifi_mac_amsdu_check(skbbuf);
     framelen = AMSDU_SUBFRAME_TOTAL_LEN(os_skb_get_pktlen(skbbuf));
 
-    /*if skbbuf is deny transmit bufferable skb previously and return current skbbuf */
     if ((framelen > AMSDU_MAX_SUBFRM_LEN) || amsdu_deny )
     {
         DPRINTF(AML_DEBUG_INFO, "%s %d tx amsdu firstly\n", __func__,__LINE__);
@@ -514,7 +474,7 @@ struct sk_buff *wifi_mac_amsdu_ex( struct sk_buff *skbbuf)
                 wifi_mac_amsdu_tx2drvlay(wifimac, amsdutx);
             }
         }
-        /*send msdu frames via amsdu path */
+        
         amsdutx->amsdu_tx_buf = skbbuf;
         wifi_mac_amsdu_tx2drvlay(wifimac, amsdutx);
         return NULL;
@@ -535,7 +495,6 @@ struct sk_buff *wifi_mac_amsdu_ex( struct sk_buff *skbbuf)
         amsdutx->framelen += framelen;
         amsdutx->amsdunum++;
 
-        /*if meet aggregation condition after last aggregating, we shall send amsdu immediately. */
         if ((amsdutx->framelen + sizeof(struct ether_header) == amsdu_max_len)
           || (amsdutx->amsdunum == tx_amsdu_sub_max))
         {
@@ -551,7 +510,7 @@ struct sk_buff *wifi_mac_amsdu_ex( struct sk_buff *skbbuf)
         {
             wifi_mac_amsdu_tx2drvlay(wifimac, amsdutx);
         }
-        /*process exception */
+        
         if (amsdutx->amsdunum >= DEFAULT_TXAMSDU_SUB_MAX_BW80 * 2)
         {
             ERROR_DEBUG_OUT("alloc skb fail, drop skb\n");
@@ -594,7 +553,6 @@ struct sk_buff *wifi_mac_amsdu_send( struct sk_buff * skbbuf)
         return skbbuf;
     }
 
-    /* shijie.chen add. FIXME: add spin_lock for every tid. */
     WIFINET_AMSDU_LOCK(wifimac);
     msdu_node = wifi_mac_msdu_node_alloc(&(wifimac->msdu_node_list));
     if (msdu_node == NULL)
@@ -604,7 +562,6 @@ struct sk_buff *wifi_mac_amsdu_send( struct sk_buff * skbbuf)
         return skbbuf;
     }
 
-    /* buffer all data frames from tcp/ip layer with specific tid of a sta */
     msdu_node->skbbuf = skbbuf;
     amsdutx = &(sta->sta_amsdu->amsdutx[tid_index]);
     list_add_tail(&msdu_node->msdu_node, &amsdutx->msdu_list);
@@ -616,10 +573,15 @@ struct sk_buff *wifi_mac_amsdu_send( struct sk_buff * skbbuf)
         amsdutx->b_work = 1;
         list_add_tail(&amsdutx->amsdu_qelem, &wifimac->wm_amsdu_txq);
     }
-    /*counter for one tid for all stations */
-
+    
     amsdutx->tid = tid_index;
     WIFINET_AMSDU_UNLOCK(wifimac);
+
+    if (wifimac->drv_priv->drv_config.cfg_txamsdu &&
+        !os_timer_ex_active(&wifimac->drv_priv->drv_txtimer)) {
+        os_timer_ex_start_period(&wifimac->drv_priv->drv_txtimer,
+                                 NET80211_AMSDU_TIMEOUT);
+    }
 
     if (wifimac->msdu_cnt[tid_index] > 1)
     {
@@ -672,7 +634,6 @@ int wifi_mac_alloc_amsdu_node(struct wifi_mac *wifimac, unsigned char vid, struc
     sta->sta_amsdu->amsdu_max_length = AMSDU_MAX_BUFFER_SIZE_BW80;
     sta->sta_amsdu->amsdu_max_sub = DEFAULT_TXAMSDU_SUB_MAX_BW80;
 
-    /*init amsdu max length capability */
     if (wifimac->wm_flags_ext2 & WIFINET_VHTCAP_MAX_MPDU_LEN_11454)
     {
         sta->sta_amsdu->amsdu_max_length = MIN(sta->sta_amsdu->amsdu_max_length, VHT_MPDU_SIZE_11451);
@@ -708,4 +669,3 @@ void wifi_mac_amsdu_nsta_free(struct wifi_mac *wifimac, struct wifi_station *sta
     if (sta->sta_amsdu)
         NET_FREE(sta->sta_amsdu, "sta_amsdu alloc");
 }
-

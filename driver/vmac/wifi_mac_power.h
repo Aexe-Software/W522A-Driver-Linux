@@ -1,75 +1,53 @@
-/*
- ****************************************************************************************
- *
- * Copyright (C) Amlogic 2010-2014
- *
- * Project: 11N 80211 mac  layer Software
- *
- * Description:
- *     wifi_mac layer power save  interface module
- *
- *
- ****************************************************************************************
- */
+
 #ifndef _NET80211_IEEE80211_POWER_H_
 #define _NET80211_IEEE80211_POWER_H_
 
 #include "wifi_mac_rx_status.h"
 
-//powersave presleep timer
 #define WIFINET_PWRSAVE_TIMER_INTERVAL   50
 
-//INACTIVITYTIME for WIFINET_PWRSAVE_LOW
 #define WIFINET_PS_LOW_INACTIVITYTIME               200
-//INACTIVITYTIME for WIFINET_PWRSAVE_NORMAL
+
 #define WIFINET_PS_NORMAL_INACTIVITYTIME            400
-//INACTIVITYTIME for WIFINET_PWRSAVE_MAXIMUM
+
 #define WIFINET_PS_MAXIMUM_INACTIVITYTIME           100
 
-//after wakeup from beacon timer, sta need to wait for the incoming beacon
 #define WIFINET_PWRSAVE_WAITBEACON_TIMER_INTERVAL       70
-//after send trigger, sta need to wait for the response
+
 #define WIFINET_PWRSAVE_PSTRIGGER_TIMER_INTERVAL    80
 
-//null data with powersave=1
 #define NULLDATA_PS              (1)
-//null data with powersave=0
+
 #define NULLDATA_NONPS        (0)
 
 #define WIFINET_BCNMISS_TIME  (WIFINET_BMISS_THRS * 2)
 
-//flag whether to enter sleep after nulldata is transmited completely
-//just send nulldata with ps=1, but not enter sleep when txed. for example, powersave for other intf scanning
-//send nulldata with ps=1 and also enter sleep after txed.
-
 enum wifi_mac_psmode
 {
-//non-powersave mode
+
     WIFINET_PWRSAVE_NONE,
-//powersave low mode, and save the minimum power, such as  INACTIVITYTIME is longer, trigger use wakeup
+
     WIFINET_PWRSAVE_LOW,
-//powersave normal mode, and save the normal power
+
     WIFINET_PWRSAVE_NORMAL,
-//powersave normal mode, and save the maximum power
+
     WIFINET_PWRSAVE_MAXIMUM,
     WIFINET_PWRSAVE_MODE_MAX
 } ;
 
 enum wifinet_ps_state
 {
-    //sta is recognized awake by ap
+    
     WIFINET_PWRSAVE_AWAKE,
-    //sta is recognized sleep by ap, and fw of sta is sleep too.
+    
     WIFINET_PWRSAVE_FULL_SLEEP,
-    //sta is recognized sleep by ap, but fw of sta is not sleep.
-    //such as sta wakeup by beacon timer.
+    
     WIFINET_PWRSAVE_NETWORK_SLEEP,
     WIFINET_PWRSAVE_STATE_MAX,
 } ;
 
 extern char *ips_state[WIFINET_PWRSAVE_STATE_MAX];
 
-//reason for enter sleep, for debug
 enum wifinet_ps_sleep_reason
 {
     SLEEP_NONE,
@@ -95,7 +73,6 @@ enum wifinet_ps_sleep_reason
     SLEEP_REASON_MAX,
 } ;
 
-//reason for enter netsleep, for debug
 enum wifinet_ps_netsleep_reason
 {
     NETSLEEP_AFTER_WAKEUP,
@@ -105,7 +82,6 @@ enum wifinet_ps_netsleep_reason
     NETSLEEP_REASON_MAX,
 } ;
 
-//reason for enter wakeup, for debug
  enum wifinet_ps_wk_reason
 {
     WKUP_FROM_VMAC_CREATE,
@@ -125,7 +101,6 @@ enum wifinet_ps_netsleep_reason
     WAKEUP_REASON_MAX,
 } ;
 
-
 struct wifi_mac_pwrsave_t
 {
     enum wifi_mac_psmode  ips_sta_psmode;
@@ -137,10 +112,10 @@ struct wifi_mac_pwrsave_t
     OS_MUTEX                ips_mutex;
 
     struct os_timer_ext       ips_timer_sleep_wait;
-    struct os_timer_ext     ips_timer_uapsd_trigger; /*timer, for user send triggers*/
+    struct os_timer_ext     ips_timer_uapsd_trigger; 
     enum wifinet_ps_sleep_reason    ips_sleep_wait_reason;
     unsigned char           ips_flag_send_ps_trigger;
-    unsigned char           ips_flag_uapsd_trigger; /*flag,  user send triggers to AP for ACs which support U-APSD */
+    unsigned char           ips_flag_uapsd_trigger; 
     unsigned short          ips_ps_trigger_timeout;
     unsigned char           ips_flag_waitbeacon_timer_start;
     unsigned short          ips_ps_waitbeacon_timeout;
@@ -164,8 +139,6 @@ struct wifi_station;
 #define PS_OVER_FLAG_UAPSD    2
 #define PS_OVER_FLAG_ALL        3
 
-/* suspend and resume field */
-
 enum wifi_mac_wow_mode
 {
     WIFI_WOW_MODE_DISABLE,
@@ -179,7 +152,6 @@ enum wifi_mac_suspend_state
     WIFI_SUSPEND_STATE_DEEPSLEEP,
 };
 
-/* suspend and resume field end*/
 int wifi_mac_pwrsave_psqueue_clean(struct wifi_station *);
 int wifi_mac_pwrsave_psqueue_age(struct wifi_station *,
                                 struct sk_buff_head *);
@@ -250,4 +222,4 @@ void  wifi_mac_pwrsave_sleep_wait_ex(SYS_TYPE param1,
         SYS_TYPE param2,SYS_TYPE param3,SYS_TYPE param4,SYS_TYPE param5);
 void wifi_mac_send_nulldata_retry(void * data);
 unsigned char sta_find_in_sta_tbl(struct wifi_station *find_sta);
-#endif /* _NET80211_IEEE80211_POWER_H_ */
+#endif 

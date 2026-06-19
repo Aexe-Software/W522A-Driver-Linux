@@ -34,11 +34,11 @@ struct class_chan_set global_chan_set [256] =
                      {CHAN_2_FREQ_2G(12), WIFINET_CHAN_2GHZ, 12, 4, 2, WIFINET_BWC_WIDTH20, 81},
                      {CHAN_2_FREQ_2G(13), WIFINET_CHAN_2GHZ, 13, 4, 2, WIFINET_BWC_WIDTH20, 81}
                  }
-    }, //class 81
+    }, 
     {82, 20, 1, {
                     {CHAN_2_FREQ_14(14), WIFINET_CHAN_2GHZ, 14, 4, 2, WIFINET_BWC_WIDTH20, 82}
                 }
-    },//82
+    },
     {83, 40, 9, {
                     {CHAN_2_FREQ_2G(1 + 2), WIFINET_CHAN_2GHZ, 1, 4, 2, WIFINET_BWC_WIDTH40, 83},
                     {CHAN_2_FREQ_2G(2 + 2), WIFINET_CHAN_2GHZ, 2, 4, 2, WIFINET_BWC_WIDTH40, 83},
@@ -50,7 +50,7 @@ struct class_chan_set global_chan_set [256] =
                     {CHAN_2_FREQ_2G(8 + 2), WIFINET_CHAN_2GHZ, 8, 4, 2, WIFINET_BWC_WIDTH40, 83},
                     {CHAN_2_FREQ_2G(9 + 2), WIFINET_CHAN_2GHZ, 9, 4, 2, WIFINET_BWC_WIDTH40, 83}
                 }
-    },//83
+    },
     {84, 40, 9, {
                     {CHAN_2_FREQ_2G(5 - 2), WIFINET_CHAN_2GHZ, 5, 4, 2, WIFINET_BWC_WIDTH40, 84},
                     {CHAN_2_FREQ_2G(6 - 2), WIFINET_CHAN_2GHZ, 6, 4, 2, WIFINET_BWC_WIDTH40, 84},
@@ -62,47 +62,47 @@ struct class_chan_set global_chan_set [256] =
                     {CHAN_2_FREQ_2G(12 - 2), WIFINET_CHAN_2GHZ, 12, 4, 2, WIFINET_BWC_WIDTH40, 84},
                     {CHAN_2_FREQ_2G(13 - 2), WIFINET_CHAN_2GHZ, 13, 4, 2, WIFINET_BWC_WIDTH40, 84}
                 }
-    },//84
+    },
     {112, 20, 3, {
                      {CHAN_2_FREQ_5G(8), WIFINET_CHAN_5GHZ, 8, 4, 2, WIFINET_BWC_WIDTH20, 112},
                      {CHAN_2_FREQ_5G(12), WIFINET_CHAN_5GHZ, 12, 4, 2, WIFINET_BWC_WIDTH20, 112},
                      {CHAN_2_FREQ_5G(16) , WIFINET_CHAN_5GHZ, 16, 4, 2, WIFINET_BWC_WIDTH20, 112}
                  }
-    },//112
+    },
     {115, 20, 4, {
                      {CHAN_2_FREQ_5G(36), WIFINET_CHAN_5GHZ, 36, 4, 2, WIFINET_BWC_WIDTH20, 115},
                      {CHAN_2_FREQ_5G(40), WIFINET_CHAN_5GHZ, 40, 4, 2, WIFINET_BWC_WIDTH20, 115},
                      {CHAN_2_FREQ_5G(44), WIFINET_CHAN_5GHZ, 44, 4, 2, WIFINET_BWC_WIDTH20, 115},
                      {CHAN_2_FREQ_5G(48), WIFINET_CHAN_5GHZ, 48, 4, 2, WIFINET_BWC_WIDTH20, 115}
                  }
-    },//115
+    },
     {116, 40, 2, {
                      {CHAN_2_FREQ_5G(36 + 2), WIFINET_CHAN_5GHZ, 36, 4, 2, WIFINET_BWC_WIDTH40, 116},
                      {CHAN_2_FREQ_5G(44 + 2), WIFINET_CHAN_5GHZ, 44, 4, 2, WIFINET_BWC_WIDTH40, 116}
                  }
-    },//116
+    },
     {117, 40, 2, {
                      {CHAN_2_FREQ_5G(40 - 2), WIFINET_CHAN_5GHZ, 40, 4, 2, WIFINET_BWC_WIDTH40, 117},
                      {CHAN_2_FREQ_5G(48 - 2), WIFINET_CHAN_5GHZ, 48, 4, 2, WIFINET_BWC_WIDTH40, 117}
                  }
-    },//117
+    },
     {118, 20, 4, {
                      {CHAN_2_FREQ_5G(52), WIFINET_CHAN_5GHZ, 52, 4, 2, WIFINET_BWC_WIDTH20, 118},
                      {CHAN_2_FREQ_5G(56), WIFINET_CHAN_5GHZ, 56, 4, 2, WIFINET_BWC_WIDTH20, 118},
                      {CHAN_2_FREQ_5G(60), WIFINET_CHAN_5GHZ, 60, 4, 2, WIFINET_BWC_WIDTH20, 118},
                      {CHAN_2_FREQ_5G(64), WIFINET_CHAN_5GHZ, 64, 4, 2, WIFINET_BWC_WIDTH20, 118}
                  }
-    },//118
+    },
     {119, 40, 2, {
                      {CHAN_2_FREQ_5G(52 + 2), WIFINET_CHAN_5GHZ, 52, 4, 2, WIFINET_BWC_WIDTH40, 119},
                      {CHAN_2_FREQ_5G(60 + 2), WIFINET_CHAN_5GHZ, 60, 4, 2, WIFINET_BWC_WIDTH40, 119}
                  }
-    },//119
+    },
     {120, 40, 2, {
                      {CHAN_2_FREQ_5G(56-2), WIFINET_CHAN_5GHZ, 56, 4, 2, WIFINET_BWC_WIDTH40, 120},
                      {CHAN_2_FREQ_5G(64-2), WIFINET_CHAN_5GHZ, 64, 4, 2, WIFINET_BWC_WIDTH40, 120}
                  }
-    },//120
+    },
     {121, 20, 12, {
                       {CHAN_2_FREQ_5G(100), WIFINET_CHAN_5GHZ, 100, 4, 2, WIFINET_BWC_WIDTH20, 121},
                       {CHAN_2_FREQ_5G(104), WIFINET_CHAN_5GHZ, 104, 4, 2, WIFINET_BWC_WIDTH20, 121},
@@ -117,7 +117,7 @@ struct class_chan_set global_chan_set [256] =
                       {CHAN_2_FREQ_5G(140), WIFINET_CHAN_5GHZ, 140, 4, 2, WIFINET_BWC_WIDTH20, 121},
                       {CHAN_2_FREQ_5G(144), WIFINET_CHAN_5GHZ, 144, 4, 2, WIFINET_BWC_WIDTH20, 121}
                   }
-     },//121
+     },
      {122, 40, 6, {
                       {CHAN_2_FREQ_5G(100+2), WIFINET_CHAN_5GHZ, 100, 4, 2, WIFINET_BWC_WIDTH40, 122},
                       {CHAN_2_FREQ_5G(108+2), WIFINET_CHAN_5GHZ, 108, 4, 2, WIFINET_BWC_WIDTH40, 122},
@@ -126,7 +126,7 @@ struct class_chan_set global_chan_set [256] =
                       {CHAN_2_FREQ_5G(132+2), WIFINET_CHAN_5GHZ, 132, 4, 2, WIFINET_BWC_WIDTH40, 122},
                       {CHAN_2_FREQ_5G(140+2), WIFINET_CHAN_5GHZ, 140, 4, 2, WIFINET_BWC_WIDTH40, 122}
                   }
-    },//122
+    },
     {123, 40, 6, {
                      {CHAN_2_FREQ_5G(104-2), WIFINET_CHAN_5GHZ, 104, 4, 2, WIFINET_BWC_WIDTH40, 123},
                      {CHAN_2_FREQ_5G(112-2), WIFINET_CHAN_5GHZ, 112, 4, 2, WIFINET_BWC_WIDTH40, 123},
@@ -135,14 +135,14 @@ struct class_chan_set global_chan_set [256] =
                      {CHAN_2_FREQ_5G(136-2), WIFINET_CHAN_5GHZ, 136, 4, 2, WIFINET_BWC_WIDTH40, 123},
                      {CHAN_2_FREQ_5G(144-2), WIFINET_CHAN_5GHZ, 144, 4, 2, WIFINET_BWC_WIDTH40, 123}
                  }
-    },//123
+    },
     {124, 20, 4, {
                      {CHAN_2_FREQ_5G(149), WIFINET_CHAN_5GHZ, 149, 4, 2, WIFINET_BWC_WIDTH20, 124},
                      {CHAN_2_FREQ_5G(153), WIFINET_CHAN_5GHZ, 153, 4, 2, WIFINET_BWC_WIDTH20, 124},
                      {CHAN_2_FREQ_5G(157), WIFINET_CHAN_5GHZ, 157, 4, 2, WIFINET_BWC_WIDTH20, 124},
                      {CHAN_2_FREQ_5G(161), WIFINET_CHAN_5GHZ, 161, 4, 2, WIFINET_BWC_WIDTH20, 124}
                  }
-    },//124
+    },
     {125, 20, 5, {
                      {CHAN_2_FREQ_5G(149), WIFINET_CHAN_5GHZ, 149, 4, 2, WIFINET_BWC_WIDTH20, 125},
                      {CHAN_2_FREQ_5G(153), WIFINET_CHAN_5GHZ, 153, 4, 2, WIFINET_BWC_WIDTH20, 125},
@@ -150,17 +150,17 @@ struct class_chan_set global_chan_set [256] =
                      {CHAN_2_FREQ_5G(161), WIFINET_CHAN_5GHZ, 161, 4, 2, WIFINET_BWC_WIDTH20, 125},
                      {CHAN_2_FREQ_5G(165), WIFINET_CHAN_5GHZ, 165, 4, 2, WIFINET_BWC_WIDTH20, 125}
                  }
-    },//125
+    },
     {126, 40, 2, {
                      {CHAN_2_FREQ_5G(149+2), WIFINET_CHAN_5GHZ, 149, 4, 2, WIFINET_BWC_WIDTH40, 126},
                      {CHAN_2_FREQ_5G(157+2), WIFINET_CHAN_5GHZ, 157, 4, 2, WIFINET_BWC_WIDTH40, 126}
                  }
-    },//126
+    },
     {127, 40, 2, {
                      {CHAN_2_FREQ_5G(153-2), WIFINET_CHAN_5GHZ, 153, 4, 2, WIFINET_BWC_WIDTH40, 127},
                      {CHAN_2_FREQ_5G(161-2), WIFINET_CHAN_5GHZ, 161, 4, 2, WIFINET_BWC_WIDTH40, 127}
                  }
-    },//127
+    },
     {128, 80, 24, {
                       {CHAN_2_FREQ_5G(42), WIFINET_CHAN_5GHZ, 36, 4, 2, WIFINET_BWC_WIDTH80, 128},
                       {CHAN_2_FREQ_5G(42), WIFINET_CHAN_5GHZ, 40, 4, 2, WIFINET_BWC_WIDTH80, 128},
@@ -187,24 +187,24 @@ struct class_chan_set global_chan_set [256] =
                       {CHAN_2_FREQ_5G(155), WIFINET_CHAN_5GHZ, 157, 4, 2, WIFINET_BWC_WIDTH80, 128},
                       {CHAN_2_FREQ_5G(155), WIFINET_CHAN_5GHZ, 161, 4, 2, WIFINET_BWC_WIDTH80, 128}
                   }
-    }//128
+    }
 };
 
 struct country_na_freq_set country_na_freq_plan_list [] =
 {
-    //0x00 :CN
+    
     {1, {
             {128, {CHAN_2_FREQ_5G(106), CHAN_2_FREQ_5G(122), CHAN_2_FREQ_5G(138), 0}}
         }
     },
-    //0x01 :US
+    
     {3, {
             {81, {CHAN_2_FREQ_2G(12), CHAN_2_FREQ_2G(13), 0}},
             {83, {CHAN_2_FREQ_2G(8 + 2), CHAN_2_FREQ_2G(9 + 2), 0}},
             {84, {CHAN_2_FREQ_2G(12 - 2), CHAN_2_FREQ_2G(13 - 2), 0}}
         }
     },
-    //0x02 :E.R/JP/FR
+    
     {4, {
             {121, {CHAN_2_FREQ_5G(144), 0}},
             {122, {CHAN_2_FREQ_5G(140 + 2), 0}},
@@ -212,12 +212,12 @@ struct country_na_freq_set country_na_freq_plan_list [] =
             {128, {CHAN_2_FREQ_5G(138), CHAN_2_FREQ_5G(155), 0}}
         }
     },
-    //0x03 :ISR
+    
     {1, {
             {128, {CHAN_2_FREQ_5G(106), CHAN_2_FREQ_5G(122), CHAN_2_FREQ_5G(138), CHAN_2_FREQ_5G(155), 0}}
         }
     },
-    //0x04 :MEXI
+    
     {4, {
             {81, {CHAN_2_FREQ_2G(12), CHAN_2_FREQ_2G(13), 0}},
             {83, {CHAN_2_FREQ_2G(8 + 2), CHAN_2_FREQ_2G(9 + 2), 0}},
@@ -225,7 +225,7 @@ struct country_na_freq_set country_na_freq_plan_list [] =
             {128, {CHAN_2_FREQ_5G(106), CHAN_2_FREQ_5G(122),CHAN_2_FREQ_5G(138), 0}}
          }
     },
-    //0x05 :CA
+    
     {7, {
             {81, {CHAN_2_FREQ_2G(12), CHAN_2_FREQ_2G(13), 0}},
             {83, {CHAN_2_FREQ_2G(8 + 2), CHAN_2_FREQ_2G(9 + 2), 0}},
@@ -236,7 +236,7 @@ struct country_na_freq_set country_na_freq_plan_list [] =
             {128, {CHAN_2_FREQ_5G(122), CHAN_2_FREQ_5G(138), 0}}
         }
     },
-    //0x06 :IN
+    
     {4, {
             {121, {CHAN_2_FREQ_5G(100), CHAN_2_FREQ_5G(104), CHAN_2_FREQ_5G(108), CHAN_2_FREQ_5G(112), CHAN_2_FREQ_5G(116)}},
             {122, {CHAN_2_FREQ_5G(100+2), CHAN_2_FREQ_5G(108+2), CHAN_2_FREQ_5G(116+2), 0}},
@@ -244,7 +244,7 @@ struct country_na_freq_set country_na_freq_plan_list [] =
             {128, {CHAN_2_FREQ_5G(106), CHAN_2_FREQ_5G(122), 0}}
         }
     },
-    //0x07 :AU
+    
     {4, {
             {121, {CHAN_2_FREQ_5G(120), CHAN_2_FREQ_5G(124), CHAN_2_FREQ_5G(128), CHAN_2_FREQ_5G(144), 0}},
             {122, {CHAN_2_FREQ_5G(116 + 2), CHAN_2_FREQ_5G(124 + 2), CHAN_2_FREQ_5G(140 + 2), 0}},
@@ -252,7 +252,7 @@ struct country_na_freq_set country_na_freq_plan_list [] =
             {128, {CHAN_2_FREQ_5G(122), CHAN_2_FREQ_5G(138), 0}}
         }
     },
-    //0x08 :BR
+    
     {4, {
             {121, {CHAN_2_FREQ_5G(144), 0}},
             {122, {CHAN_2_FREQ_5G(140 + 2), 0}},
@@ -260,7 +260,7 @@ struct country_na_freq_set country_na_freq_plan_list [] =
             {128, {CHAN_2_FREQ_5G(138), 0}}
         }
     },
-    //0x09 :RU
+    
     {4, {
             {121, {CHAN_2_FREQ_5G(100), CHAN_2_FREQ_5G(104), CHAN_2_FREQ_5G(108), CHAN_2_FREQ_5G(112), CHAN_2_FREQ_5G(116), CHAN_2_FREQ_5G(120),CHAN_2_FREQ_5G(124), CHAN_2_FREQ_5G(128)}},
             {122, {CHAN_2_FREQ_5G(100+2), CHAN_2_FREQ_5G(108+2), CHAN_2_FREQ_5G(116+2), CHAN_2_FREQ_5G(124+2),0}},
@@ -268,12 +268,12 @@ struct country_na_freq_set country_na_freq_plan_list [] =
             {128, {CHAN_2_FREQ_5G(106), CHAN_2_FREQ_5G(122), 0}}
         }
     },
-    //0x0a :ID
+    
     {1, {
             {128, {CHAN_2_FREQ_5G(42),CHAN_2_FREQ_5G(58),CHAN_2_FREQ_5G(106), CHAN_2_FREQ_5G(122), CHAN_2_FREQ_5G(138), 0}}
         }
     },
-    //0x0b :TW
+    
     {10, {
             {81, {CHAN_2_FREQ_2G(12), CHAN_2_FREQ_2G(13), 0}},
             {83, {CHAN_2_FREQ_2G(8 + 2), CHAN_2_FREQ_2G(9 + 2), 0}},
@@ -287,12 +287,12 @@ struct country_na_freq_set country_na_freq_plan_list [] =
             {128, {CHAN_2_FREQ_5G(122), CHAN_2_FREQ_5G(138), 0}}
         }
     },
-    //0x0c :AE
+    
     {1, {
             {121, {CHAN_2_FREQ_5G(144), 0}}
         }
     },
-    //0x0d :AR
+    
     {4, {
             {121, {CHAN_2_FREQ_5G(120), CHAN_2_FREQ_5G(124), CHAN_2_FREQ_5G(128), 0}},
             {122, {CHAN_2_FREQ_5G(116 + 2), CHAN_2_FREQ_5G(124 + 2), 0}},
@@ -300,7 +300,7 @@ struct country_na_freq_set country_na_freq_plan_list [] =
             {128, {CHAN_2_FREQ_5G(122), 0}}
         }
     },
-    //0x0e :KZ
+    
     {4, {
             {121, {CHAN_2_FREQ_5G(100), CHAN_2_FREQ_5G(104), CHAN_2_FREQ_5G(108), CHAN_2_FREQ_5G(112), CHAN_2_FREQ_5G(116), CHAN_2_FREQ_5G(120), CHAN_2_FREQ_5G(124), CHAN_2_FREQ_5G(128)}},
             {122, {CHAN_2_FREQ_5G(100+2), CHAN_2_FREQ_5G(108+2), CHAN_2_FREQ_5G(116+2), CHAN_2_FREQ_5G(124+2), 0}},
@@ -313,314 +313,314 @@ struct country_na_freq_set country_na_freq_plan_list [] =
 
 struct tx_power_plan tx_power_plan_list[] = {
     {57, {0, 0, 0, 0}, {100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100,
-        100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100}}, //TX_POWER_DEFAULT
+        100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100}}, 
     {57, {0, 0, 0, 0}, {100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100,
-        100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100}}, //TX_POWER_CE
+        100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100}}, 
     {57, {0, 0, 0, 0}, {100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100,
-        100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100}}, //TX_POWER_FCC
+        100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100}}, 
     {57, {0, 0, 0, 0}, {100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100,
-        100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100}}, //TX_POWER_ARIB
+        100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100}}, 
     {57, {0, 0, 0, 0}, {100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100,
-        100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100}}, //TX_POWER_SRRC
+        100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100}}, 
     {57, {0, 0, 0, 0}, {100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100,
-        100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100}}, //TX_POWER_ANATEL
+        100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100}}, 
 };
 
 struct country_chan_plan country_chan_plan_list[] = {
-    /* 0x00 */ {17, {81,82,83,84,115,116,117,118,119,120,121,122,123,125,126,127,128}, 0xff, DFS_5G_B2|DFS_5G_B3|PASSIVE_2G_12_14, TX_POWER_DEFAULT}, //Worldwide
-    /* 0x01 */ {13, {81,83,84,115,116,117,118,119,120,125,126,127,128,0,0,0,0},       0x00, DFS_5G_B2,           TX_POWER_SRRC}, //China
-    /* 0x02 */ {16, {81,83,84,115,116,117,118,119,120,121,122,123,125,126,127,128,0}, 0x01, DFS_5G_B2|DFS_5G_B3, TX_POWER_FCC}, //United States of America
-    /* 0x03 */ {14, {81,83,84,115,116,117,118,119,120,121,122,123,125,128,0,0,0},     0x02, DFS_5G_B2|DFS_5G_B3, TX_POWER_CE}, //Europe
-    /* 0x04 */ {17, {81,83,84,115,116,117,118,119,120,121,122,123,124,125,126,127,128}, 0x01, DFS_5G_B2|DFS_5G_B3, TX_POWER_CE}, //France
-    /* 0x05 */ {14, {81,82,83,84,115,116,117,118,119,120,121,122,123,128,0,0,0},      0x02, DFS_5G_B2|DFS_5G_B3, TX_POWER_ARIB}, //Japan
-    /* 0x06 */ {10, {81,83,84,115,116,117,118,119,120,128,0,0,0,0,0,0,0},             0x03, DFS_5G_B2,           TX_POWER_CE}, //Israel
-    /* 0x07 */ {13, {81,83,84,115,116,117,118,119,120,125,126,127,128,0,0,0,0},       0x04, DFS_5G_B2,           TX_POWER_FCC}, //Mexico
-    /* 0x08 */ {16, {81,83,84,115,116,117,118,119,120,121,122,123,125,126,127,128,0}, 0x05, DFS_5G_B2|DFS_5G_B3, TX_POWER_DEFAULT}, //Canada
-    /* 0x09 */ {16, {81,83,84,115,116,117,118,119,120,121,122,123,125,126,127,128,0}, 0x06, DFS_5G_B2|DFS_5G_B3, TX_POWER_DEFAULT}, //India
-    /* 0x0A */ {16, {81,83,84,115,116,117,118,119,120,121,122,123,125,126,127,128,0}, 0x07, DFS_5G_B2|DFS_5G_B3, TX_POWER_CE}, //Australia
-    /* 0x0B */ {16, {81,83,84,115,116,117,118,119,120,121,122,123,125,126,127,128,0}, 0xff, DFS_5G_B2|DFS_5G_B3, TX_POWER_CE}, //NewZealand
-    /* 0x0C */ {16, {81,83,84,115,116,117,118,119,120,121,122,123,125,126,127,128,0}, 0x08, DFS_5G_B2|DFS_5G_B3, TX_POWER_ANATEL}, //Brazil
-    /* 0x0D */ {16, {81,83,84,115,116,117,118,119,120,121,122,123,125,126,127,128,0}, 0x09, DFS_5G_B2|DFS_5G_B3, TX_POWER_CE}, //RU
-    /* 0x0E */ {13, {81,83,84,115,116,117,118,119,120,125,126,127,128,0,0,0,0},       0x00, 0,                   TX_POWER_CE}, //Indonesia
-    /* 0x0f */ {16, {81,83,84,115,116,117,118,119,120,121,122,123,125,126,127,128,0}, 0xff, DFS_5G_B1|DFS_5G_B2|DFS_5G_B3, TX_POWER_CE}, //South Korea
-    /* 0x10 */ {4,  {81,83,84,125,0,0,0,0,0,0,0,0,0,0,0,0,0},                         0xff, 0,                   TX_POWER_FCC}, //Peru
-    /* 0x11 */ {13, {81,83,84,118,119,120,121,122,123,125,126,127,128,0,0,0,0},       0x0b, DFS_5G_B2|DFS_5G_B3, TX_POWER_FCC}, //Taiwan
-    /* 0x12 */ {16, {81,83,84,115,116,117,118,119,120,121,122,123,125,126,127,128,0}, 0xff, DFS_5G_B1|DFS_5G_B2, TX_POWER_CE}, //Thailand
-    /* 0x13 */ {6,  {81,83,84,115,118,121,0,0,0,0,0,0,0,0,0,0,0},                     0x0c, DFS_5G_B2|DFS_5G_B3, TX_POWER_CE}, //United Arab Emirates
-    /* 0x14 */ {15, {81,83,84,115,116,117,118,119,120,121,122,123,125,126,127,128,0}, 0x0d, DFS_5G_B2|DFS_5G_B3, TX_POWER_CE}, //Argentina
-    /* 0x15 */ {6,  {81,83,84,115,118,125,0,0,0,0,0,0,0,0,0,0,0},                     0xff, DFS_5G_B2,           TX_POWER_CE}, //Bahrain
-    /* 0x16 */ {3,  {81,83,84,0,0,0,0,0,0,0,0,0,0,0,0,0,0},                           0xff, 0,                   TX_POWER_CE}, //Costa Rica
-    /* 0x17 */ {5,  {81,83,84,115,118,0,0,0,0,0,0,0,0,0,0,0,0},                       0xff, DFS_5G_B2,           TX_POWER_CE}, //Armenia
-    /* 0x18 */ {4,  {81,83,84,115,0,0,0,0,0,0,0,0,0,0,0,0,0},                         0xff, 0,                   TX_POWER_CE}, //Jordan
-    /* 0x19 */ {7,  {81,83,84,124,126,127,128,0,0,0,0,0,0,0,0,0,0},                   0x0a, 0,                   TX_POWER_CE}, //North Korea
-    /* 0x1A */ {7,  {81,83,84,115,118,121,125,0,0,0,0,0,0,0,0,0,0},                   0x0c, DFS_5G_B2|DFS_5G_B3, TX_POWER_CE}, //Sri Lanka
-    /* 0x1B */ {16, {81,83,84,115,116,117,118,119,120,121,122,123,125,126,127,128,0}, 0x08, 0,                   TX_POWER_CE}, //Ukraine
-    /* 0x1C */ {16, {81,83,84,115,116,117,118,119,120,121,122,123,125,126,127,128,0}, 0xff, DFS_5G_B2|DFS_5G_B3|DFS_5G_B4, TX_POWER_CE}, //Great Britain
-    /* 0x1D */ {13, {81,83,84,115,116,117,118,119,120,121,122,123,128,0,0,0,0},       0x0e, DFS_5G_B2|DFS_5G_B3, TX_POWER_CE}, //Kazakhstan
-    /* 0x1E */ {17, {81,82,83,84,115,116,117,118,119,120,121,122,123,125,126,127,128},0xff, 0,                   TX_POWER_DEFAULT}, //Global
+     {17, {81,82,83,84,115,116,117,118,119,120,121,122,123,125,126,127,128}, 0xff, DFS_5G_B2|DFS_5G_B3|PASSIVE_2G_12_14, TX_POWER_DEFAULT}, 
+     {13, {81,83,84,115,116,117,118,119,120,125,126,127,128,0,0,0,0},       0x00, DFS_5G_B2,           TX_POWER_SRRC}, 
+     {16, {81,83,84,115,116,117,118,119,120,121,122,123,125,126,127,128,0}, 0x01, DFS_5G_B2|DFS_5G_B3, TX_POWER_FCC}, 
+     {14, {81,83,84,115,116,117,118,119,120,121,122,123,125,128,0,0,0},     0x02, DFS_5G_B2|DFS_5G_B3, TX_POWER_CE}, 
+     {17, {81,83,84,115,116,117,118,119,120,121,122,123,124,125,126,127,128}, 0x01, DFS_5G_B2|DFS_5G_B3, TX_POWER_CE}, 
+     {14, {81,82,83,84,115,116,117,118,119,120,121,122,123,128,0,0,0},      0x02, DFS_5G_B2|DFS_5G_B3, TX_POWER_ARIB}, 
+     {10, {81,83,84,115,116,117,118,119,120,128,0,0,0,0,0,0,0},             0x03, DFS_5G_B2,           TX_POWER_CE}, 
+     {13, {81,83,84,115,116,117,118,119,120,125,126,127,128,0,0,0,0},       0x04, DFS_5G_B2,           TX_POWER_FCC}, 
+     {16, {81,83,84,115,116,117,118,119,120,121,122,123,125,126,127,128,0}, 0x05, DFS_5G_B2|DFS_5G_B3, TX_POWER_DEFAULT}, 
+     {16, {81,83,84,115,116,117,118,119,120,121,122,123,125,126,127,128,0}, 0x06, DFS_5G_B2|DFS_5G_B3, TX_POWER_DEFAULT}, 
+     {16, {81,83,84,115,116,117,118,119,120,121,122,123,125,126,127,128,0}, 0x07, DFS_5G_B2|DFS_5G_B3, TX_POWER_CE}, 
+     {16, {81,83,84,115,116,117,118,119,120,121,122,123,125,126,127,128,0}, 0xff, DFS_5G_B2|DFS_5G_B3, TX_POWER_CE}, 
+     {16, {81,83,84,115,116,117,118,119,120,121,122,123,125,126,127,128,0}, 0x08, DFS_5G_B2|DFS_5G_B3, TX_POWER_ANATEL}, 
+     {16, {81,83,84,115,116,117,118,119,120,121,122,123,125,126,127,128,0}, 0x09, DFS_5G_B2|DFS_5G_B3, TX_POWER_CE}, 
+     {13, {81,83,84,115,116,117,118,119,120,125,126,127,128,0,0,0,0},       0x00, 0,                   TX_POWER_CE}, 
+     {16, {81,83,84,115,116,117,118,119,120,121,122,123,125,126,127,128,0}, 0xff, DFS_5G_B1|DFS_5G_B2|DFS_5G_B3, TX_POWER_CE}, 
+     {4,  {81,83,84,125,0,0,0,0,0,0,0,0,0,0,0,0,0},                         0xff, 0,                   TX_POWER_FCC}, 
+     {13, {81,83,84,118,119,120,121,122,123,125,126,127,128,0,0,0,0},       0x0b, DFS_5G_B2|DFS_5G_B3, TX_POWER_FCC}, 
+     {16, {81,83,84,115,116,117,118,119,120,121,122,123,125,126,127,128,0}, 0xff, DFS_5G_B1|DFS_5G_B2, TX_POWER_CE}, 
+     {6,  {81,83,84,115,118,121,0,0,0,0,0,0,0,0,0,0,0},                     0x0c, DFS_5G_B2|DFS_5G_B3, TX_POWER_CE}, 
+     {15, {81,83,84,115,116,117,118,119,120,121,122,123,125,126,127,128,0}, 0x0d, DFS_5G_B2|DFS_5G_B3, TX_POWER_CE}, 
+     {6,  {81,83,84,115,118,125,0,0,0,0,0,0,0,0,0,0,0},                     0xff, DFS_5G_B2,           TX_POWER_CE}, 
+     {3,  {81,83,84,0,0,0,0,0,0,0,0,0,0,0,0,0,0},                           0xff, 0,                   TX_POWER_CE}, 
+     {5,  {81,83,84,115,118,0,0,0,0,0,0,0,0,0,0,0,0},                       0xff, DFS_5G_B2,           TX_POWER_CE}, 
+     {4,  {81,83,84,115,0,0,0,0,0,0,0,0,0,0,0,0,0},                         0xff, 0,                   TX_POWER_CE}, 
+     {7,  {81,83,84,124,126,127,128,0,0,0,0,0,0,0,0,0,0},                   0x0a, 0,                   TX_POWER_CE}, 
+     {7,  {81,83,84,115,118,121,125,0,0,0,0,0,0,0,0,0,0},                   0x0c, DFS_5G_B2|DFS_5G_B3, TX_POWER_CE}, 
+     {16, {81,83,84,115,116,117,118,119,120,121,122,123,125,126,127,128,0}, 0x08, 0,                   TX_POWER_CE}, 
+     {16, {81,83,84,115,116,117,118,119,120,121,122,123,125,126,127,128,0}, 0xff, DFS_5G_B2|DFS_5G_B3|DFS_5G_B4, TX_POWER_CE}, 
+     {13, {81,83,84,115,116,117,118,119,120,121,122,123,128,0,0,0,0},       0x0e, DFS_5G_B2|DFS_5G_B3, TX_POWER_CE}, 
+     {17, {81,82,83,84,115,116,117,118,119,120,121,122,123,125,126,127,128},0xff, 0,                   TX_POWER_DEFAULT}, 
 
 };
 
 struct country_chan_mapping  country_chan_mapping_list[] = {
-    {"WW", 0x00}, /* Worldwide */
-    {"GO", 0x1E}, /* Global */
-    {"AD", 0x04}, /* Andorra */
-    {"AE", 0x13}, /* United Arab Emirates */
-    {"AF", 0x00}, /* Afghanistan */
-    {"AG", 0x02}, /* Antigua & Barbuda */
-    {"AI", 0x04}, /* Anguilla(UK) */
-    {"AL", 0x04}, /* Albania */
-    {"AM", 0x17}, /* Armenia */
-    {"AN", 0x02}, /* Netherlands Antilles */
-    {"AO", 0x00}, /* Angola */
-    {"AQ", 0x04}, /* Antarctica */
-    {"AR", 0x14}, /* Argentina */
-    {"AS", 0x02}, /* American Samoa */
-    {"AT", 0x04}, /* Austria */
-    {"AU", 0x0A}, /* Australia */
-    {"AW", 0x02}, /* Aruba */
-    {"AZ", 0x06}, /* Azerbaijan */
-    {"BA", 0x00}, /* Bosnia & Herzegovina */
-    {"BB", 0x02}, /* Barbados */
-    {"BD", 0x04}, /* Bangladesh */
-    {"BE", 0x04}, /* Belgium */
-    {"BF", 0x04}, /* Burkina Faso */
-    {"BG", 0x06}, /* Bulgaria */
-    {"BH", 0x15}, /* Bahrain */
-    {"BI", 0x04}, /* Burundi */
-    {"BJ", 0x04}, /* Benin */
-    {"BM", 0x02}, /* Bermuda (UK) */
-    {"BN", 0x0E}, /* Brunei */
-    {"BO", 0x0E}, /* Bolivia */
-    {"BR", 0x0C}, /* Brazil */
-    {"BS", 0x02}, /* Bahamas */
-    {"BT", 0x04}, /* Bhutan */
-    {"BV", 0x04}, /* Bouvet Island (Norway) */
-    {"BW", 0x00}, /* Botswana */
-    {"BY", 0x04}, /* Belarus */
-    {"BZ", 0x0E}, /* Belize */
-    {"CA", 0x08}, /* Canada */
-    {"CC", 0x04}, /* Cocos (Keeling) Islands (Australia) */
-    {"CD", 0x04}, /* Congo, Republic of the */
-    {"CF", 0x04}, /* Central African Republic */
-    {"CG", 0x04}, /* Congo, Democratic Republic of the. Zaire */
-    {"CH", 0x04}, /* Switzerland */
-    {"CI", 0x00}, /* Cote d'Ivoire */
-    {"CK", 0x04}, /* Cook Islands */
-    {"CL", 0x01}, /* Chile */
-    {"CM", 0x04}, /* Cameroon */
-    {"CN", 0x01}, /* China */
-    {"CO", 0x07}, /* Colombia */
-    {"CR", 0x16}, /* Costa Rica */
-    {"CV", 0x04}, /* Cape Verde */
-    {"CX", 0x0A}, /* Christmas Island (Australia) */
-    {"CY", 0x04}, /* Cyprus */
-    {"CZ", 0x04}, /* Czech Republic */
-    {"DE", 0x04}, /* Germany */
-    {"DJ", 0x04}, /* Djibouti */
-    {"DK", 0x04}, /* Denmark */
-    {"DM", 0x02}, /* Dominica */
-    {"DO", 0x07}, /* Dominican Republic */
-    {"DZ", 0x03}, /* Algeria */
-    {"EC", 0x0C}, /* Ecuador */
-    {"EE", 0x04}, /* Estonia */
-    {"EG", 0x17}, /* Egypt */
-    {"EH", 0x00}, /* Western Sahara */
-    {"ER", 0x04}, /* Eritrea */
-    {"ES", 0x04}, /* Spain, Canary Islands, Ceuta, Melilla */
-    {"ET", 0x04}, /* Ethiopia */
-    {"EU", 0x03}, /* Europe */
-    {"FI", 0x04}, /* Finland */
-    {"FJ", 0x02}, /* Fiji */
-    {"FK", 0x04}, /* Falkland Islands (Islas Malvinas) (UK) */
-    {"FM", 0x02}, /* Micronesia, Federated States of (USA) */
-    {"FO", 0x04}, /* Faroe Islands (Denmark) */
-    {"FR", 0x04}, /* France */
-    {"GA", 0x04}, /* Gabon */
-    {"GB", 0x1C}, /* Great Britain (United Kingdom; England) */
-    {"GD", 0x02}, /* Grenada */
-    {"GE", 0x04}, /* Georgia */
-    {"GF", 0x04}, /* French Guiana */
-    {"GG", 0x04}, /* Guernsey (UK) */
-    {"GH", 0x04}, /* Ghana */
-    {"GI", 0x04}, /* Gibraltar (UK) */
-    {"GL", 0x04}, /* Greenland (Denmark) */
-    {"GM", 0x04}, /* Gambia */
-    {"GN", 0x04}, /* Guinea */
-    {"GP", 0x04}, /* Guadeloupe (France) */
-    {"GQ", 0x04}, /* Equatorial Guinea */
-    {"GR", 0x04}, /* Greece */
-    {"GS", 0x04}, /* South Georgia and the Sandwich Islands (UK) */
-    {"GT", 0x07}, /* Guatemala */
-    {"GU", 0x02}, /* Guam (USA) */
-    {"GW", 0x04}, /* Guinea-Bissau */
-    {"GY", 0x00}, /* Guyana */
-    {"HK", 0x0C}, /* Hong Kong */
-    {"HM", 0x0A}, /* Heard and McDonald Islands (Australia) */
-    {"HN", 0x0C}, /* Honduras */
-    {"HR", 0x04}, /* Croatia */
-    {"HT", 0x02}, /* Haiti */
-    {"HU", 0x04}, /* Hungary */
-    {"ID", 0x0e}, /* Indonesia */
-    {"IE", 0x04}, /* Ireland */
-    {"IL", 0x06}, /* Israel */
-    {"IM", 0x04}, /* Isle of Man (UK) */
-    {"IN", 0x09}, /* India */
-    {"IO", 0x04}, /* British Indian Ocean Territory (UK) */
-    {"IQ", 0x01}, /* Iraq */
-    {"IR", 0x06}, /* Iran */
-    {"IS", 0x04}, /* Iceland */
-    {"IT", 0x04}, /* Italy */
-    {"JE", 0x04}, /* Jersey (UK) */
-    {"JM", 0x00}, /* Jamaica */
-    {"JO", 0x18}, /* Jordan */
-    {"JP", 0x05}, /* Japan- Telec */
-    {"KE", 0x00}, /* Kenya */
-    {"KG", 0x04}, /* Kyrgyzstan */
-    {"KH", 0x04}, /* Cambodia */
-    {"KI", 0x04}, /* Kiribati */
-    {"KM", 0x04}, /* Comoros */
-    {"KN", 0x02}, /* Saint Kitts and Nevis */
-    {"KP", 0x19}, /* North Korea */
-    {"KR", 0x0f}, /* South Korea */
-    {"KW", 0x16}, /* Kuwait */
-    {"KY", 0x02}, /* Cayman Islands (UK) */
-    {"KZ", 0x1D}, /* Kazakhstan */
-    {"LA", 0x04}, /* Laos */
-    {"LB", 0x10}, /* Lebanon */
-    {"LC", 0x02}, /* Saint Lucia */
-    {"LI", 0x04}, /* Liechtenstein */
-    {"LK", 0x1A}, /* Sri Lanka */
-    {"LR", 0x04}, /* Liberia */
-    {"LS", 0x04}, /* Lesotho */
-    {"LT", 0x04}, /* Lithuania */
-    {"LU", 0x04}, /* Luxembourg */
-    {"LV", 0x04}, /* Latvia */
-    {"LY", 0x04}, /* Libya */
-    {"MA", 0x16}, /* Morocco */
-    {"MC", 0x06}, /* Monaco */
-    {"MD", 0x04}, /* Moldova */
-    {"ME", 0x04}, /* Montenegro */
-    {"MF", 0x02}, /* Saint Martin */
-    {"MG", 0x04}, /* Madagascar */
-    {"MH", 0x02}, /* Marshall Islands (USA) */
-    {"MK", 0x13}, /* Republic of Macedonia (FYROM) */
-    {"ML", 0x04}, /* Mali */
-    {"MM", 0x04}, /* Burma (Myanmar) */
-    {"MN", 0x04}, /* Mongolia */
-    {"MO", 0x01}, /* Macau */
-    {"MP", 0x02}, /* Northern Mariana Islands (USA) */
-    {"MQ", 0x04}, /* Martinique (France) */
-    {"MR", 0x04}, /* Mauritania */
-    {"MS", 0x04}, /* Montserrat (UK) */
-    {"MT", 0x04}, /* Malta */
-    {"MU", 0x04}, /* Mauritius */
-    {"MV", 0x00}, /* Maldives */
-    {"MW", 0x04}, /* Malawi */
-    {"MX", 0x07}, /* Mexico */
-    {"MY", 0x01}, /* Malaysia */
-    {"MZ", 0x04}, /* Mozambique */
-    {"NA", 0x04}, /* Namibia */
-    {"NC", 0x04}, /* New Caledonia */
-    {"NE", 0x04}, /* Niger */
-    {"NF", 0x0A}, /* Norfolk Island (Australia) */
-    {"NG", 0x0C}, /* Nigeria */
-    {"NI", 0x02}, /* Nicaragua */
-    {"NL", 0x04}, /* Netherlands */
-    {"NO", 0x04}, /* Norway */
-    {"NP", 0x01}, /* Nepal */
-    {"NR", 0x04}, /* Nauru */
-    {"NU", 0x0B}, /* Niue */
-    {"NZ", 0x0B}, /* New Zealand */
-    {"OM", 0x15}, /* Oman */
-    {"PA", 0x07}, /* Panama */
-    {"PE", 0x10}, /* Peru */
-    {"PF", 0x04}, /* French Polynesia (France) */
-    {"PG", 0x00}, /* Papua New Guinea */
-    {"PH", 0x0C}, /* Philippines */
-    {"PK", 0x19}, /* Pakistan */
-    {"PL", 0x04}, /* Poland */
-    {"PM", 0x04}, /* Saint Pierre and Miquelon (France) */
-    {"PR", 0x07}, /* Puerto Rico */
-    {"PT", 0x04}, /* Portugal */
-    {"PW", 0x02}, /* Palau */
-    {"PY", 0x02}, /* Paraguay */
-    {"QA", 0x0B}, /* Qatar */
-    {"RE", 0x04}, /* Reunion (France) */
-    {"RO", 0x04}, /* Romania */
-    {"RS", 0x04}, /* Serbia, Kosovo */
-    {"RU", 0x0D}, /* Russia(fac/gost), Kaliningrad */
-    {"RW", 0x04}, /* Rwanda */
-    {"SA", 0x01}, /* Saudi Arabia */
-    {"SB", 0x04}, /* Solomon Islands */
-    {"SC", 0x02}, /* Seychelles */
-    {"SE", 0x04}, /* Sweden */
-    {"SG", 0x0C}, /* Singapore */
-    {"SH", 0x04}, /* Saint Helena (UK) */
-    {"SI", 0x04}, /* Slovenia */
-    {"SJ", 0x04}, /* Svalbard (Norway) */
-    {"SK", 0x04}, /* Slovakia */
-    {"SL", 0x04}, /* Sierra Leone */
-    {"SM", 0x04}, /* San Marino */
-    {"SN", 0x04}, /* Senegal */
-    {"SO", 0x04}, /* Somalia */
-    {"SR", 0x00}, /* Suriname */
-    {"ST", 0x02}, /* Sao Tome and Principe */
-    {"SV", 0x16}, /* El Salvador */
-    {"SX", 0x02}, /* Sint Marteen */
-    {"SY", 0x16}, /* Syria */
-    {"SZ", 0x04}, /* Swaziland */
-    {"TC", 0x04}, /* Turks and Caicos Islands (UK) */
-    {"TD", 0x04}, /* Chad */
-    {"TF", 0x04}, /* French Southern and Antarctic Lands (FR Southern Territories) */
-    {"TG", 0x04}, /* Togo */
-    {"TH", 0x12}, /* Thailand */
-    {"TJ", 0x04}, /* Tajikistan */
-    {"TK", 0x0A}, /* Tokelau */
-    {"TM", 0x04}, /* Turkmenistan */
-    {"TN", 0x17}, /* Tunisia */
-    {"TO", 0x04}, /* Tonga */
-    {"TR", 0x04}, /* Turkey, Northern Cyprus */
-    {"TT", 0x0C}, /* Trinidad & Tobago */
-    {"TV", 0x00}, /* Tuvalu */
-    {"TW", 0x11}, /* Taiwan */
-    {"TZ", 0x04}, /* Tanzania */
-    {"UA", 0x1B}, /* Ukraine */
-    {"UG", 0x04}, /* Uganda */
-    {"US", 0x02}, /* United States of America (USA) */
-    {"UY", 0x0A}, /* Uruguay */
-    {"UZ", 0x06}, /* Uzbekistan */
-    {"VA", 0x04}, /* Holy See (Vatican City) */
-    {"VC", 0x02}, /* Saint Vincent and the Grenadines */
-    {"VE", 0x0E}, /* Venezuela */
-    {"VG", 0x02}, /* British Virgin Islands (UK) */
-    {"VI", 0x02}, /* United States Virgin Islands (USA) */
-    {"VN", 0x0C}, /* Vietnam */
-    {"VU", 0x04}, /* Vanuatu */
-    {"WF", 0x04}, /* Wallis and Futuna (France) */
-    {"WS", 0x02}, /* Samoa */
-    {"YE", 0x16}, /* Yemen */
-    {"YT", 0x04}, /* Mayotte (France) */
-    {"ZA", 0x0C}, /* South Africa */
-    {"ZM", 0x04}, /* Zambia */
-    {"ZW", 0x16}  /* Zimbabwe */
+    {"WW", 0x00}, 
+    {"GO", 0x1E}, 
+    {"AD", 0x04}, 
+    {"AE", 0x13}, 
+    {"AF", 0x00}, 
+    {"AG", 0x02}, 
+    {"AI", 0x04}, 
+    {"AL", 0x04}, 
+    {"AM", 0x17}, 
+    {"AN", 0x02}, 
+    {"AO", 0x00}, 
+    {"AQ", 0x04}, 
+    {"AR", 0x14}, 
+    {"AS", 0x02}, 
+    {"AT", 0x04}, 
+    {"AU", 0x0A}, 
+    {"AW", 0x02}, 
+    {"AZ", 0x06}, 
+    {"BA", 0x00}, 
+    {"BB", 0x02}, 
+    {"BD", 0x04}, 
+    {"BE", 0x04}, 
+    {"BF", 0x04}, 
+    {"BG", 0x06}, 
+    {"BH", 0x15}, 
+    {"BI", 0x04}, 
+    {"BJ", 0x04}, 
+    {"BM", 0x02}, 
+    {"BN", 0x0E}, 
+    {"BO", 0x0E}, 
+    {"BR", 0x0C}, 
+    {"BS", 0x02}, 
+    {"BT", 0x04}, 
+    {"BV", 0x04}, 
+    {"BW", 0x00}, 
+    {"BY", 0x04}, 
+    {"BZ", 0x0E}, 
+    {"CA", 0x08}, 
+    {"CC", 0x04}, 
+    {"CD", 0x04}, 
+    {"CF", 0x04}, 
+    {"CG", 0x04}, 
+    {"CH", 0x04}, 
+    {"CI", 0x00}, 
+    {"CK", 0x04}, 
+    {"CL", 0x01}, 
+    {"CM", 0x04}, 
+    {"CN", 0x01}, 
+    {"CO", 0x07}, 
+    {"CR", 0x16}, 
+    {"CV", 0x04}, 
+    {"CX", 0x0A}, 
+    {"CY", 0x04}, 
+    {"CZ", 0x04}, 
+    {"DE", 0x04}, 
+    {"DJ", 0x04}, 
+    {"DK", 0x04}, 
+    {"DM", 0x02}, 
+    {"DO", 0x07}, 
+    {"DZ", 0x03}, 
+    {"EC", 0x0C}, 
+    {"EE", 0x04}, 
+    {"EG", 0x17}, 
+    {"EH", 0x00}, 
+    {"ER", 0x04}, 
+    {"ES", 0x04}, 
+    {"ET", 0x04}, 
+    {"EU", 0x03}, 
+    {"FI", 0x04}, 
+    {"FJ", 0x02}, 
+    {"FK", 0x04}, 
+    {"FM", 0x02}, 
+    {"FO", 0x04}, 
+    {"FR", 0x04}, 
+    {"GA", 0x04}, 
+    {"GB", 0x1C}, 
+    {"GD", 0x02}, 
+    {"GE", 0x04}, 
+    {"GF", 0x04}, 
+    {"GG", 0x04}, 
+    {"GH", 0x04}, 
+    {"GI", 0x04}, 
+    {"GL", 0x04}, 
+    {"GM", 0x04}, 
+    {"GN", 0x04}, 
+    {"GP", 0x04}, 
+    {"GQ", 0x04}, 
+    {"GR", 0x04}, 
+    {"GS", 0x04}, 
+    {"GT", 0x07}, 
+    {"GU", 0x02}, 
+    {"GW", 0x04}, 
+    {"GY", 0x00}, 
+    {"HK", 0x0C}, 
+    {"HM", 0x0A}, 
+    {"HN", 0x0C}, 
+    {"HR", 0x04}, 
+    {"HT", 0x02}, 
+    {"HU", 0x04}, 
+    {"ID", 0x0e}, 
+    {"IE", 0x04}, 
+    {"IL", 0x06}, 
+    {"IM", 0x04}, 
+    {"IN", 0x09}, 
+    {"IO", 0x04}, 
+    {"IQ", 0x01}, 
+    {"IR", 0x06}, 
+    {"IS", 0x04}, 
+    {"IT", 0x04}, 
+    {"JE", 0x04}, 
+    {"JM", 0x00}, 
+    {"JO", 0x18}, 
+    {"JP", 0x05}, 
+    {"KE", 0x00}, 
+    {"KG", 0x04}, 
+    {"KH", 0x04}, 
+    {"KI", 0x04}, 
+    {"KM", 0x04}, 
+    {"KN", 0x02}, 
+    {"KP", 0x19}, 
+    {"KR", 0x0f}, 
+    {"KW", 0x16}, 
+    {"KY", 0x02}, 
+    {"KZ", 0x1D}, 
+    {"LA", 0x04}, 
+    {"LB", 0x10}, 
+    {"LC", 0x02}, 
+    {"LI", 0x04}, 
+    {"LK", 0x1A}, 
+    {"LR", 0x04}, 
+    {"LS", 0x04}, 
+    {"LT", 0x04}, 
+    {"LU", 0x04}, 
+    {"LV", 0x04}, 
+    {"LY", 0x04}, 
+    {"MA", 0x16}, 
+    {"MC", 0x06}, 
+    {"MD", 0x04}, 
+    {"ME", 0x04}, 
+    {"MF", 0x02}, 
+    {"MG", 0x04}, 
+    {"MH", 0x02}, 
+    {"MK", 0x13}, 
+    {"ML", 0x04}, 
+    {"MM", 0x04}, 
+    {"MN", 0x04}, 
+    {"MO", 0x01}, 
+    {"MP", 0x02}, 
+    {"MQ", 0x04}, 
+    {"MR", 0x04}, 
+    {"MS", 0x04}, 
+    {"MT", 0x04}, 
+    {"MU", 0x04}, 
+    {"MV", 0x00}, 
+    {"MW", 0x04}, 
+    {"MX", 0x07}, 
+    {"MY", 0x01}, 
+    {"MZ", 0x04}, 
+    {"NA", 0x04}, 
+    {"NC", 0x04}, 
+    {"NE", 0x04}, 
+    {"NF", 0x0A}, 
+    {"NG", 0x0C}, 
+    {"NI", 0x02}, 
+    {"NL", 0x04}, 
+    {"NO", 0x04}, 
+    {"NP", 0x01}, 
+    {"NR", 0x04}, 
+    {"NU", 0x0B}, 
+    {"NZ", 0x0B}, 
+    {"OM", 0x15}, 
+    {"PA", 0x07}, 
+    {"PE", 0x10}, 
+    {"PF", 0x04}, 
+    {"PG", 0x00}, 
+    {"PH", 0x0C}, 
+    {"PK", 0x19}, 
+    {"PL", 0x04}, 
+    {"PM", 0x04}, 
+    {"PR", 0x07}, 
+    {"PT", 0x04}, 
+    {"PW", 0x02}, 
+    {"PY", 0x02}, 
+    {"QA", 0x0B}, 
+    {"RE", 0x04}, 
+    {"RO", 0x04}, 
+    {"RS", 0x04}, 
+    {"RU", 0x0D}, 
+    {"RW", 0x04}, 
+    {"SA", 0x01}, 
+    {"SB", 0x04}, 
+    {"SC", 0x02}, 
+    {"SE", 0x04}, 
+    {"SG", 0x0C}, 
+    {"SH", 0x04}, 
+    {"SI", 0x04}, 
+    {"SJ", 0x04}, 
+    {"SK", 0x04}, 
+    {"SL", 0x04}, 
+    {"SM", 0x04}, 
+    {"SN", 0x04}, 
+    {"SO", 0x04}, 
+    {"SR", 0x00}, 
+    {"ST", 0x02}, 
+    {"SV", 0x16}, 
+    {"SX", 0x02}, 
+    {"SY", 0x16}, 
+    {"SZ", 0x04}, 
+    {"TC", 0x04}, 
+    {"TD", 0x04}, 
+    {"TF", 0x04}, 
+    {"TG", 0x04}, 
+    {"TH", 0x12}, 
+    {"TJ", 0x04}, 
+    {"TK", 0x0A}, 
+    {"TM", 0x04}, 
+    {"TN", 0x17}, 
+    {"TO", 0x04}, 
+    {"TR", 0x04}, 
+    {"TT", 0x0C}, 
+    {"TV", 0x00}, 
+    {"TW", 0x11}, 
+    {"TZ", 0x04}, 
+    {"UA", 0x1B}, 
+    {"UG", 0x04}, 
+    {"US", 0x02}, 
+    {"UY", 0x0A}, 
+    {"UZ", 0x06}, 
+    {"VA", 0x04}, 
+    {"VC", 0x02}, 
+    {"VE", 0x0E}, 
+    {"VG", 0x02}, 
+    {"VI", 0x02}, 
+    {"VN", 0x0C}, 
+    {"VU", 0x04}, 
+    {"WF", 0x04}, 
+    {"WS", 0x02}, 
+    {"YE", 0x16}, 
+    {"YT", 0x04}, 
+    {"ZA", 0x0C}, 
+    {"ZM", 0x04}, 
+    {"ZW", 0x16}  
 };
 
 struct country_chan_mapping  southamerica_country[] = {
-    {"AR", 0x14}, /* Argentina */
-    {"BO", 0x0E}, /* Bolivia */
-    {"BR", 0x0C}, /* Brazil */
-    {"CL", 0x01}, /* Chile */
-    {"CO", 0x07}, /* Colombia */
-    {"EC", 0x0C}, /* Ecuador */
-    {"FK", 0x04}, /* Falkland Islands (Islas Malvinas) (UK) */
-    {"GF", 0x04}, /* French Guiana */
-    {"GY", 0x00}, /* Guyana */
-    {"PY", 0x02}, /* Paraguay */
-    {"PE", 0x10}, /* Peru */
-    {"SR", 0x00}, /* Suriname */
-    {"UY", 0x0A}, /* Uruguay */
-    {"VE", 0x0E}, /* Venezuela */
+    {"AR", 0x14}, 
+    {"BO", 0x0E}, 
+    {"BR", 0x0C}, 
+    {"CL", 0x01}, 
+    {"CO", 0x07}, 
+    {"EC", 0x0C}, 
+    {"FK", 0x04}, 
+    {"GF", 0x04}, 
+    {"GY", 0x00}, 
+    {"PY", 0x02}, 
+    {"PE", 0x10}, 
+    {"SR", 0x00}, 
+    {"UY", 0x0A}, 
+    {"VE", 0x0E}, 
 };
 
 unsigned char if_southamerica_country(unsigned char *countrycode) {
@@ -694,14 +694,12 @@ static int wifi_mac_check_if_na_freq(int country_code, int global_class, int fre
     int plan_index = country_chan_mapping_list[country_code].chplan;
     int na_freq_plan_index = country_chan_plan_list[plan_index].class_na_freq_plan;
 
-    /*get na_freq index*/
     if (na_freq_plan_index == 0xff) {
         return 0;
     }
 
     na_freq_set = &country_na_freq_plan_list[na_freq_plan_index];
 
-    /*find global class*/
     if (na_freq_set) {
         for (i = 0; i < na_freq_set->na_freq_class_num; i++) {
            if (na_freq_set->na_freq_info[i].g_operating_class == global_class) {
@@ -710,7 +708,6 @@ static int wifi_mac_check_if_na_freq(int country_code, int global_class, int fre
         }
     }
 
-    /*find freq*/
     if (na_freq_info) {
         for (i = 0; i < MAX_NA_FREQ_NUM; i++) {
            if (na_freq_info->na_freq[i] == freq) {
@@ -772,7 +769,7 @@ static void  wifi_mac_select_chan_from_global(int country_code, int sub_set[], i
                             } else if (hash_40M[chn_idx_40M][1] != -1) {
                                 if (wifimac->wm_channels[hash_40M[chn_idx_40M][1]].chan_cfreq1 != global_chan_set[j].chan_sub_set[k].chan_cfreq1) {
                                     memcpy(wifimac->wm_channels + channel_num++, &global_chan_set[j].chan_sub_set[k], sizeof(struct wifi_channel));
-                                    hash_40M[chn_idx_40M][0]++;//40M finish
+                                    hash_40M[chn_idx_40M][0]++;
                                 }
                             }
                         }
@@ -793,15 +790,6 @@ static void  wifi_mac_select_chan_from_global(int country_code, int sub_set[], i
     wifimac->wm_nchans = channel_num;
     wifi_mac_chan_order(wifimac->wm_channels, 0, wifimac->wm_nchans - 1);
 
-#if 0
-    pr_debug("wifimac->wm_nchans:%d\n", wifimac->wm_nchans);
-    for (i = 0; i < wifimac->wm_nchans; ++i) {
-        //pr_debug("chan_cfreq1:%d\n", wifimac->wm_channels[i].chan_cfreq1);
-        //pr_debug("chan_bw:%d\n", wifimac->wm_channels[i].chan_bw);
-        pr_debug("chan_pri_num:%d\n", wifimac->wm_channels[i].chan_pri_num);
-    }
-    pr_debug("i is %d\n", i);
-#endif
 }
 
 static void wifi_mac_mark_dfs_channel_ex(int country_code, struct wifi_mac *wifimac, int chan_num)
@@ -811,7 +799,6 @@ static void wifi_mac_mark_dfs_channel_ex(int country_code, struct wifi_mac *wifi
     int plan_index = country_chan_mapping_list[country_code].chplan;
     unsigned char dfs_chan_flag = country_chan_plan_list[plan_index].dfs_chan_flag;
 
-    /* if chan mun==0 mark all dfs channel*/
     if (chan_num == 0) {
         for (i = 0; i < wifimac->wm_nchans; i++) {
             chan_pri_num = wifimac->wm_channels[i].chan_pri_num;
@@ -820,14 +807,14 @@ static void wifi_mac_mark_dfs_channel_ex(int country_code, struct wifi_mac *wifi
                 || ((IS_5G_BAND3(chan_pri_num)) && (dfs_chan_flag & DFS_5G_B3))
                 || ((IS_5G_BAND4(chan_pri_num)) && (dfs_chan_flag & DFS_5G_B4))
                 || ((chan_pri_num >= 12 && chan_pri_num <= 14) && (dfs_chan_flag & PASSIVE_2G_12_14))) {
-//                pr_debug("%s mark channel %d \n", __func__, chan_pri_num);
+
                 wifimac->wm_channels[i].chan_flags |= WIFINET_CHAN_DFS;
             }
         }
     } else {
         for (i = 0; i <  wifimac->wm_nchans; i++) {
             if (wifimac->wm_channels[i].chan_pri_num == chan_num) {
-//                pr_debug("%s mark channel %d \n", __func__,wifimac->wm_channels[i].chan_pri_num);
+
                 wifimac->wm_channels[i].chan_flags |= WIFINET_CHAN_DFS;
             }
         }
@@ -841,7 +828,7 @@ static void wifi_mac_unmark_dfs_channel_ex(int country_code, struct wifi_mac *wi
     for (i = 0; i < wifimac->wm_nchans; i++) {
         if (( chan_num == 0 && (wifimac->wm_channels[i].chan_flags & WIFINET_CHAN_DFS) )
             || (chan_num != 0 && (wifimac->wm_channels[i].chan_pri_num == chan_num)) ){
-//            pr_debug("%s UNmark channel %d \n", __func__,wifimac->wm_channels[i].chan_pri_num);
+
             wifimac->wm_channels[i].chan_flags &= ~WIFINET_CHAN_DFS;
         }
     }
@@ -855,7 +842,7 @@ int wifi_mac_if_dfs_channel(struct wifi_mac *wifimac, int chan_num)
 
     for (i = 0; i <  wifimac->wm_nchans; i++) {
         if (wifimac->wm_channels[i].chan_pri_num == chan_num && (wifimac->wm_channels[i].chan_flags & WIFINET_CHAN_DFS)) {
-//            pr_debug("%s is dfs channel %d \n", __func__,wifimac->wm_channels[i].chan_pri_num);
+
             WIFI_CHANNEL_UNLOCK(wifimac);
             return 1;
         }
@@ -952,7 +939,6 @@ unsigned int wifi_mac_Mhz2ieee(unsigned int freq, unsigned int flags)
     }
 }
 
-/*check struct WIFINET_S_CHANNEL *c and return primary channel num */
 unsigned int wifi_mac_chan2ieee(struct wifi_mac *wifimac,
 const struct wifi_channel *c)
 {
@@ -1135,7 +1121,6 @@ struct wifi_channel * wifi_mac_scan_sta_get_ap_channel(struct wlan_net_vif *wnet
         center_chan = chan;
     }
 
-    /*check coexistence for 20MHz and 40MHz */
     if ((bw == WIFINET_BWC_WIDTH40) && (xhtcap != NULL) && !(htcapval & WIFINET_HTCAP_SUPPORTCBW40)) {
         bw = WIFINET_BWC_WIDTH20;
         center_chan = chan;
@@ -1207,22 +1192,18 @@ int wifi_mac_chan_overlapping_map_init(struct wifi_mac *wifimac)
 {
     unsigned char i;
 
-    //2.4G channel count:14
     for (i = 0; i < 14; ++i) {
         wifimac->chan_overlapping_map[i].chan_index = i + 1;
     }
 
-    //5G channel  34 - 64, count:16
     for (; i < 30; ++i) {
         wifimac->chan_overlapping_map[i].chan_index = 2 * (i - 14) + 34;
     }
 
-    //5G channel  100 - 144 count:23
     for (; i < 53; ++i) {
         wifimac->chan_overlapping_map[i].chan_index = 2 * (i - 30) + 100;
     }
 
-    //5G channel  149 - 165 count:9
     for (; i < 62; ++i) {
         wifimac->chan_overlapping_map[i].chan_index = 2 * (i - 53) + 149;
     }
@@ -1309,13 +1290,43 @@ int wifi_mac_set_wnet_vif_channel(struct wlan_net_vif *wnet_vif,  int chan,
     struct wifi_mac *wifimac = wnet_vif->vm_wmac;
     struct wifi_channel * c = NULL;
 
-    pr_debug("%s(%d)\n", __func__, __LINE__);
+    pr_info("W522A: set_chan: caller=%pS chan=%d bw=%d c_chan=%d switch_flag=0x%x scnd=%d\n",
+        __builtin_return_address(0), chan, bw, center_chan, switch_flag,
+        wnet_vif->scnd_chn_offset);
     c = wifi_mac_find_chan(wifimac, chan, bw, center_chan);
 
     if (c == NULL) {
-        ERROR_DEBUG_OUT("WARNING<%s>can't support set this channel, chan %d, bw %d, c_chan %d\n",
-            (wnet_vif)->vm_ndev->name, chan, bw, center_chan);
-        return false;
+        
+        int retry_center = center_chan;
+        if (bw == WIFINET_BWC_WIDTH40 && center_chan == chan) {
+            if (wnet_vif->scnd_chn_offset == WIFINET_HTINFO_EXTOFFSET_ABOVE)
+                retry_center = chan + 2;
+            else if (wnet_vif->scnd_chn_offset == WIFINET_HTINFO_EXTOFFSET_BELOW)
+                retry_center = chan - 2;
+        }
+        if (retry_center != center_chan) {
+            pr_info("W522A: set_chan: retry with computed c_chan=%d (scnd=%d)\n",
+                retry_center, wnet_vif->scnd_chn_offset);
+            c = wifi_mac_find_chan(wifimac, chan, bw, retry_center);
+            if (c != NULL)
+                center_chan = retry_center;
+        }
+        if (c == NULL && bw == WIFINET_BWC_WIDTH40) {
+            pr_info("W522A: set_chan: HT40 lookup failed, falling back to HT20 on chan=%d\n",
+                chan);
+            c = wifi_mac_find_chan(wifimac, chan, WIFINET_BWC_WIDTH20, chan);
+            if (c != NULL) {
+                bw = WIFINET_BWC_WIDTH20;
+                center_chan = chan;
+                wnet_vif->vm_bandwidth = WIFINET_BWC_WIDTH20;
+                wnet_vif->scnd_chn_offset = WIFINET_HTINFO_EXTOFFSET_NA;
+            }
+        }
+        if (c == NULL) {
+            ERROR_DEBUG_OUT("WARNING<%s>can't support set this channel, chan %d, bw %d, c_chan %d\n",
+                (wnet_vif)->vm_ndev->name, chan, bw, center_chan);
+            return false;
+        }
     }
 
     wnet_vif->vm_curchan = c;
@@ -1359,25 +1370,6 @@ void wifi_mac_restore_wnet_vif_channel(struct wlan_net_vif *wnet_vif)
 
     if (atomic_read(&wifimac->wm_nrunning) > 1)
     {
-    #ifdef CONFIG_CONCURRENT_MODE
-        if (wifimac->wm_vsdb_slot == CONCURRENT_SLOT_P2P) {
-            selected_wnet_vif = p2p_vmac;
-
-        } else if (wifimac->wm_vsdb_slot == CONCURRENT_SLOT_STA) {
-            selected_wnet_vif = main_vmac;
-
-        } else {
-            selected_wnet_vif = p2p_vmac;
-
-            if (selected_wnet_vif == NULL) {
-                selected_wnet_vif = main_vmac;
-            } else if (main_vmac != NULL && selected_wnet_vif->vm_curchan != WIFINET_CHAN_ERR
-                && main_vmac->vm_curchan != WIFINET_CHAN_ERR
-                && selected_wnet_vif->vm_curchan->chan_bw < main_vmac->vm_curchan->chan_bw) {
-                selected_wnet_vif = main_vmac;
-            }
-        }
-    #endif
     } else if (atomic_read(&wifimac->wm_nrunning) == 1) {
         if (p2p_vmac != NULL && p2p_vmac->vm_state == WIFINET_S_CONNECTED) {
             selected_wnet_vif = p2p_vmac;
@@ -1469,7 +1461,6 @@ void chan_dbg(struct wifi_channel *chan, char* str, int line)
         chan->chan_maxpower,chan->chan_minpower,chan->chan_bw);
 }
 
-/* * Find the country code. */
 int find_country_code(unsigned char *countryString)
 {
     int i;
@@ -1485,10 +1476,9 @@ int find_country_code(unsigned char *countryString)
         }
     }
 
-    return 0xff;        /* Not found */
+    return 0xff;        
 }
 
-/* * Set the country tx_power_plan. */
 int wifimac_set_tx_pwr_plan(int txpoweplan)
 {
     struct wifi_mac *wifimac = wifi_mac_get_mac_handle();
@@ -1504,7 +1494,6 @@ int wifimac_set_tx_pwr_plan(int txpoweplan)
     return 0;
 }
 
-/* * Get the country tx_power_plan. */
 unsigned char wifimac_get_tx_pwr_plan(int country_code)
 {
     int chan_plan = country_chan_mapping_list[country_code].chplan;
@@ -1515,13 +1504,11 @@ unsigned char wifimac_get_tx_pwr_plan(int country_code)
     return tx_power_plan;
 }
 
-/* * Set the country tx_power_plan. */
 int wifi_mac_set_tx_power_coefficient(struct drv_private *drv_priv, struct wifi_channel *chan, int tx_power_plan)
 {
     drv_priv->drv_ops.drv_cfg_txpwr_cffc_param(chan, &tx_power_plan_list[tx_power_plan]);
     return 0;
 }
-
 
 int hal_cfg_txpwr_cffc_param_init(int tx_power_plan)
 {
@@ -1529,7 +1516,6 @@ int hal_cfg_txpwr_cffc_param_init(int tx_power_plan)
 
     return 0;
 }
-
 
 int update_tx_power_coefficient_plan(int tx_power_plan, unsigned short pwr_coefficient[])
 {
@@ -1559,14 +1545,7 @@ int update_tx_power_band(int tx_power_plan, unsigned short pwr_value[])
 
 unsigned char wifi_mac_p2p_home_channel_enabled(struct wlan_net_vif *wnet_vif)
 {
-#ifndef CONFIG_P2P
     return 0;
-#else
-    struct wifi_mac *wifimac = wnet_vif->vm_wmac;
-
-    return ((wnet_vif->vm_p2p->p2p_role == NET80211_P2P_ROLE_GO)
-        && (wifimac->wm_p2p_home_channel != 0));
-#endif
 }
 
 bool wifi_mac_get_chandef(struct wifi_channel *vmac_chan, struct cfg80211_chan_def *chandef)
@@ -1620,12 +1599,11 @@ unsigned char wifi_mac_get_operation_class(struct cfg80211_chan_def chandef)
         if (chandef.width > NL80211_CHAN_WIDTH_40)
             return ret;
 
-        /* 2.407 GHz, channels 1..13 */
         if (chandef.width == NL80211_CHAN_WIDTH_40) {
             if (freq > chandef.chan->center_freq)
-                ret = 83; /* HT40+ */
+                ret = 83; 
             else
-                ret = 84; /* HT40- */
+                ret = 84; 
         } else {
             ret = 81;
         }
@@ -1634,14 +1612,13 @@ unsigned char wifi_mac_get_operation_class(struct cfg80211_chan_def chandef)
     }
 
     if (freq == 2484) {
-        /* channel 14 is only for IEEE 802.11b */
+        
         if (chandef.width != NL80211_CHAN_WIDTH_20_NOHT)
             return ret;
-        ret = 82; /* channel 14 */
+        ret = 82; 
         return ret;
     }
 
-    /* 5 GHz, channels 36..48 */
     if (freq >= 5180 && freq <= 5240) {
         if (vht_opclass) {
             ret = vht_opclass;
@@ -1657,7 +1634,6 @@ unsigned char wifi_mac_get_operation_class(struct cfg80211_chan_def chandef)
         return ret;
     }
 
-    /* 5 GHz, channels 52..64 */
     if (freq >= 5260 && freq <= 5320) {
         if (vht_opclass) {
             ret = vht_opclass;
@@ -1673,7 +1649,6 @@ unsigned char wifi_mac_get_operation_class(struct cfg80211_chan_def chandef)
         return ret;
     }
 
-    /* 5 GHz, channels 100..144 */
     if (freq >= 5500 && freq <= 5720) {
         if (vht_opclass) {
             ret = vht_opclass;
@@ -1689,7 +1664,6 @@ unsigned char wifi_mac_get_operation_class(struct cfg80211_chan_def chandef)
         return ret;
     }
 
-    /* 5 GHz, channels 149..169 */
     if (freq >= 5745 && freq <= 5845) {
         if (vht_opclass) {
             ret = vht_opclass;
@@ -1707,7 +1681,6 @@ unsigned char wifi_mac_get_operation_class(struct cfg80211_chan_def chandef)
         return ret;
     }
 
-    /* 56.16 GHz, channel 1..4 */
     if (freq >= 56160 + 2160 * 1 && freq <= 56160 + 2160 * 6) {
         if (chandef.width >= NL80211_CHAN_WIDTH_40)
             return ret;
@@ -1716,6 +1689,5 @@ unsigned char wifi_mac_get_operation_class(struct cfg80211_chan_def chandef)
         return ret;
     }
 
-    /* not supported yet */
     return ret;
 }

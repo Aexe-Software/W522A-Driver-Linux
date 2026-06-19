@@ -1,16 +1,4 @@
-/*
- ****************************************************************************************
- *
- * Copyright (C) Amlogic 2010-2014
- *
- * Project: 11N 80211 mac  layer Software
- *
- * Description:
- *     wifi_mac layer p2p  module
- *
- *
- ****************************************************************************************
- */
+
 #ifndef IEEE_P2P_H
 #define IEEE_P2P_H
 
@@ -219,7 +207,6 @@ struct p2p_ie_intent_attr
     unsigned char   go_intent;
 } __packed;
 
-
 struct p2p_ie_chanlist_attr_chan_entry
 {
     unsigned char   operat_class;
@@ -270,7 +257,7 @@ struct wifi_mac_wfd_info
     unsigned char wfd_tdls_enable;
     unsigned char session_available;
 };
-#endif //CONFIG_WFD
+#endif 
 
 struct type_ctw_opps_s
 {
@@ -509,9 +496,8 @@ int vm_wfd_build_assocbssid_attrib(struct wlan_net_vif *wnet_vif, unsigned char 
 int vm_p2p_bsschan_in_chanList(struct wifi_mac_p2p *p2p, const unsigned char *frm, unsigned int len);
 void vm_set_p2pie_channelList(struct wifi_mac_p2p *p2p , const unsigned char *frm, unsigned int len,int channel);
 void vm_p2p_print_attr(const void *frm);
-//void vm_p2p_print_buf(const void *frm, int len);
+
 void set_p2p_negotiation_status(struct wifi_station *sta, enum NET80211_P2P_NEGO_STATE status);
 unsigned char is_p2p_negotiation_complete(struct wifi_mac *wifimac);
 
-#endif //IEEE_P2P_H
-
+#endif 

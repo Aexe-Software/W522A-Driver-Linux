@@ -131,11 +131,10 @@ int wifi_mac_parse_mmie(struct wifi_station *sta, struct sk_buff *skb, unsigned 
     wh = (struct wifi_frame *)os_skb_data(skb);
 
     #ifdef PMF_PKT_PRINT
-        /* dump the packet content before decrypt */
+        
         pr_debug("before parse:%d\n", skb->len);
         wifi_mac_dump_pkt(frm, skb->len);
     #endif
-
 
     if ((pkt_len < hdr_len) || (pkt_len - hdr_len < mic_len)) {
         ERROR_DEBUG_OUT("pkt_len too small\n");
@@ -150,7 +149,6 @@ int wifi_mac_parse_mmie(struct wifi_station *sta, struct sk_buff *skb, unsigned 
         return -1;
     }
 
-    /* copy key index */
     memcpy(&pkt_keyid, mme + 2, 2);
     pkt_keyid = le16_to_cpu(pkt_keyid);
     if (pkt_keyid != sta->pmf_key.wk_keyix) {
@@ -158,12 +156,11 @@ int wifi_mac_parse_mmie(struct wifi_station *sta, struct sk_buff *skb, unsigned 
         return -1;
     }
 
-    /* save packet number */
     memcpy(&pkt_ipn, mme + 4, sizeof(unsigned long));
     pkt_ipn = le64_to_cpu(pkt_ipn);
     local_ipn = (unsigned long *)(sta->pmf_key.wk_keyrsc);
-    /* BIP packet number should bigger than previous BIP packet */
-    if (pkt_ipn <= *local_ipn) { /* wrap around? */
+    
+    if (pkt_ipn <= *local_ipn) { 
         ERROR_DEBUG_OUT("replay BIP packet, pkt_ipn%08x, local_ipn:%08x\n", pkt_ipn, *local_ipn);
         return -1;
     }
@@ -175,15 +172,13 @@ int wifi_mac_parse_mmie(struct wifi_station *sta, struct sk_buff *skb, unsigned 
         return -1;
     }
 
-    /* save the frame body + MME (w/o mic) */
     memcpy(bip_aad + BIP_AAD_SIZE, frm + hdr_len, pkt_len - hdr_len - mic_len);
 
-    /* construct AAD, copy frame control field */
     memcpy(bip_aad, &wh->i_fc[0], 2);
     clear_retry(bip_aad);
     clear_pwr_mgt(bip_aad);
     clear_more_data(bip_aad);
-    /* construct AAD, copy address 1 to address 3 */
+    
     memcpy(bip_aad + 2, wh->i_addr1, 6);
     memcpy(bip_aad + 8, wh->i_addr2, 6);
     memcpy(bip_aad + 14, wh->i_addr3, 6);
@@ -198,7 +193,6 @@ int wifi_mac_parse_mmie(struct wifi_station *sta, struct sk_buff *skb, unsigned 
         pkt_len, sta->pmf_key.wk_key, bip_aad, ori_len, mic) == 0)
         goto bip_exit;
 
-    /* MIC field should be last 8 bytes of packet (packet without FCS) */
     if (memcmp(mic, wh + pkt_len - mic_len, mic_len)) {
         *local_ipn = pkt_ipn;
         res = 1;
@@ -207,11 +201,10 @@ int wifi_mac_parse_mmie(struct wifi_station *sta, struct sk_buff *skb, unsigned 
     }
 
     #ifdef PMF_PKT_PRINT
-        /* dump the packet content before decrypt */
+        
         pr_debug("after parse:%d\n", skb->len);
         wifi_mac_dump_pkt(frm, skb->len);
     #endif
-
 
 bip_exit:
     FREE(bip_aad, "bip_aad");
@@ -234,13 +227,13 @@ static int aml_aes_decrypt(struct wifi_station *sta, struct sk_buff *skb, unsign
     key_len = sta->sta_ucastkey.wk_keylen;
     key = sta->sta_ucastkey.wk_key;
 
-    if (key_len == 16) { /* 128 bits */
-        plain = ccmp_decrypt(key, hdr, frm + hdr_len, /* PN + enc_data + MIC */
-            skb->len - hdr_len, /* PN + enc_data + MIC */ &plain_len);
+    if (key_len == 16) { 
+        plain = ccmp_decrypt(key, hdr, frm + hdr_len, 
+            skb->len - hdr_len,  &plain_len);
 
-    } else if (key_len == 32) { /* 256 bits */
-        plain = ccmp_256_decrypt(key, hdr, frm + hdr_len, /* PN + enc_data + MIC */
-            skb->len - hdr_len, /* PN + enc_data + MIC */&plain_len);
+    } else if (key_len == 32) { 
+        plain = ccmp_256_decrypt(key, hdr, frm + hdr_len, 
+            skb->len - hdr_len, &plain_len);
     }
 
     if (plain == NULL) {
@@ -248,7 +241,6 @@ static int aml_aes_decrypt(struct wifi_station *sta, struct sk_buff *skb, unsign
         return 1;
     }
 
-    /* Copy @plain back to @frame and free @plain */
     memcpy(frm + hdr_len + 8, plain, plain_len);
     FREE(plain, "plain");
 
@@ -317,7 +309,6 @@ int wifi_mac_unprotected_mgmt_pkt_handle(struct wifi_station *sta, struct sk_buf
     frm = (unsigned char *)&wh[1];
     is_bmc = (WIFINET_IS_MULTICAST(wh->i_addr1));
 
-    //pr_debug("%s recv :%d\n", __func__, subtype);
     switch (wnet_vif->vm_opmode) {
         case WIFINET_M_STA:
             if ((is_bmc) && (subtype != WIFINET_FC0_SUBTYPE_BEACON)) {
@@ -404,11 +395,8 @@ int wifi_mac_mgmt_validate(struct wifi_station *sta, struct sk_buff *skb, unsign
         return 1;
     }
 
-    /* cases to decrypt mgmt frame */
-    /* set iv and icv length */
     SET_ICE_IV_LEN(&iv_len, &icv_len, sta->sta_rsn.rsn_ucastcipher);
 
-    /* actual management data frame body */
     data_len = skb->len - hdr_len - iv_len - icv_len;
     mgmt_data = ZMALLOC(data_len, "mgmt_data", GFP_ATOMIC);
     if (mgmt_data == NULL) {
@@ -417,7 +405,7 @@ int wifi_mac_mgmt_validate(struct wifi_station *sta, struct sk_buff *skb, unsign
     }
 
     #ifdef PMF_PKT_PRINT
-        /* dump the packet content before decrypt */
+        
         pr_debug("rsn_ucastcipher:%d\n", sta->sta_rsn.rsn_ucastcipher);
         wifi_mac_dump_pkt(frm, skb->len);
     #endif
@@ -428,16 +416,16 @@ int wifi_mac_mgmt_validate(struct wifi_station *sta, struct sk_buff *skb, unsign
         FREE(mgmt_data, "mgmt_data");
         goto fail;
     }
-    /* save actual management data frame body */
+    
     memcpy(mgmt_data, frm + hdr_len + iv_len, data_len);
-    /* overwrite the iv field */
+    
     memcpy(frm + hdr_len, mgmt_data, data_len);
-    /* remove the iv and icv length */
+    
     skb->len = skb->len - iv_len - icv_len;
     FREE(mgmt_data, "mgmt_data");
 
     #ifdef PMF_PKT_PRINT
-        /* print packet content after decryption */
+        
         pr_debug("after decrypt\n");
         wifi_mac_dump_pkt(frm, skb->len);
     #endif
@@ -480,10 +468,9 @@ int wifi_mac_add_mmie(struct wifi_station *sta, struct sk_buff *skb) {
     pr_debug("%s len:%d, frame_body_len:%d\n", __func__, skb->len, frame_body_len);
 
     {
-        /* broadcast robust mgmt frame, using BIP */
+        
         unsigned char mic[16] = {0};
 
-        /* IGTK key is not install ex: mesh MFP without IGTK */
         if (sta->pmf_key.wk_valid != 1) {
             FREE(bip_aad, "bip_aad");
             return 1;
@@ -500,47 +487,36 @@ int wifi_mac_add_mmie(struct wifi_station *sta, struct sk_buff *skb) {
         frm_end = frm + skb->len - mme_clen - 2;
 
         #ifdef PMF_PKT_PRINT
-            /* dump the packet content before decrypt */
+            
             pr_debug("before add aad:%d\n", skb->len);
             wifi_mac_dump_pkt(frm, skb->len);
         #endif
 
         mme_cont[0] = MME_IE_ID;
         mme_cont[1] = mme_clen;
-        /* octent 0 and 1 is key index ,BIP keyid is 4 or 5, LSB only need octent 0 */
+        
         mme_cont[2] = sta->pmf_key.wk_keyix;
 
-        /* increase PN and apply to packet */
         sta->pmf_key.wk_keyrsc[5]++;
         memcpy(&mme_cont[4], &sta->pmf_key.wk_keyrsc[0], 6);
 
-        /* add MME IE with MIC all zero, MME string doesn't include element id and length */
         memcpy(frm_end, mme_cont, mme_clen + 2);
 
-        /* construct AAD, copy frame control field */
         memcpy(bip_aad, &wh->i_fc[0], 2);
         clear_retry(bip_aad);
         clear_pwr_mgt(bip_aad);
         clear_more_data(bip_aad);
-        /* construct AAD, copy address 1 to address 3 */
+        
         memcpy(bip_aad + 2, wh->i_addr1, 6);
         memcpy(bip_aad + 8, wh->i_addr2, 6);
         memcpy(bip_aad + 14, wh->i_addr3, 6);
-        /* copy management frame body */
+        
         memcpy(bip_aad + BIP_AAD_SIZE, mgmt_body, frame_body_len);
 
-        /* dump total packet include MME with zero MIC */
-        #if 0
-            pr_debug("bip_aad:%d\n", ori_len);
-            wifi_mac_dump_pkt(bip_add, ori_len);
-        #endif
-
-        /* calculate mic */
         if (aml_calculate_bip_mic(sta->pmf_key.wk_key_type, (unsigned char *)wh, pkt_len_before_add_ie,
             sta->pmf_key.wk_key, bip_aad, ori_len, mic) == 0)
                 goto add_fail;
 
-        /* dump calculated mic result */
         if (0) {
             int i;
             pr_debug("Calculated mic result: ");
@@ -550,7 +526,7 @@ int wifi_mac_add_mmie(struct wifi_station *sta, struct sk_buff *skb) {
         }
 
         frm_end = frm + skb->len;
-        /* copy right BIP mic value, total is 128bits, we use the 0~63 bits */
+        
         if (sta->pmf_key.wk_key_type == WIFINET_CIPHER_AES_CMAC)
             memcpy(frm_end - 8, mic, 8);
         else
@@ -575,11 +551,11 @@ static int _aml_ccmp_encrypt(struct wifi_mac_key *key, unsigned char *pn, unsign
     unsigned char *enc = NULL;
     size_t enc_len = 0;
 
-    if (key->wk_keylen == 16) { /* 128 bits */
+    if (key->wk_keylen == 16) { 
         enc = ccmp_encrypt(key->wk_key, frame, hdrlen + plen, hdrlen,
             (hdrlen == 26) ? (frame + hdrlen - 2) : NULL, pn, key->wk_keyix, &enc_len);
 
-    } else if (key->wk_keylen == 32) { /* 256 bits */
+    } else if (key->wk_keylen == 32) { 
         enc = ccmp_256_encrypt(key->wk_key, frame, hdrlen + plen, hdrlen,
             (hdrlen == 26) ? (frame + hdrlen - 2) : NULL, pn, key->wk_keyix, &enc_len);
     }
@@ -589,7 +565,6 @@ static int _aml_ccmp_encrypt(struct wifi_mac_key *key, unsigned char *pn, unsign
         return 0;
     }
 
-    /* Copy @enc back to @frame and free @enc */
     memcpy(frame, enc, enc_len);
     FREE(enc, "enc");
 
@@ -629,7 +604,7 @@ int wifi_mac_sw_encrypt(struct wifi_station *sta, struct sk_buff *skb) {
     }
 
     #ifdef PMF_PKT_PRINT
-        /* dump the packet content before decrypt */
+        
         pr_debug("before encrypt rsn_ucastcipher:%d\n", sta->sta_rsn.rsn_ucastcipher);
         wifi_mac_dump_pkt(frm, skb->len);
     #endif
@@ -641,7 +616,7 @@ int wifi_mac_sw_encrypt(struct wifi_station *sta, struct sk_buff *skb) {
         case WIFINET_CIPHER_AES_OCB:
         case WIFINET_CIPHER_AES_CCM:
         case WIFINET_CIPHER_AES_CMAC:
-            res = _aml_ccmp_encrypt(key, pn, hdr_len, frm, (skb->len - hdr_len - iv_len - icv_len)/*data len*/);
+            res = _aml_ccmp_encrypt(key, pn, hdr_len, frm, (skb->len - hdr_len - iv_len - icv_len));
             break;
 
         default:
@@ -650,10 +625,9 @@ int wifi_mac_sw_encrypt(struct wifi_station *sta, struct sk_buff *skb) {
 
     PN = (unsigned long long *)pn;
     (*PN)++;
-    //pr_debug("PN is %016x, pn[0]:%02x, pn[7]:%02x\n", *PN, pn[0], pn[7]);
-
+    
     #ifdef PMF_PKT_PRINT
-        /* dump the packet content before decrypt */
+        
         pr_debug("after encrypt:\n");
         wifi_mac_dump_pkt(frm, skb->len);
     #endif
@@ -673,4 +647,4 @@ int wifi_mac_send_sa_query(struct wifi_station *sta, unsigned char action, unsig
     return 0;
 }
 
-#endif//AML_WPA3
+#endif

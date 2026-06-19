@@ -107,7 +107,8 @@ EXTRA_CFLAGS += -DWITH_RF
 EXTRA_CFLAGS += -DRF_T9026
 EXTRA_CFLAGS += -DUSE_T902X_RF
 EXTRA_CFLAGS += -DSYSTEM64
-# IRQ mode: use SDIO interrupt (not GPIO) on Armbian — suppresses -Wundef
+# IRQ mode: v28z9 uses in-band SDIO DAT1 IRQ. On this 6.12 ophub box the
+# OOB GPIO host-wake request_irq() path can stall CPU0 during insmod.
 EXTRA_CFLAGS += -DUSE_SDIO_IRQ=1
 EXTRA_CFLAGS += -DUSE_GPIO_IRQ=0
 
@@ -238,19 +239,32 @@ install: all
 	install -m 644 vmac/aml_wifi_rf_fn_link.txt /lib/firmware/aml/aml_wifi_rf.txt
 	install -m 644 vmac/aml_wifi_rf_fn_link.txt /etc/aml-wifi/aml_wifi_rf.txt
 	install -m 644 vmac/aml_wifi_drv_cfg_0.conf /etc/aml-wifi/
+	@# Role override files MUST be installed: the driver reads them from
+	@# /etc/aml-wifi/ at runtime (drv_cfg_load_role_file). Without them it falls
+	@# back to builtin defaults where cfg_ap_txaggr/cfg_ap_vht80_txaggr/
+	@# cfg_vhtsupport are all 0 -> no AP aggregation, no VHT -> ~9 Mbit ceiling.
+	install -m 644 vmac/aml_wifi_drv_cfg_ap.conf      /etc/aml-wifi/
+	install -m 644 vmac/aml_wifi_drv_cfg_sta.conf     /etc/aml-wifi/
+	install -m 644 vmac/aml_wifi_drv_cfg_monitor.conf /etc/aml-wifi/
 	@echo ""
-	@echo "Installing auto-load config (modprobe.d / modules-load.d)..."
+	@echo "Installing safe module config..."
 	install -d /etc/modprobe.d/ /etc/modules-load.d/
 	install -m 644 install_files/aml-w1.conf    /etc/modprobe.d/aml-w1.conf
-	install -m 644 install_files/aml-w1.modules /etc/modules-load.d/aml-w1.conf
+	@if [ "$$W522A_AUTOLOAD" = "1" ]; then \
+		echo "W522A_AUTOLOAD=1: installing modules-load.d auto-load config (risky for experiments)"; \
+		install -m 644 install_files/aml-w1.modules /etc/modules-load.d/aml-w1.conf; \
+	else \
+		echo "Safe default: removing modules-load.d auto-load config"; \
+		rm -f /etc/modules-load.d/aml-w1.conf; \
+	fi
 	@echo ""
 	@echo "Refreshing module dependencies..."
 	depmod -a $(shell uname -r)
 	@echo ""
 	@echo "Done! Reboot — the 'w522a' interface will come up automatically"
-	@echo "  on SDIO hotplug (no wlan0/wlan1 collision with other drivers)."
-	@echo "Or to load now without reboot:"
-	@echo "  sudo modprobe aml_sdio"
+	@echo "Auto-load is disabled by default."
+	@echo "Load manually after SSH is up:"
+	@echo "  sudo /usr/local/sbin/w522a-load-manual.sh"
 
 uninstall:
 	@echo "Removing modules..."

@@ -1,23 +1,11 @@
-/*****************************************************************************************
- *
- * Copyright (C) Amlogic 2010-2014
- *
- * Project: 11N 80211 driver  layer Software
- *
- * Description:
- *     Initialization work before testing HAL layer throughput performance
- * Author : Boatman Yang(xuexing.yang@amlogic.com)
- *
- * Date:    20160901
- ****************************************************************************************
- */
+
 #ifndef _DRV_HAL_THR_INIT_H
 #define _DRV_HAL_THR_INIT_H
 
 #if defined (HAL_FPGA_VER)
 #include <linux/init.h>
 #include <linux/module.h>
-#include <linux/delay.h>    /* udelay */
+#include <linux/delay.h>    
 #include <linux/spinlock.h>
 #include <linux/netdevice.h>
 #include <linux/etherdevice.h>
@@ -31,18 +19,16 @@
 #include <linux/errno.h>
 #include <linux/irq.h>
 #include <linux/interrupt.h>
-#include <linux/kernel.h> /* pr_debug() */
+#include <linux/kernel.h> 
 #include <linux/list.h>
 #include <linux/netdevice.h>
 #include <linux/version.h>
 #include <linux/spinlock.h>
 #include <linux/kthread.h>
-#include <linux/gpio.h> //mach
+#include <linux/gpio.h> 
 #include <linux/timer.h>
 #include <linux/string.h>
 #endif
-
-
 
 #include "wifi_pt_conf.h"
 #include "wifi_pt_network.h"
@@ -54,8 +40,6 @@
 #define WIFI_11B_11M                0x03
 #define WIFI_MAX_TID                    8
 #define MAX_TID                         10
-//#define HI_TXPRIVD_NUM_PER_TID          (128)
-//#define HI_TXPRIVD_NUM_ALL_TID          (MAX_TID*HI_TXPRIVD_NUM_PER_TID)
 
 #ifndef STA1_VMAC1_SHORTGI
 #define STA1_VMAC1_SHORTGI gB2BTestCasePacket.if_shortGI
@@ -77,18 +61,18 @@
 #endif
 
 struct _Queue {
-        void** start;                           ///< Start of the ring buffer.
-        void** end;                             ///< End of the ring buffer.
-        void** front;                           ///< Front of the queue.
-        void** back;                            ///< Back of the queue.
+        void** start;                           
+        void** end;                             
+        void** front;                           
+        void** back;                            
 } ;
 
 struct _Pool {
-        struct _Queue queue;                         ///< Internal queue to manage the blocks.
-        unsigned char* buffer;                        ///< Starting address of pool buffer.
-        unsigned short size;                          ///< Size of allocation blocks.
-        unsigned short max_count;                     ///< Number of allocation blocks.
-        unsigned short min_count;                     ///< Minimun block count.
+        struct _Queue queue;                         
+        unsigned char* buffer;                        
+        unsigned short size;                          
+        unsigned short max_count;                     
+        unsigned short min_count;                     
         unsigned char   name[16];
 };
 
@@ -99,12 +83,12 @@ enum {
 
 enum {
         TX_TASK_CONFIRM_QUEUE_SIZE = 32,
-        RX_QUEUE_SIZE = RX_BUFFER_COUNT + 1,    // Make sure RX queue is never full
+        RX_QUEUE_SIZE = RX_BUFFER_COUNT + 1,    
 };
 
 struct _TxControl {
-        unsigned int  control_0;     ///< = ( service << 16 | length )
-        unsigned int  control_1;     ///< = ( ack_to << 23 | ackto_en << 22 | rate << 16 | power )
+        unsigned int  control_0;     
+        unsigned int  control_1;     
         unsigned int  length_0;
         unsigned int  address_0;
         unsigned int  length_1;
@@ -126,7 +110,6 @@ enum {
         TX_DESCRIPTOR_SIZE  = sizeof( struct _TxDescriptor ),
         TX_CONTROL_SIZE     = sizeof( struct _TxControl ),
 };
-
 
 enum {
         PHY_RATE_RESERVED = 0x0,
@@ -173,9 +156,9 @@ struct _TRC_CONF_MIB {
         unsigned char           dot11PsMode;
         unsigned char           dot11MacMode;
         unsigned char           the_bssid[6];
-        unsigned char           the_mac_address[6]; //the vmac address
-        unsigned char           the_desc_address[6];    //the destination address of tx frame
-        unsigned char           the_connect_address[6];    //the connected peer address
+        unsigned char           the_mac_address[6]; 
+        unsigned char           the_desc_address[6];    
+        unsigned char           the_connect_address[6];    
         unsigned char           bGotoDeepSleep;
         unsigned char           tid;
         unsigned short          SN[9];
@@ -209,8 +192,6 @@ struct _TxTask {
         void* confirm_queue_buffer[ TX_TASK_CONFIRM_QUEUE_SIZE ];
         unsigned int confirm_queue_num;
 } ;
-
-
 
 struct _B2B_Platform_Conf{
     unsigned char enable_debug;

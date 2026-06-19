@@ -1,16 +1,3 @@
-/*
- ****************************************************************************************
- *
- * Copyright (C) Amlogic 2010-2014
- *
- * Project: 11N 80211 mac  layer Software
- *
- * Description:
- *     wifi_mac layer scan module
- *
- *
- ****************************************************************************************
- */
 
 #ifndef _WIFI_NET_SCAN_H_
 #define _WIFI_NET_SCAN_H_
@@ -57,14 +44,12 @@ enum
     SCANSTATE_F_RX_CHKING_LEAKAP_PKT = BIT(15),
 };
 
-
 enum wifi_scan_noise
 {
     WIFINET_S_SCAN_ENV_CLEAR  = 0,
     WIFINET_S_SCAN_ENV_NOISE  = 1,
     WIFINET_S_SCAN_ENV_MID  = 2,
 };
-
 
 #define STA_HASHSIZE 32
 #define STA_HASH(addr) (((const unsigned char *)(addr))[WIFINET_ADDR_LEN - 1] % STA_HASHSIZE)
@@ -83,9 +68,8 @@ struct wifi_mac_scan_state
     unsigned short scan_CfgFlags;
     unsigned char ss_nssid;
 
-    /*save specified ssid to scan */
     struct wifi_mac_ScanSSID ss_ssid[WIFINET_SCAN_MAX_SSID];
-    /*save channel to scan, include 2.4G and 5G */
+    
     struct wifi_channel *ss_chans[WIFINET_CHAN_MAX];
 
     struct wifi_mac_ScanSSID roaming_ssid;
@@ -110,7 +94,6 @@ struct wifi_mac_scan_state
     ktime_t scan_kt;
     struct work_struct timeout_work;
 };
-
 
 #define WIFI_SCAN_SE_LIST_LOCK(_st) OS_SPIN_LOCK(&(_st)->st_lock)
 #define WIFI_SCAN_SE_LIST_UNLOCK(_st) OS_SPIN_UNLOCK(&(_st)->st_lock)
@@ -152,11 +135,11 @@ struct wifi_mac_scan_param
     unsigned char *p2p[MAX_P2PIE_NUM];
     unsigned char *p2p_noa;
     unsigned char *wfd;
-#endif //#ifdef CONFIG_P2P
+#endif 
 
 #ifdef CONFIG_WAPI
     unsigned char *wai;
-#endif //#ifdef CONFIG_WAPI
+#endif 
     unsigned char *ext_cap;
     unsigned char *vht_cap;
     unsigned char *vht_opt;
@@ -203,14 +186,14 @@ struct wifi_scan_info
 
 #ifdef CONFIG_WAPI
     unsigned char  SI_wai_ie[SCANINFO_IE_LENGTH];
-#endif /*CONFIG_WAPI*/
+#endif 
 
 #ifdef CONFIG_P2P
     unsigned char  SI_p2p_ie[MAX_P2PIE_NUM][SCANINFO_IE_LENGTH];
-#endif /*CONFIG_P2P*/
+#endif 
 #ifdef CONFIG_WFD
     unsigned char  SI_wfd_ie[SCANINFO_IE_LENGTH];
-#endif /*CONFIG_WFD*/
+#endif 
 
     unsigned char ie_ext_cap[sizeof(struct wifi_mac_ie_ext_cap )];
     unsigned char ie_vht_cap[sizeof(struct wifi_mac_ie_vht_cap )];
@@ -265,7 +248,7 @@ struct scaninfo_entry
     struct list_head se_list;
     struct list_head se_hash;
 
-    unsigned char connectcnt; //
+    unsigned char connectcnt; 
     unsigned char se_valid;
     unsigned int se_avgrssi;
     unsigned long LastUpdateTime;
@@ -302,4 +285,4 @@ int wifi_mac_scan_chk_11g_bss(struct wifi_mac_scan_state *ss, struct wlan_net_vi
 void is_connect_need_set_gain(struct wlan_net_vif *wnet_vif);
 void wifi_mac_scan_chking_leakap(void * station, struct wifi_frame *wh);
 struct wifi_channel* wifi_mac_connect_get_target_chan(struct wifi_mac_scan_state *ss, struct wlan_net_vif *wnet_vif);
-#endif /* _WIFI_NET_SCAN_H_ */
+#endif 

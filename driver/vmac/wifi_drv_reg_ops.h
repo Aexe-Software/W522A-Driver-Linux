@@ -1,12 +1,9 @@
 #ifndef _WIFI_DRV_REG_OPS_H_
 #define _WIFI_DRV_REG_OPS_H_
 
-/*********************************************************************/
-/***************************** I2C Module ***************************/
-/******************************************************************/
-#ifdef    DRIVER_FOR_BT //for I2C BASE FOR ACCESS BT RF
+#ifdef    DRIVER_FOR_BT 
 #define  I2C_REG_BASEADDR     (0x00250800)
-#else                           //for I2C BASE FOR ACCESS WIFI RF
+#else                           
 #define  I2C_REG_BASEADDR     (0x00004800)
 #endif
 

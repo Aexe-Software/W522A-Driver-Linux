@@ -1,16 +1,4 @@
-/*
- ****************************************************************************************
- *
- * Copyright (C) Amlogic 2010-2014
- *
- * Project: 11N 80211 mac  layer Software
- *
- * Description:
- *     wifi_mac layer the first .h need include
- *
- *
- ****************************************************************************************
- */
+
 #ifndef _NET80211_IEEE80211_VAR_H_
 #define _NET80211_IEEE80211_VAR_H_
 
@@ -18,6 +6,7 @@
 #include "wifi_mac_power.h"
 #include "wifi_mac_scan.h"
 #include "wifi_mac_action.h"
+#include <linux/workqueue.h>
 
 struct wifi_mac_statistic
 {
@@ -115,13 +104,11 @@ struct vm_wlan_net_vif_params
 };
 
 #define WIFINET_SIGNAL_POWER_WEAK_THRESH_NARROW -75
-//When RSSI is less than -70, selecting a fixed rate when entering a weak signal
-// will lead to a sudden drop in throughput
+
 #define WIFINET_SIGNAL_POWER_WEAK_THRESH_WIDE -80
 
 #define WIFINET_SIGNAL_POWER_BW_CHANGE_THRESH_NARROW -74
 #define WIFINET_SIGNAL_POWER_BW_CHANGE_THRESH_WIDE -63
-
 
 #define WIFINET_TXPOWER_MAX  100
 
@@ -140,11 +127,10 @@ struct vm_wlan_net_vif_params
 
 #define WIFINET_BMISS_THRS  (25*100)
 #define WIFINET_BMISS_COUNT_MAX  4
-//in ms, fake interval for fw power saving
+
 #define WIFINET_INTER_BEACON_INTERVAL (500)
 
 #define WIFINET_FRAGMT_THRESHOLD_MAX  2346
-
 
 #define WIFINET_TU_TO_MS(x)  (((x) * 1024) / 1000)
 
@@ -174,7 +160,6 @@ struct nsta_entry
     unsigned long queue_time;
 };
 
-
 #define WIFINET_NODE_FREE_LOCK_INIT(_ic) spin_lock_init(&(_ic)->wm_free_lock)
 #define WIFINET_NODE_FREE_LOCK(_ic) OS_SPIN_LOCK_IRQ(&(_ic)->wm_free_lock, (_ic)->wm_free_lock_flags)
 #define WIFINET_NODE_FREE_UNLOCK(_ic) OS_SPIN_UNLOCK_IRQ(&(_ic)->wm_free_lock, (_ic)->wm_free_lock_flags)
@@ -188,22 +173,19 @@ struct nsta_entry
 #define NET80211_IF_RUN_UP(_ic)  (((_ic)->wm_dev_flags & NETCOM_NETIF_IFF_UP_RUNNING))
 
 struct wifinet_vht_mcs {
-    unsigned short mcs_map;      /* Max MCS for each SS */
-    unsigned short data_rate;    /* Max data rate */
+    unsigned short mcs_map;      
+    unsigned short data_rate;    
 } ;
 
 struct wifinet_vht_mcs_set {
-    /* B0-B15 Max Rx MCS for each SS B16-B28 Max Rx data rate
-       B29-B31 reserved */
+    
     struct wifinet_vht_mcs rx_mcs_set;
-    /* B32-B47 Max Tx MCS for each SS B48-B60 Max Tx data rate
-       B61-B63 reserved */
+    
     struct wifinet_vht_mcs tx_mcs_set;
 };
 
 #define WME_NUM_TID         8
 
-/*shijie.chen add, for buffer msdu to aggregate amsdu */
 struct msdu_list {
     struct list_head free_list;
 };
@@ -244,9 +226,6 @@ struct wifi_mac_app_ie_t
 #define NET80211_P2P_VMAC  1
 
 struct wifi_skb_callback;
-/**
- *  per-frame tx control block
- */
 
 struct wifi_mac_ops
 {
@@ -265,7 +244,6 @@ struct wifi_mac_ops
     void (*wifi_mac_switch_mode_static40)(void * ieee);
     void (*wifi_mac_switch_mode_static80)(void * ieee);
 
-    /* Rate control related ops */
     void (*wifi_mac_rate_init)(void * ieee, enum wifi_mac_macmode,  const struct drv_rate_table *rt);
     void (*wifi_mac_rate_nsta_update)(void *  ieee, void * sta, int isnew);
 
@@ -290,8 +268,7 @@ struct wifi_mac_ops
     int (*os_skb_get_tid)(struct sk_buff *skb);
     void (*wifi_mac_notify_mic_fail)(struct wlan_net_vif *wnet_vif,const struct wifi_frame *wh, unsigned int key_index);
     int (*wifi_mac_send_qosnulldata)(struct wifi_station *sta, int ac);
-   // int (*vm_p2p_client_cancle_noa) (struct wifi_mac_p2p *p2p);
-   // int (*vm_p2p_go_cancle_noa) (struct wifi_mac_p2p *p2p);
+   
     int (*wifi_mac_pwrsave_fullsleep)(struct wlan_net_vif *wnet_vif, enum wifinet_ps_sleep_reason reason);
     int (*wifi_mac_pwrsave_is_sta_fullsleep) (struct wlan_net_vif *wnet_vif);
     int (*wifi_mac_pwrsave_is_sta_sleeping) (struct wlan_net_vif *wnet_vif);
@@ -356,7 +333,7 @@ struct wifi_mac
     unsigned int wm_flags_ext2;
     unsigned int wm_caps;
     unsigned char wm_nopened;
-    atomic_t wm_nrunning;           /* N-C2 fix: was unsigned char, SMP-unsafe bare reads */
+    atomic_t wm_nrunning;           
     unsigned int wm_runningmask;
 
     short wm_signal_power_weak_thresh_narrow;
@@ -389,7 +366,6 @@ struct wifi_mac
     int roaming_threshold_5g;
     int roaming_threshold_2g;
 
-    /* 11g rates for p2p GO and vht mode */
     struct wifi_mac_rateset wm_11b_rates;
     struct wifi_mac_rateset wm_11g_rates;
     struct wifi_mac_rateset wm_sup_ht_rates;
@@ -424,7 +400,7 @@ struct wifi_mac
 
 #ifdef CONFIG_CONCURRENT_MODE
     struct os_timer_ext wm_concurrenttimer;
-#endif //CONFIG_CONCURRENT_MODE
+#endif 
     unsigned char wm_vsdb_sate;
     unsigned char wm_vsdb_slot;
     unsigned short wm_vsdb_flags;
@@ -460,7 +436,7 @@ struct wifi_mac
     struct list_head free_amsdu_list;
     struct os_timer_ext wm_amsdu_flush_timer;
     spinlock_t wm_amsdu_txq_lock;
-    /*buffered msdu num of per tid*/
+    
     int msdu_cnt[WME_NUM_TID ];
     struct msdu_list msdu_node_list;
 
@@ -470,8 +446,8 @@ struct wifi_mac
     unsigned char is_miracast_connect;
     unsigned char vsdb_mode_set_noa_enable;
 
-    struct drv_txdesc *txdesc_bufptr;/* TX descriptors buffer point*/
-    struct list_head txdesc_freequeue;/* transmit buffer */
+    struct drv_txdesc *txdesc_bufptr;
+    struct list_head txdesc_freequeue;
     spinlock_t tx_desc_buf_lock;
     unsigned long tx_desc_buf_lock_flags;
 
@@ -480,7 +456,6 @@ struct wifi_mac
     int wm_mng_qid;
     int wm_mcast_qnum;
 
-    /* suspend for all vif, so wifimac maintains suspend mode */
     unsigned int wm_suspend_mode;
     wait_queue_head_t wm_suspend_wq;
     unsigned char wm_esco_en;
@@ -488,6 +463,9 @@ struct wifi_mac
 
     enum wifi_mac_recovery_state recovery_stat;
     struct os_timer_ext wm_monitor_fw;
+    struct work_struct wm_tx_recovery_work;
+    atomic_t wm_tx_recovery_pending;
+    atomic_t wm_tx_stall_cnt;
     spinlock_t fw_stat_lock;
 
 #if defined(SU_BF) || defined(MU_BF)
@@ -593,9 +571,9 @@ struct wlan_net_vif
     struct conn_chan_list vm_connchan;
     enum wifi_mac_bwc_width vm_bandwidth;
     unsigned char vm_scan_before_connect_flag;
-    unsigned char vm_phase_flags; // bit0: connecting; bit1: disconnecting; bit2:flush_tx_buff_q
+    unsigned char vm_phase_flags; 
     int vm_scanchan_rssi;
-    int vm_deauth_fail_time; /* M-7 FIX: was static local in drv_tx_complete_mgmt_handle - shared across VIFs! */
+    int vm_deauth_fail_time; 
     struct scaninfo_entry vm_connect_scan_entry;
     unsigned char vm_chan_simulate_scan_flag;
     unsigned char vm_chan_switch_scan_flag;
@@ -621,7 +599,6 @@ struct wlan_net_vif
     int vm_inact_run;
     int vm_inact_probe;
 
-    /*scan per channel wait time ms*/
     unsigned char vm_scan_time_idle;
     unsigned char vm_scan_time_connect;
     unsigned char vm_scan_time_before_connect;
@@ -649,7 +626,6 @@ struct wlan_net_vif
     unsigned char vm_opt_ie[WIFINET_MAX_IV_OPT_IE];
     unsigned short vm_opt_ie_len;
 
-    /* for change channel when sta receive a channel change announce frame*/
     unsigned char vm_chanchange_count;
     atomic_t vm_bmiss_count;
     struct wifi_mac_rateset vm_legacy_rates;
@@ -680,16 +656,9 @@ struct wlan_net_vif
     unsigned char vm_def_mgmt_txkey;
     struct wifi_mac_key vm_nw_keys[WIFINET_WEP_NKID];
     unsigned int current_keytype;
-    /* wpa2 pmk list */
+    
     struct aml_pmk_list *pmk_list;
 
-    /* Short Guard Interval Enable:1 Disable:0 */
-    /* Short Guard Interval Enable:1 Disable:0 for VHT fixed rates */
-    /* LDPC Enable Rx:1 TX: 2 ; Disable:0 */
-    /* flag to indicate using default ratemask */
-    /*For wakeup AP vmac when wds-sta connect to the AP only use
-      when export UMAC_REPEATER_DELAYED_BRINGUP=1*/
-    /* if performed the iwlist scanning */
     unsigned int vm_sgi:1,
                  vm_data_sgi:1,
                  vm_ldpc:2,
@@ -698,17 +667,17 @@ struct wlan_net_vif
                  vm_list_scanning:1;
 
     unsigned short vm_htcap;
-    /*only for ht info ie */
+    
     int scnd_chn_offset;
-    /* TX STBC Enable:1 Disable:0 */
+    
     unsigned char vm_tx_stbc;
-    /* RX STBC Enable:(1,2,3) Disable:0 */
+    
     unsigned char vm_rx_stbc;
 
     unsigned int vm_vhtcap;
-    /* VHT Supported MCS set */
+    
     struct wifinet_vht_mcs_set vm_vhtcap_max_mcs;
-    /* VHT Basic MCS set */
+    
     unsigned short vm_vhtop_basic_mcs;
 
     unsigned short vm_tx_speed;
@@ -759,7 +728,6 @@ struct wlan_net_vif
 #define WIFINET_F_DOTH 0x40000000
 #define WIFINET_F_CHANSWITCH 0x80000000
 
-
 #define WIFINET_FEXT_SHORTGI_ENABLE 0x00000001
 #define WIFINET_FEXT_SHORTGI20 0x00000002
 #define WIFINET_FEXT_SHORTGI40 0x00000004
@@ -787,7 +755,6 @@ struct wlan_net_vif
 #define WIFINET_FEXT2_PUREN 0x40000000
 #define WIFINET_FEXT2_SWITCH_CHANNEL 0x80000000
 #define WIFINET_FEXT2_ALLOW_SWITCH_CHANNEL 0x01000000
-
 
 #define WIFINET_FEXT2_PUREBGN (WIFINET_FEXT2_PUREB|WIFINET_FEXT2_PUREG|WIFINET_FEXT2_PUREN)
 #define WIFINET_FEXT2_PUREBG (WIFINET_FEXT2_PUREG|WIFINET_FEXT2_PUREB)
@@ -823,48 +790,15 @@ struct wlan_net_vif
 #define WIFINET_C_BGSCAN 0x20000000
 #define WIFINET_C_UAPSD 0x40000000
 
-
 unsigned int   wifi_mac_Mhz2ieee(unsigned int, unsigned int);
 int wifi_mac_ComSetCountryCode(struct wifi_mac *wifimac, char* isoName);
 
-/* v13g: aarch64 kernel virtual addresses live in TTBR1 (upper half) and
- * function pointers must be 4-byte aligned. Real callbacks always have
- * bit 47/48 set AND the bottom 2 bits clear; corrupted values like 0x2,
- * 0x100000000, or off-by-one (e.g. fn|1) indicate the vif_ops fields
- * hold partial / freed / bit-flipped garbage. The pre-existing != NULL
- * check is not enough: it lets 0x2 through and the BLR raises an SP/PC
- * alignment exception (e.g. wifi_mac_sec_delt_key+0x40 on the
- * cfg80211_event_work workqueue, or wifi_mac_pwrsave_set_tim+0x1 on the
- * hal_rx_thread when an associated client wakes from PS).
- * Guard every vif_ops indirect call with a kernel-virtual-range gate
- * AND a 4-byte alignment check. */
 #ifndef WIFI_MAC_LIKELY_KERNEL_PTR
 #define WIFI_MAC_LIKELY_KERNEL_PTR(p) \
     (((unsigned long)(p) >= 0xffff000000000000UL) && \
      (((unsigned long)(p) & 0x3UL) == 0UL))
 #endif
 
-/* v14a: WIFI_MAC_LIKELY_KERNEL_PTR is necessary but not sufficient.
- * Two distinct failure shapes have hit us in production:
- *   (a) range-bogus pointers (0x2, 0x...|1, LIST_POISON 0xdead...) - caught
- *       by WIFI_MAC_LIKELY_KERNEL_PTR.
- *   (b) range-OK pointers whose backing PAGE is unmapped (slab page that
- *       was returned to the buddy allocator and torn out of the linear
- *       map, vmalloc page that was vunmap'd, etc.). The crash on
- *       wifi_mac_find_sta+0xb8 in v14 is exactly this: x19 = cur =
- *       0xffff00010b618010 looks valid but the LDR cur->next at +0xb8
- *       takes a level-1 translation fault (ESR=0x96000005). No amount
- *       of address-shape checking can detect that ahead of time -
- *       the only safe option is a probed read, which is what
- *       copy_from_kernel_nofault() exists for.
- *
- * vlsi_kp_alive(p) returns 1 iff (a) p is in TTBR1 and 4-byte aligned
- * AND (b) the first 8 bytes at p can actually be read without
- * page-faulting. Use this everywhere a list cursor or other pointer
- * loaded from a structure with unclear lifetime is about to be
- * dereferenced; do NOT use it on every single field of a struct -
- * instead, validate the head pointer once and trust that the rest
- * of the struct is on the same page. */
 #include <linux/uaccess.h>
 static __always_inline int vlsi_kp_alive(const void *p)
 {
@@ -875,37 +809,6 @@ static __always_inline int vlsi_kp_alive(const void *p)
         return 0;
     return 1;
 }
-
-/* v14: cohesive validation infrastructure for the indirect-call and
- * list-iteration uses scattered through the driver. Six successive
- * point-fixes (v13e..v13j) each closed one crash signature only to
- * uncover the next: KeyUpdate -> SetTim -> StationTimeoutEx ->
- * find_sta -> get_new_sta_node -> find_wds_sta. Every one shared the
- * same shape: an indirect call or a list_for_each_entry_safe walk
- * dereferenced a partially-torn-down or free()'d structure during a
- * concurrent mode-change / disconnect / pwr-save transition. v14
- * provides three reusable building blocks so the remaining ~30 sites
- * can be hardened with the same one-liner check.
- *
- * VLSI_VALID_VIFMAC(vif): true iff
- *   wnet_vif, wnet_vif->vm_wmac, and wnet_vif->vm_wmac->drv_priv
- *   are all kernel-pointer-shaped. Use as the first line of any
- *   function that will go on to call wifimac->drv_priv->drv_ops.X(...).
- *
- * VLSI_VALID_DRV_OP(wmac, op): true iff
- *   wmac, wmac->drv_priv and the drv_ops.op function pointer are
- *   all kernel-pointer-shaped. Use immediately before the indirect
- *   call site:
- *     if (VLSI_VALID_DRV_OP(wmac, free_nsta))
- *         wmac->drv_priv->drv_ops.free_nsta(wmac->drv_priv, drv_sta);
- *
- * VLSI_FOR_EACH_ENTRY_SAFE(pos, n, head, member): drop-in replacement
- *   for list_for_each_entry_safe with per-iteration pointer
- *   validation and a hard 4096-iteration cap. Cleanly bails out when
- *   it encounters LIST_POISON1 (0xdead0000_00000100) or any other
- *   non-kernel cursor, which is what crashed
- *   wifi_mac_StationTimeoutEx (v13h) and wifi_mac_find_sta (v13i).
- *   Same break/continue/return semantics as the kernel original. */
 
 #define VLSI_VALID_VIFMAC(vif)                                        \
     (WIFI_MAC_LIKELY_KERNEL_PTR(vif) &&                               \
@@ -921,20 +824,6 @@ static __always_inline int vlsi_kp_alive(const void *p)
 #define VLSI_LIST_MAX_ITERS 4096
 #endif
 
-/* Single-statement for-loop. Body may use break / continue / return.
- * Internals: holds a snapshot of (head, cursor, iter-count) in a
- * compound aggregate so we can declare it in the for() initializer
- * without breaking C99 single-type-decl rules. The loop terminates
- * cleanly the moment any cursor or its ->next is not a sane kernel
- * pointer, which is what every "list_for_each_entry_safe just
- * walked into LIST_POISON" crash reduces to.
- *
- * v14a: switched cursor checks from WIFI_MAC_LIKELY_KERNEL_PTR (range
- * + alignment only) to vlsi_kp_alive (range + alignment + probed
- * read). The plain range check let through cursors whose backing
- * page was unmapped, producing a level-1 translation fault on the
- * first deref - that's how wifi_mac_find_sta+0xb8 crashed under v14
- * even though all the iterators here had been migrated. */
 #define VLSI_FOR_EACH_ENTRY_SAFE(pos, n, head, member)                \
     for (struct { struct list_head *h; struct list_head *c; int i; }  \
             _vlsi_it = { (head),                                      \
@@ -978,10 +867,6 @@ wifi_mac_KeyUpdateEnd(struct wlan_net_vif *wnet_vif)
     fn(wnet_vif);
 }
 
-/* v13g: validated wrapper for vif_ops.vm_set_tim (used in AP/IBSS power
- * save path). The original direct call sites blindly dereferenced the
- * function pointer and crashed with SP/PC alignment exception when the
- * pointer became 0x...|1 during teardown. */
 static __inline void
 wifi_mac_SetTim(struct wifi_station *sta, int set)
 {
@@ -1044,7 +929,6 @@ static __inline  int wifi_mac_anyhdrsize(const void *data)
         return wifi_mac_hdrsize(data);
 }
 
-
 static __inline int
 wifi_mac_hdrspace(struct wifi_mac *wifimac, const void *data)
 {
@@ -1063,7 +947,6 @@ wifi_mac_anyhdrspace(struct wifi_mac *wifimac, const void *data)
     return size;
 }
 
-
 static __inline int
 wifi_mac_is_ht_enable(struct wifi_station *sta)
 {
@@ -1073,7 +956,6 @@ wifi_mac_is_ht_enable(struct wifi_station *sta)
         return 0;
     }
 
-    //wep
     if ((sta->sta_ucastkey.wk_cipher == &wifi_mac_cipher_none)
         && (sta->sta_wnet_vif->vm_def_txkey != WIFINET_KEYIX_NONE)) {
         k = &sta->sta_wnet_vif->vm_nw_keys[sta->sta_wnet_vif->vm_def_txkey];
@@ -1083,18 +965,15 @@ wifi_mac_is_ht_enable(struct wifi_station *sta)
         }
     }
 
-    //tkip, check sta's & ap's cipher capability
     if ((sta->sta_wnet_vif->vm_flags & WIFINET_F_WPA)
         && (sta->sta_rsn.rsn_ucastcipherset == (1 << WIFINET_CIPHER_TKIP))) {
         return 0;
     }
 
-    //check current connection's unicast cipher
     if (sta->sta_rsn.rsn_ucastcipher == WIFINET_CIPHER_TKIP) {
         return 0;
     }
 
-    //mode
     if (sta->sta_wnet_vif->vm_mac_mode < WIFINET_MODE_11N) {
         return 0;
     }
@@ -1105,7 +984,7 @@ wifi_mac_is_ht_enable(struct wifi_station *sta)
 static __inline int
 wifi_mac_is_vht_enable(struct wlan_net_vif *wnet_vif)
 {
-    /*judge sequence: first HT then VHT*/
+    
     if (wifi_mac_is_ht_enable(wnet_vif->vm_mainsta)
         && (wnet_vif->vm_mac_mode >= WIFINET_MODE_11AC)
         && (wnet_vif->vm_mac_mode <= WIFINET_MODE_11GNAC)) {
@@ -1146,4 +1025,4 @@ struct wifi_mac_actuator
 
 int remove_app_ie(unsigned int frame_type_index,struct wlan_net_vif *wnet_vif);
 extern const unsigned char BROADCAST_ADDRESS[WIFINET_ADDR_LEN];
-#endif /* _NET80211_IEEE80211_VAR_H_ */
+#endif 

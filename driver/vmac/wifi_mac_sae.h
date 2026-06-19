@@ -1,23 +1,10 @@
-/*
- ****************************************************************************************
- *
- * Copyright (C) Amlogic 2010-2014
- *
- * Project: 11N 80211 mac  layer Software
- *
- * Description:
- *     wifi_mac layer interface function/interface use by driver layer
- *
- *
- ****************************************************************************************
- */
 
 #ifndef _WIFI_MAC_SAE_H_
 #define _WIFI_MAC_SAE_H_
 
 #include "wifi_mac_if.h"
 
-#define MAXPMKID 16/* max # PMKID cache entries NDIS */
+#define MAXPMKID 16
 #define WL_NUM_PMKIDS_MAX MAXPMKID
 
 typedef struct _aml_pmkid_cache {
@@ -43,5 +30,4 @@ void aml_del_pmksa_by_index(struct wlan_net_vif *wnet_vif, const unsigned char *
 int aml_cfg80211_flush_pmksa(struct wiphy *wiphy, struct net_device *dev);
 void wifi_mac_trigger_sae(struct wifi_station *sta);
 
-#endif//_WIFI_MAC_SAE_H_
-
+#endif

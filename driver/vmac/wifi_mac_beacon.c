@@ -1,16 +1,3 @@
-/*
- ****************************************************************************************
- *
- * Copyright (C) Amlogic 2010-2014
- *
- * Project: 11N 80211 mac  layer Software
- *
- * Description:
- *     wifi_mac beacon alloc/initial/update module
- *
- *
- ****************************************************************************************
- */
 
 #include "wifi_mac_com.h"
 
@@ -76,7 +63,6 @@ wifi_mac_beacon_init(struct wifi_station *sta, struct wifi_mac_beacon_offsets *b
     bo->bo_rates = frm;
     frm = wifi_mac_add_rates(frm, rs);
 
-    /*VHT mode ,non-support DSSS Parameter Set*/
     *frm++ = WIFINET_ELEMID_DSPARMS;
     *frm++ = 1;
     bo->bo_channel = frm;
@@ -155,11 +141,7 @@ wifi_mac_beacon_init(struct wifi_station *sta, struct wifi_mac_beacon_offsets *b
 
         bo->bo_vhtop = frm;
         frm = wifi_mac_add_vht_opt(frm, sta, WIFINET_FC0_SUBTYPE_BEACON);
-        //frm = wifi_mac_add_vht_txpw(frm, sta);
-        //frm = wifi_mac_add_vht_ch_sw_wrp(frm, sta);
-        //frm = wifi_mac_add_vht_ext_bss_ld(frm, sta);
-        //frm = wifi_mac_add_vht_quiet_ch(frm, sta);
-        //frm = wifi_mac_add_vht_op_md_ntf(frm, sta);
+        
     }
 
     for (index = 0; index < VENDOR_IE_MAX; index++) {
@@ -196,8 +178,8 @@ struct sk_buff *_wifi_mac_beacon_alloc(struct wifi_station *sta, struct wifi_mac
     htinfolen += sizeof(struct wifi_mac_ie_htinfo);
     pktlen = 8 + sizeof(unsigned short) + sizeof(unsigned short)
         + 2 + sta->sta_esslen + 2 + WIFINET_RATE_SIZE
-        /*VHT mode ,non-support DSSS Parameter Set*/
-        + 2 + 1 //DSSS Parameter Set Len = 3Byte
+        
+        + 2 + 1 
         + 2 + 4 + wnet_vif->vm_tim_len
         + wifimac->wm_countryinfo.country_len + 2 + 3 + 5 + 2 + 1
         + 2 + (WIFINET_RATE_MAXSIZE - WIFINET_RATE_SIZE)
@@ -214,7 +196,6 @@ struct sk_buff *_wifi_mac_beacon_alloc(struct wifi_station *sta, struct wifi_mac
         return NULL;
     }
     frm = os_skb_put(skb, pktlen);
-
 
     frm = wifi_mac_beacon_init(sta, bo, frm);
     os_skb_trim(skb, frm - os_skb_data(skb));
@@ -246,46 +227,6 @@ int _wifi_mac_beacon_update(struct wifi_station *sta,
         pr_crit("%s %d, bug to fix\n",__func__,__LINE__);
         return len_changed;
     }
-
-#ifdef CONFIG_P2P
-    if (wnet_vif->vm_p2p->go_hidden_mode != (wnet_vif->vm_flags & WIFINET_F_HIDESSID)>>WIFINET_F_HIDESSID_TO_BIT0_OFST) {
-        unsigned char *frm;
-
-        DPRINTF(AML_DEBUG_BEACON, "%s(%d), GO_HIDDEN_MODE[%d], HIDESSID[%d], CHANNEL_SWITCH[%d]\n",
-                    __func__, __LINE__, wnet_vif->vm_p2p->go_hidden_mode,
-                    (wnet_vif->vm_flags & WIFINET_F_HIDESSID) >> 27,(wifimac->wm_flags & WIFINET_F_CHANSWITCH) >> 31);
-
-        if (!((wifimac->wm_flags & WIFINET_F_DOTH) && (wifimac->wm_flags & WIFINET_F_CHANSWITCH))) {
-            if (wnet_vif->vm_p2p->go_hidden_mode) {
-                wnet_vif->vm_flags |= WIFINET_F_HIDESSID;
-            } else {
-                wnet_vif->vm_flags &= ~WIFINET_F_HIDESSID;
-            }
-        }
-
-        WIFINET_BEACON_LOCK(wifimac);
-        os_skb_pull(skb, sizeof(struct wifi_frame));
-        os_skb_trim(skb, 0);
-        frm = os_skb_data(skb);
-        if (frm == NULL)
-        {
-            WIFINET_BEACON_UNLOCK(wifimac);
-            ERROR_DEBUG_OUT("<running> ERROR\n");
-            return 0;
-        }
-        os_skb_put(skb, wifi_mac_beacon_init(sta, bo, frm) - frm);
-        os_skb_push(skb, sizeof(struct wifi_frame));
-        WIFINET_BEACON_UNLOCK(wifimac);
-
-        if ((wifimac->wm_flags & WIFINET_F_DOTH) && (wifimac->wm_flags & WIFINET_F_CHANSWITCH)) {
-            if (wnet_vif->vm_p2p->go_hidden_mode) {
-                wnet_vif->vm_flags |= WIFINET_F_HIDESSID;
-            } else {
-                wnet_vif->vm_flags &= ~WIFINET_F_HIDESSID;
-            }
-        }
-    }
-#endif
 
     if ((wifimac->wm_flags & WIFINET_F_DOTH) && (wnet_vif->vm_flags & WIFINET_F_CHANSWITCH) &&
         (wnet_vif->vm_chanchange_count == wifimac->wm_doth_tbtt))
@@ -324,21 +265,20 @@ int _wifi_mac_beacon_update(struct wifi_station *sta,
 
             if (wnet_vif->vm_curchan
                  && !memcmp(switch_chan, wnet_vif->vm_curchan, sizeof(struct wifi_channel))) {
-                concurrent_set_channel = 0;//no need set channel again due to bw
+                concurrent_set_channel = 0;
                 memset(&(wnet_vif->csa_target.switch_chan), 0, sizeof(struct wifi_channel));
             }
         } else {
-            /*no other vmac running, no need set concurrent channel*/
+            
             concurrent_set_channel = 0;
         }
 
-        if (concurrent_set_channel) { /*need think if system want to change channel*/
+        if (concurrent_set_channel) { 
             struct wifi_station *sta_entry = NULL, *next = NULL;
             struct wifi_station_tbl *nt = &wnet_vif->vm_sta_tbl;
             int update_band_to_2g = 0;
             int update_band_to_5g = 0;
 
-            /*sta connect to 5G ap, softap need update channel/band/mac_mode as sta*/
             if (switch_chan) {
                 if (wnet_vif->vm_curchan) {
                     if ((wnet_vif->vm_curchan->chan_pri_num >= 36)
@@ -366,13 +306,8 @@ int _wifi_mac_beacon_update(struct wifi_station *sta,
                 }
 
                 wifi_mac_set_wnet_vif_channel(wnet_vif, switch_chan->chan_pri_num, switch_chan->chan_bw, wifi_mac_Mhz2ieee(switch_chan->chan_cfreq1, 0), channel_switch_flag);
-#ifdef CONFIG_CONCURRENT_MODE
-                pr_debug("%s(%d) set ap chan %d, mac mode %d, band %d slot %d\n",__func__,__LINE__,
-                      wnet_vif->vm_curchan->chan_pri_num, wnet_vif->vm_mac_mode, wnet_vif->vm_bandwidth, wifimac->wm_vsdb_slot);
-#else
                 pr_debug("%s(%d) set ap chan %d, mac mode %d, band %d\n",__func__,__LINE__,
                       wnet_vif->vm_curchan->chan_pri_num, wnet_vif->vm_mac_mode, wnet_vif->vm_bandwidth);
-#endif
 
                 VLSI_FOR_EACH_ENTRY_SAFE(sta_entry, next, &nt->nt_nsta, sta_list) {
                     if (sta_entry->sta_associd != 0) {
@@ -387,33 +322,6 @@ int _wifi_mac_beacon_update(struct wifi_station *sta,
                     }
                 }
 
-#ifdef CONFIG_CONCURRENT_MODE
-                if (wifimac->wm_vsdb_slot != CONCURRENT_SLOT_NONE) {
-                    wifi_mac_set_vsdb_task(wifimac, wnet_vif, DISABLE);
-                    wifimac->wm_vsdb_slot = CONCURRENT_SLOT_NONE;
-                    wifimac->vsdb_mode_set_noa_enable = 0;
-
-                    if (wifimac->wm_vsdb_slot == CONCURRENT_SLOT_P2P) {
-                        /*sta need notify ap*/
-                        wifimac->wm_vsdb_flags = CONCURRENT_SWITCH_TO_STA_CHANNEL;
-                    } else {
-                        wifimac->wm_vsdb_flags = 0;
-                        wifimac->wm_vsdb_slot = CONCURRENT_SLOT_NONE;
-                    }
-
-                    if (wnet_vif->vm_wdev->iftype == NL80211_IFTYPE_P2P_GO)
-                    {
-                        if (wnet_vif->vm_p2p->p2p_flag & P2P_OPPPS_START_FLAG_HI)
-                        {
-                            vm_p2p_go_cancel_opps(wnet_vif->vm_p2p);
-                        }
-                        if (wnet_vif->vm_p2p->p2p_flag & P2P_NOA_START_FLAG_HI)
-                        {
-                            vm_p2p_go_cancel_noa(wnet_vif->vm_p2p);
-                        }
-                    }
-                }
-#endif
                 wnet_vif->csa_target.start = 0;
                 wifi_mac_add_work_task(wifimac, vm_cfg80211_chan_switch_notify_task, NULL, (SYS_TYPE)wifimac, (SYS_TYPE)wnet_vif, 0, (SYS_TYPE)&(wnet_vif->csa_target.switch_chan), 0);
             }
@@ -638,12 +546,6 @@ tim_done:
                 wnet_vif->vm_mqueue_flag_send = 0;
                 wifimac->drv_priv->drv_ops.drv_txq_backup_send(drv_priv, txlist);
 
-#ifdef CONFIG_P2P
-                if (txlist->txlist_backup_qcnt && P2P_NoA_START_FLAG(wnet_vif->vm_p2p->HiP2pNoaCountNow))
-                {
-                    wnet_vif->vm_mqueue_flag_send |= MCAST_SEND_FLAG_NOA_END_RETRY;
-                }
-#endif
             }
 
             WIFINET_BEACON_LOCK(wifimac);
@@ -766,16 +668,6 @@ tim_done:
         wnet_vif->vm_flags_ext &= ~WIFINET_FEXT_BR_UPDATE;
     }
     WIFINET_BEACON_UNLOCK(wifimac);
-#ifdef  CONFIG_P2P
-    if (wnet_vif->app_ie[WIFINET_APPIE_FRAME_BEACON].length
-        && (wnet_vif->vm_p2p->p2p_enable == 1)
-        && (wnet_vif->vm_p2p->p2p_flag & P2P_NOA_START_FLAG_HI))
-    {
-        pr_debug("%s(%d) noa_len %d\n",__func__,__LINE__,
-            wnet_vif->app_ie[WIFINET_APPIE_FRAME_BEACON].length);
-        vm_p2p_update_noa_count_start(wnet_vif->vm_p2p);
-    }
-#endif
     WIFINET_BEACON_LOCK(wifimac);
     if (wnet_vif->vm_flags_ext & WIFINET_FEXT_APPIE_UPDATE)
     {
@@ -820,24 +712,13 @@ int wifi_mac_beacon_alloc(void * ieee, int wnet_vif_id)
     int len;
 
     wnet_vif = wifi_mac_get_wnet_vif_by_vid(wifimac, wnet_vif_id);
-    /* N-C1 fix: guard against not-found VIF */
+    
     if (wnet_vif == NULL) {
-        /* v16b: was pr_info; this path is hit when a stale work-task
-         * fires after the vif was destroyed and is normal during teardown
-         * — should not flood production dmesg. Demote to pr_warn (still
-         * visible at default loglevel because it indicates a genuine
-         * use-after-free guard, just rate-limited via DPRINTF). */
+        
         DPRINTF(AML_DEBUG_WARNING, "bcn_alloc: vif lookup failed vid=%d\n", wnet_vif_id);
         return -EINVAL;
     }
 
-    /* v15f FIX: original code took WIFINET_BEACONBUF_LOCK and then,
-     * when vm_beaconbuf was non-NULL, called wifi_mac_beacon_free()
-     * which re-acquires the same non-recursive mutex -> hard deadlock.
-     * Inline the free path here while holding the lock so we never
-     * recurse, and continue with allocation in the same critical
-     * section.
-     */
     WIFINET_BEACONBUF_LOCK(wifimac);
 
     skbbuf = wnet_vif->vm_beaconbuf;
@@ -849,7 +730,7 @@ int wifi_mac_beacon_alloc(void * ieee, int wnet_vif_id)
     }
     sta = wnet_vif->vm_mainsta;
     if (sta == NULL) {
-        /* v16b: same logic as above — normal during AP teardown race. */
+        
         DPRINTF(AML_DEBUG_WARNING, "bcn_alloc: mainsta NULL vid=%d\n", wnet_vif_id);
         WIFINET_BEACONBUF_UNLOCK(wifimac);
         return -EINVAL;
@@ -857,9 +738,7 @@ int wifi_mac_beacon_alloc(void * ieee, int wnet_vif_id)
 
     skbbuf = _wifi_mac_beacon_alloc(sta, &wnet_vif->vm_beaconbuf_offset);
     if (skbbuf == NULL) {
-        /* v16b: this one stays at pr_warn level via DPRINTF because
-         * it is a true ENOMEM and should be surfaced — but it
-         * shouldn't be production-info-level chatty. */
+        
         DPRINTF(AML_DEBUG_WARNING,
                 "bcn_alloc: _wifi_mac_beacon_alloc returned NULL vid=%d\n",
                 wnet_vif_id);
@@ -870,9 +749,6 @@ int wifi_mac_beacon_alloc(void * ieee, int wnet_vif_id)
     wnet_vif->vm_beaconbuf = skbbuf;
     len = os_skb_get_pktlen(skbbuf);
 
-    /* v16b: was pr_info, called every TIM/IE update which in AP mode
-     * can be many times per second per associated STA. Demoted to
-     * pr_debug — bring back via dyndebug for diagnostics. */
     pr_debug("bcn_alloc: PutBeaconBuf vid=%d len=%d rate=0x%x bw=%d intval=%d\n",
         wnet_vif_id, len, bcn_rate, wnet_vif->vm_bandwidth, wnet_vif->vm_bcn_intval);
 
@@ -880,11 +756,10 @@ int wifi_mac_beacon_alloc(void * ieee, int wnet_vif_id)
     wifimac->drv_priv->drv_ops.Phy_SetBeaconStart(wifimac->drv_priv,wnet_vif_id,wnet_vif->vm_bcn_intval,0,wnet_vif->vm_opmode);
 
     WIFINET_BEACONBUF_UNLOCK(wifimac);
-    /* v16b: was pr_info — see comment above. */
+    
     pr_debug("bcn_alloc: PutBeaconBuf done vid=%d\n", wnet_vif_id);
     return 0;
 }
-
 
 void wifi_mac_beacon_alloc_ex(SYS_TYPE param1,
                             SYS_TYPE param2,SYS_TYPE param3,
@@ -930,7 +805,7 @@ void wifi_mac_beacon_free(void * ieee, int wnet_vif_id)
     struct wlan_net_vif *wnet_vif = NULL;
 
     wnet_vif = wifi_mac_get_wnet_vif_by_vid(wifimac, wnet_vif_id);
-    /* N-C1 fix: guard against not-found VIF */
+    
     if (wnet_vif == NULL) {
         return;
     }
@@ -963,7 +838,6 @@ void wifi_mac_beacon_sync(void * ieee, int wnet_vif_id)
     wifi_mac_beacon_config(ieee, wnet_vif_id);
 }
 
-
 int wifi_mac_update_beacon(void * ieee, int wnet_vif_id,
                       struct sk_buff * skbbuf, int mcast)
 {
@@ -978,7 +852,7 @@ int wifi_mac_update_beacon(void * ieee, int wnet_vif_id,
     error = _wifi_mac_beacon_update(wnet_vif->vm_mainsta, &wnet_vif->vm_beaconbuf_offset, skbbuf, mcast);
     if (error==2)
     {
-        /* FIXME: Remove, Beacon lock in drv_main.c bcn_tx_ok irq */
+        
         WIFINET_BEACONBUF_UNLOCK(wifimac);
         pr_debug("<running> %s %d  beacon_realloc\n",__func__,__LINE__);
         wifi_mac_beacon_alloc(ieee,  wnet_vif_id);
@@ -998,16 +872,12 @@ void wifi_mac_process_beacon_miss_ex(SYS_TYPE arg)
         READ_ONCE(wnet_vif->vm_state) != WIFINET_S_CONNECTED)
         return;
 
-    /*
-    * Actually, we will lost at least 25 beacons here,
-    * because 'vm_swbmiss' timeout is 2500ms.
-    */
     if (atomic_inc_return(&wnet_vif->vm_bmiss_count) < WIFINET_BMISS_COUNT_MAX) {
-        /* we should wakeup when beacon miss happened */
+        
         if (wifi_mac_pwrsave_is_wnet_vif_sleeping(wnet_vif) == 0) {
             wifi_mac_pwrsave_wakeup(wnet_vif, WKUP_FROM_BCN_MISS);
         }
-        /*if not in roaming mode, triger roaming */
+        
         if ((wifimac->wm_roaming == WIFINET_ROAMING_BASIC) && (wnet_vif->vm_chan_roaming_scan_flag != 1)
              && (atomic_read(&wnet_vif->vm_bmiss_count) >= 2)) {
             pr_warn("Miss beacon trigger roaming\n");
@@ -1016,10 +886,6 @@ void wifi_mac_process_beacon_miss_ex(SYS_TYPE arg)
         return;
     }
 
-    /*
-    * when 2 beacons lost: 1) sta is in roaming, then do asso
-    * otherwise 2) sta lost ap totally then do scan again
-    */
     atomic_set(&wnet_vif->vm_bmiss_count, 0);
     if (wifimac->wm_roaming == WIFINET_ROAMING_FAST) {
         DPRINTF(AML_DEBUG_WARNING,"roaming bcn lost...\n");
@@ -1069,7 +935,7 @@ void wifi_mac_set_beacon_miss(SYS_TYPE param1,
     unsigned char enable = (unsigned char)param3;
     int period = (int)param5;
 
-    if (enable == 1 && period < 100/*ms*/)
+    if (enable == 1 && period < 100)
     {
         WIFINET_DPRINTF(AML_DEBUG_WARNING, "period: %d, error\n", period);
         return;
@@ -1118,7 +984,7 @@ void wifi_mac_beacon_update_csaie(struct wifi_station *sta,
     if (switch_chan->chan_bw >= WIFINET_BWC_WIDTH40) {
         int chswwrp_len = 0;
         if (switch_chan->chan_bw == WIFINET_BWC_WIDTH80) {
-            /*add extend channel switch ie*/
+            
             memmove(bo->bo_extchanswitch + WIFINET_EXTCHANSWITCHANN_BYTES,
             bo->bo_extchanswitch, bo->bo_extchanswitch_trailerlen);
             wifi_mac_add_extended_chanswitch(bo->bo_extchanswitch,sta);
@@ -1134,7 +1000,6 @@ void wifi_mac_beacon_update_csaie(struct wifi_station *sta,
             os_skb_put(skb, WIFINET_EXTCHANSWITCHANN_BYTES);
         }
 
-        /*add CHAN_SWITCH_WRAP ie*/
         chswwrp_len += (2 + WIFINET_WIDEBANDCHANSW_BYTES);
         memmove(bo->bo_ch_sw_wrp + chswwrp_len,
         bo->bo_ch_sw_wrp, bo->bo_chswwrp_trailerlen);
@@ -1165,9 +1030,4 @@ void wifi_mac_set_vsdb_task(struct wifi_mac *wifimac, struct wlan_net_vif *wnet_
         return;
     }
 
-#ifdef CONFIG_CONCURRENT_MODE
-    wifimac->wm_vsdb_sate = state;
-    AML_OUTPUT("vid:%d, enable:%d\n", wnet_vif->wnet_vif_id, state);
-    wifi_mac_add_work_task(wifimac, wifi_mac_set_vsdb, NULL,(SYS_TYPE)wifimac, 0, state, (SYS_TYPE)wnet_vif, 0);
-#endif
 }

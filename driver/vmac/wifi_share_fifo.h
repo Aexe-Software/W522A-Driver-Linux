@@ -1,15 +1,4 @@
-/*copyright (C) amlogic.com 2002-2006
- *
- * Project: amlogic Software
- *
- * Description:
- *      General shared FIFO management
- *
- * Revision History:
- * $Source: cosharedfifo.c,v
- *
- ****************************************************************************************
- */
+
 #ifndef CO_SHARED_FIFO_H
 #define CO_SHARED_FIFO_H
 
@@ -19,7 +8,6 @@
 
 #define CO_STATUS_GROUP_COMMON  (0 << 8)
 
-/* COMMON STATUS CODE  */
 #define CO_STATUS_OK  ((unsigned short)(CO_STATUS_GROUP_COMMON + 0))
 #define CO_FAIL  ((unsigned short)(CO_STATUS_GROUP_COMMON + 1))
 #define CO_BAD_PARAM  ((unsigned short)(CO_STATUS_GROUP_COMMON + 4))
@@ -29,53 +17,34 @@
 #define AL_BEGIN_CRITICAL_PATH  COMMON_LOCK()
 #define  AL_END_CRITICAL_PATH  COMMON_UNLOCK()
 
-/*
- ****************************************************************************************
- */
-/* ID of the producer BlockID (the one which allocate and FREE) */
 #define CO_SF_PROD_ID        0
 #define CO_SF_BLOCK_DEF_NBR  2
-
-/*
- * TYPES
- ****************************************************************************************
- */
 
 #ifndef __INLINE
 #endif
 
-/* ERROR GROUP
-*/
 #ifndef CO_STATUS_GROUP_COMMON
-//#define CO_STATUS_GROUP_COMMON                     0
+
 #endif
 
-
-/* Indexes for one BlockID */
 struct _CO_SF_BLOCK_IDX
 {
-    unsigned int Flag;  /* Indicate if indexes are shared between both processors */
-    unsigned int In;    /* Index of the next buffer to put  */
-    unsigned int Out;   /* Index of the next buffer to get  */
+    unsigned int Flag;  
+    unsigned int In;    
+    unsigned int Out;   
 } ;
 
-
-//elt = element
 struct _CO_SHARED_FIFO
 {
-    SYS_TYPE EltBasePhy; /* Physical address of the start of allocated memory  */
-    void *EltBasePtr; /* Pointer to the start of allocated memory */
-    unsigned int EltNbr; /* Nbr of elt which can takes place in allocated mem  */
-    unsigned int EltSize; /* Size of each element */
-    unsigned int BlockNbr; /* Number of Block sharing the FIFO */
-    // struct semaphore mutex;
-    struct _CO_SF_BLOCK_IDX IdxTab[CO_SF_BLOCK_DEF_NBR+2]; /* Indexes  */
+    SYS_TYPE EltBasePhy; 
+    void *EltBasePtr; 
+    unsigned int EltNbr; 
+    unsigned int EltSize; 
+    unsigned int BlockNbr; 
+    
+    struct _CO_SF_BLOCK_IDX IdxTab[CO_SF_BLOCK_DEF_NBR+2]; 
 } ;
 
-/*
- * FUNCTION PROTOTYPES
- *****************************************************************************************
- */
 void CO_SharedFifoInit(struct _CO_SHARED_FIFO* SharedFifoPtr, SYS_TYPE  EltBasePhy, void *EltBasePtr,
     unsigned int EltNbr, unsigned int EltSize, unsigned char BlockNbr);
 
@@ -107,54 +76,18 @@ void CO_SharedFifo_Dump(struct _CO_SHARED_FIFO* const  SharedFifoPtr, const unsi
 void qfifo_mng_info_dump(struct _CO_SHARED_FIFO* const  SharedFifoPtr);
 unsigned char CO_SharedFifoEmpty(struct _CO_SHARED_FIFO *SharedFifoPtr, unsigned char BlockID);
 
-/*
- *****************************************************************************************
- * function    : CO_SharedFifoGetInBlockIdxPtr
- *
- * parameters:
- *    struct _CO_SHARED_FIFO *SharedFifoPtr   Pointer to the shared FIFO to deal with
- *    unsigned char   BlockID   Block ID
- *
- * returns:
- *    struct _CO_SF_BLOCK_IDX * Dedicated pointer to the IN index
- *
- *
- * description:
- *    Return the pointer to the dedicated IN index. If the index is shared, get the
- *  mirrored index, else, get the local one.
- *
- *****************************************************************************************
- */
 static __INLINE struct _CO_SF_BLOCK_IDX *CO_SharedFifoGetInBlockIdxPtr(struct _CO_SHARED_FIFO *const SharedFifoPtr,
     const unsigned char BlockID)
 {
-    /* Embedded processor */
+    
     return &(SharedFifoPtr->IdxTab[BlockID]);
 }
 
-/*
- *****************************************************************************************
- * function   : CO_SharedFifoPick
- *
- * parameters:
- *    struct _CO_SHARED_FIFO *SharedFifoPtr  Pointer to the shared FIFO to deal with
- *    unsigned char  BlockID  Identifier of the block
- *
- * returns:
- *     void
- *
- * description:
- *    Pick 1 elements from the queue and return a pointer on the first element.
- *    The returned element is not removed from the cosharedfifo (use CO_SharedFifoGet()
- *    to do so).
- *
- *****************************************************************************************
- */
 static __INLINE unsigned char * CO_SharedFifoPick
     (struct _CO_SHARED_FIFO *const SharedFifoPtr, const unsigned char BlockID)
 {
-    // ASSERT(CO_SharedFifoNbElt(SharedFifoPtr, BlockID) > 0) ;
+    
     return (unsigned char*)((unsigned long)(SharedFifoPtr->EltBasePtr)
                  + (unsigned int)(SharedFifoPtr->IdxTab[BlockID].Out * SharedFifoPtr->EltSize));
 }
-#endif //CO_SHARED_FIFO_H
+#endif 

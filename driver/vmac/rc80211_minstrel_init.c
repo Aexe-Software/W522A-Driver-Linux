@@ -1,10 +1,3 @@
-#ifdef AUTO_RATE_SIM
-#include "type.h"
-#include "opt_sim2.h"
-#include "mac80211_temp.h"
-#include "cfg80211.h"
-struct sk_buff g_skbuffer[MAX_SKB_NUM];
-#else
 #include <linux/netdevice.h>
 #include <linux/types.h>
 #include <linux/skbuff.h>
@@ -14,7 +7,6 @@ struct sk_buff g_skbuffer[MAX_SKB_NUM];
 #include <linux/slab.h>
 #include <net/mac80211.h>
 #include "wifi_mac_com.h"
-#endif
 
 #include "osdep.h"
 #include "rc80211_minstrel.h"
@@ -33,7 +25,7 @@ static struct ieee80211_supported_band aml_band_24ghz = {
 	.band = (enum nl80211_band)IEEE80211_BAND_2GHZ,
 	.n_bitrates = AML_G_RATES_NUM,
 	.bitrates = aml_g_rates,
-	.ht_cap.cap = 0,/*Need to be initialized later*/
+	.ht_cap.cap = 0,
 	.ht_cap.ht_supported = true,
 };
 
@@ -41,34 +33,12 @@ static struct ieee80211_supported_band aml_band_5ghz = {
 	.n_channels = AML_5G_CHANNELS_NUM,
 	.channels = aml_5ghz_channels,
 	.band = (enum nl80211_band)IEEE80211_BAND_5GHZ,
-	.n_bitrates = AML_A_RATES_NUM,/*Eliminate 11b rate*/
-	.bitrates = aml_a_rates,/*Eliminate 11b rate*/
-	.ht_cap.cap = 0,  /*Need to be initialized later*/
+	.n_bitrates = AML_A_RATES_NUM,
+	.bitrates = aml_a_rates,
+	.ht_cap.cap = 0,  
 	.ht_cap.ht_supported = true,
 };
 
-/* v15r: pick the right max_4ms_framelen[] row for a per-MPDU rate.
- *
- * The vendor BSP hard-coded `max_4ms_framelen[0][mcs]` everywhere it
- * needs an A-MPDU byte budget for a particular MCS. Row 0 is
- * MCS_HT20 - the smallest budget in the table (~28952 B at MCS9).
- *
- * Net effect: a station running VHT80+MCS9 (267150 B / 4 ms) had its
- * TX A-MPDU capped at the HT20 value, ~10x smaller than the radio
- * could actually carry. The matching aggregation pass in
- * drv_aggr_tid_pickup() picks `MIN(maxampdulen[0..2])` as its byte
- * budget so the cap directly throttled outgoing aggregation length.
- *
- * Pick the correct row from {bw, short_gi, ht/vht}. The table only
- * populates rows up to MCS_VHT80 (the MCS_VHT80_SGI / VHT160 rows are
- * zero-initialised); when we resolve to a zero row the aggr path
- * already falls back to DEFAULT_TXAMPDU_LEN_MAX, which is still
- * higher than the old MCS_HT20 value.
- */
-/* v15s: was `static inline` in v15r - now an extern symbol declared
- * in wifi_rate_ctrl.h so wifi_drv_xmit.c can reach it too (the
- * weak-signal rate-fallback path in drv_tx_lower_rate_when_signal_weak
- * was still using max_4ms_framelen[0][...] in v15r). */
 unsigned int aml_max_4ms_framelen(unsigned char vendor_rate_code,
                                   unsigned char bw,
                                   unsigned char short_gi)
@@ -108,9 +78,7 @@ static struct ieee80211_sta_ht_cap aml_get_ht_cap(struct aml_rate_adaptation_dev
 
 	ht_cap.ht_supported = 1;
 	ht_cap.ampdu_factor = IEEE80211_HT_MAX_AMPDU_64K;
-	/* v16a: matched to the band-init density we advertise via cfg80211
-	 * (4 us). See vm_cfg80211_init_ht_capab() in wifi_cfg80211.c for
-	 * the rationale. */
+	
 	ht_cap.ampdu_density = IEEE80211_HT_MPDU_DENSITY_4;
 	ht_cap.cap |= IEEE80211_HT_CAP_SUP_WIDTH_20_40;
 	ht_cap.cap |= IEEE80211_HT_CAP_DSSSCCK40;
@@ -152,7 +120,6 @@ static struct ieee80211_sta_ht_cap aml_get_ht_cap(struct aml_rate_adaptation_dev
 	if (aml_minstrel_dev->ht_cap_info & WMI_HT_CAP_L_SIG_TXOP_PROT)
 		ht_cap.cap |= IEEE80211_HT_CAP_LSIG_TXOP_PROT;
 
-	/* max AMSDU is implicitly taken from vht_cap_info */
 	if (aml_minstrel_dev->vht_cap_info & WMI_VHT_CAP_MAX_MPDU_LEN_MASK)
 		ht_cap.cap |= IEEE80211_HT_CAP_MAX_AMSDU;
 
@@ -165,14 +132,12 @@ static struct ieee80211_sta_ht_cap aml_get_ht_cap(struct aml_rate_adaptation_dev
 	return ht_cap;
 }
 
-
 static struct ieee80211_sta_vht_cap aml_create_vht_cap(struct aml_rate_adaptation_dev *aml_minstrel_dev, int rate_mode)
 {
     struct ieee80211_sta_vht_cap vht_cap = {0};
     u16 mcs_map;
     int i;
 
-    /*0: legacy rate, 1:ht rate, 2:vht rate*/
     if (rate_mode == 2) {
         vht_cap.vht_supported = 1;
 
@@ -189,8 +154,8 @@ static struct ieee80211_sta_vht_cap aml_create_vht_cap(struct aml_rate_adaptatio
             mcs_map |= IEEE80211_VHT_MCS_NOT_SUPPORTED << (i * 2);
     }
 
-    vht_cap.vht_mcs.rx_mcs_map = /*cpu_to_le16*/(mcs_map);
-    vht_cap.vht_mcs.tx_mcs_map = /*cpu_to_le16*/(mcs_map);
+    vht_cap.vht_mcs.rx_mcs_map = (mcs_map);
+    vht_cap.vht_mcs.tx_mcs_map = (mcs_map);
 
     return vht_cap;
 }
@@ -200,12 +165,7 @@ static struct ieee80211_hw g_hw;
 static struct wiphy g_wiphy;
 
 static struct ieee80211_sta_aml g_sta;
-#ifdef AUTO_RATE_SIM
-    static struct ieee80211_sta_rates g_rates[4];
-    int g_rate_mode = 0;	/*0: legacy rate, 1:ht rate, 2:vht rate*/
-#endif
 
- /* allocate memory and init in alloc_sta*/
 struct minstrel_ht_sta_priv *g_minstrel_ht_sta_priv = NULL;
 struct minstrel_sta_info *g_minstrel_sta_info = NULL;
 struct minstrel_priv *g_minstel_pri = NULL;
@@ -244,51 +204,51 @@ static unsigned int support_legacy_rate_init( struct wifi_station *sta ,  struct
 
     for( i = 0; i<sta->sta_rates.dot11_rate_num; i++){
         switch(sta->sta_rates.dot11_rate[i]&0x7f){
-            case 0x02: /*1M*/
+            case 0x02: 
                 bit_val |= 0x1;
                 break;
 
-            case 0x04:  /*2M*/
+            case 0x04:  
                   bit_val |= 0x2;
                 break;
 
-            case 0x0b:   /*5.5M*/
+            case 0x0b:   
                 bit_val |= 0x4;
                 break;
 
-            case 0x16: /*11M*/
+            case 0x16: 
                  bit_val |= 0x8;
                 break;
 
-            case 0x0c:  /*6M*/
+            case 0x0c:  
                  bit_val |= 0x10;
                 break;
 
-            case 0x12:  /*9M*/
+            case 0x12:  
                   bit_val |= 0x20;
                 break;
 
-            case 0x18: /*12M*/
+            case 0x18: 
                 bit_val |= 0x40;
                 break;
 
-            case 0x24: /*18M*/
+            case 0x24: 
                 bit_val |= 0x80;
                 break;
 
-            case 0x30:   /*24M*/
+            case 0x30:   
                  bit_val |= 0x100;
                 break;
 
-            case 0x48:   /*36M*/
+            case 0x48:   
                 bit_val |= 0x200;
                 break;
 
-            case 0x60:   /*48M*/
+            case 0x60:   
                 bit_val |= 0x400;
                 break;
 
-            case 0x6c:   /*54M*/
+            case 0x6c:   
                 bit_val |= 0x800;
                 break;
             default :
@@ -353,41 +313,8 @@ static void aml_rate_adaptation_dev_init(struct wifi_station *sta, int rate_mode
 static unsigned char get_fitable_bw(struct wifi_station *sta) {
     unsigned char bw;
 
-    /* v16m: Problem #3 — beacon-RSSI BW classification is meaningless in
-     * AP mode.
-     *
-     * get_fitable_bw() exists to pick a "fitable" rate group when WE are
-     * a STA: we look at the AP's beacon RSSI we've been receiving, and
-     * if the beacons are weak we narrow the rate group to BW_20 even if
-     * the channel is HT40/VHT80. That makes sense when the remote we're
-     * pinging IS the source of the beacons (the AP).
-     *
-     * In AP mode (vm_opmode == WIFINET_M_HOSTAP) the "sta" object is the
-     * REMOTE CLIENT that just associated. Clients don't emit beacons —
-     * APs do. So sta_avg_bcn_rssi for a HOSTAP "sta" is never updated
-     * from real packets; it stays at whatever alloc_sta_node() seeded
-     * (-60 dBm in v15x+) or whatever assoc-time scan returned (often
-     * worse than -85 dBm on a 1T1R 2.4 GHz radio).
-     *
-     * v15y added a -85 dBm escape valve, but with the -60 seed we hit
-     * the live threshold path which can still mis-classify because the
-     * default thresholds (narrow=-74, wide=-63) were tuned for STA-side
-     * beacon-RSSI dynamics. Real-world observation on Fn-Link K255B-SR
-     * (W155S1) is: sta_chbw=1 (HT40) but get_fitable_bw returns 0
-     * (HT20), so minstrel_init_start_stats() seeds the BW_20 group while
-     * actual TX runs at BW_40 — minstrel never finds its bearings and
-     * sticks at low MCS / tiny A-MPDU.
-     *
-     * v16m: in HOSTAP, trust sta_chbw outright. The actual link quality
-     * to a remote client is measured via sta_avg_rssi (RX RSSI from data
-     * frames) which IS valid for clients — but that's already used by
-     * get_fitable_mcs_rate(). Letting the BW classification use the
-     * negotiated channel BW means the right rate group is seeded; if
-     * the client really can't sustain HT40, minstrel will downshift on
-     * TX failures within the first A-MPDU. */
     if (sta->sta_wnet_vif && sta->sta_wnet_vif->vm_opmode == WIFINET_M_HOSTAP) {
-        /* v16o: confirmed working in v16n — promote noisy pr_info to a
-         * cheap AML_PRINT so dmesg isn't spammed every minstrel cycle. */
+        
         AML_PRINT(AML_DBG_MODULES_RATE_CTR,
             "rate-init AP: bypass bcn-rssi bw, using sta_chbw=%d directly "
             "(bcn_rssi=%d avg_rssi=%d snr=%d)\n",
@@ -396,22 +323,6 @@ static unsigned char get_fitable_bw(struct wifi_station *sta) {
         return sta->sta_chbw;
     }
 
-    /* v15y: Problem #2 fix — STA-mode stale-RSSI escape.
-     *
-     * The v15x alloc_sta_node() seed of sta_avg_bcn_rssi = -60 dBm is
-     * overwritten in wifi_mac_sta.c:408 with translate_to_dbm(SI_rssi)
-     * from the scan entry. If the scan happened to catch only a weak
-     * beacon (or the cached SI_rssi is stale), sta_avg_bcn_rssi can be
-     * -90 dBm or worse at minstrel-init time even when the link to the
-     * AP is actually fine. The thresh_narrow (-74) comparison below then
-     * picks BW_20 and minstrel_init_start_stats() seeds rate stats in
-     * the BW_20 MCS group. The real TX runs in BW_40 / BW_80 with an
-     * un-seeded group and gets wedged at MCS 0 — see
-     * w522a-v15x-analysis.md section 4.1.
-     *
-     * Defense: if sta_avg_bcn_rssi looks like a stale/sentinel value
-     * (worse than -85 dBm) we ignore it for BW classification and just
-     * trust the actual negotiated bandwidth sta->sta_chbw. */
     if (sta->sta_avg_bcn_rssi <= -85) {
         AML_PRINT(AML_DBG_MODULES_RATE_CTR,
             "rate-init: bcn_rssi=%d looks uninitialised, using sta_chbw=%d directly\n",
@@ -450,35 +361,10 @@ static unsigned char get_fitable_mcs_rate(struct wifi_station *sta, unsigned cha
         avg_rssi = sta->sta_avg_bcn_rssi;
 
     if((aml_wifi_get_platform_verid() == 1) || (aml_wifi_get_platform_verid() == 2)) {
-        /*this is for gva only*/
+        
         rssi_offset = 10;
     }
 
-    /* v15w → v15y: Problem #2 fix — stale-RSSI seed.
-     *
-     * alloc_sta_node() in wifi_mac_sta.c originally seeded
-     *   sta_avg_bcn_rssi = -100 dBm, sta_avg_snr = 25
-     * and aml_minstrel_init() is called via wifi_mac_new_assoc() before
-     * the first real beacon has been averaged in. With avg_rssi at -100
-     * every rssi_threshold[bw][N]+rssi_offset comparison below fails and
-     * the function returns MCS 0 — minstrel_init_start_stats() then
-     * seeds success/attempts only at MCS 0, mi->max_tp_rate becomes 0,
-     * and under low load the probe loop can't climb out.
-     *
-     * v15w returned MCS 4 only for avg_rssi <= -100. v15x bumped the
-     * alloc-time sentinel to -60 dBm. The user-side v15x test
-     * (w522a-v15x-analysis.md §4.1) showed both still failed because
-     * wifi_mac_sta.c:408 overwrites sta_avg_bcn_rssi with the scan-entry
-     * RSSI which can be -90 dBm if the scan only caught a weak beacon.
-     * That value is below thresh_narrow (-74) but above -100, so v15w's
-     * threshold didn't fire and v15x's seed got clobbered.
-     *
-     * v15y: relax the early-exit threshold to <= -85 dBm so anything that
-     * looks like "stale scan noise / sentinel" still gets MCS 4 — a
-     * realistic mid-link seed that minstrel can downshift from on real
-     * TX failures. -85 is below realistic post-association RSSI for any
-     * link that actually works (the AP would never have answered the
-     * assoc-req at that signal) and above true zero/sentinel values. */
     if (avg_rssi <= -85 || avg_rssi == 0) {
         AML_PRINT(AML_DBG_MODULES_RATE_CTR,
             "rate-init: stale avg_rssi=%d, seeding MCS4 @ bw=%d\n",
@@ -517,7 +403,6 @@ static unsigned char get_fitable_mcs_rate(struct wifi_station *sta, unsigned cha
         max_rate_rssi = 0;
     }
 
-    //max rate according snr
     if (sta->sta_avg_snr >= snr_threshold[bw][0] + snr_offset) {
         max_rate_snr = 9;
 
@@ -553,15 +438,16 @@ static unsigned char get_fitable_mcs_rate(struct wifi_station *sta, unsigned cha
     if (max_rate > max_rate_snr)
         max_rate = max_rate_snr;
 
+    if (max_rate > 6)
+        max_rate = 6;
+    else if (avg_rssi != 0 && avg_rssi >= -72 && max_rate < 6)
+        max_rate = 6;
+
     return max_rate;
 }
 
 void aml_minstrel_init(
-#ifdef AUTO_RATE_SIM
-    void
-#else
     void *p_sta
-#endif
 )
 {
     struct minstrel_rate_control_ops *p_rate_control_ops = NULL;
@@ -572,16 +458,9 @@ void aml_minstrel_init(
     struct minstrel_sta_info *p_minstrel_sta_info = NULL;
     unsigned int channel_band = IEEE80211_BAND_5GHZ;
     bool mcs_rate_support = true;
-    int rate_mode = 0;   /*0: legacy rate, 1:ht rate, 2:vht rate*/
+    int rate_mode = 0;   
     unsigned char fitable_bw;
 
-#ifdef AUTO_RATE_SIM
-    memset(&g_rates, 0, sizeof(g_rates));
-    rate_mode = g_rate_mode;
-    g_sta.smps_mode = IEEE80211_SMPS_OFF;
-    g_sta.rates = g_rates;
-    p_ieee_sta = &g_sta;
-#else
     p_ieee_sta = &(sta->ieee_sta);
     p_ieee_sta->smps_mode = IEEE80211_SMPS_OFF;
     p_ieee_sta->rates = &(sta->sta_ieee_rates);
@@ -603,9 +482,7 @@ void aml_minstrel_init(
     } else {
         channel_band = IEEE80211_BAND_5GHZ;
     }
-#endif
 
-    /*0: legacy rate, 1:ht rate, 2:vht rate*/
     if (rate_mode) {
         mcs_rate_support = true;
 
@@ -635,28 +512,17 @@ void aml_minstrel_init(
         p_rate_control_ops_ht->rate_init(g_minstel_pri, g_aml_rate_adaptation_dev.sband, p_ieee_sta, p_minstrel_ht_sta_priv);
         fitable_bw = get_fitable_bw(sta);
         init_mcs = get_fitable_mcs_rate(sta, fitable_bw);
-        /*
-         * v16s: MCS9 is valid for 1x1 VHT, but in HT/802.11n the index space
-         * is different: MCS0..7 are one spatial stream and MCS8..15 imply a
-         * second stream. W155S1 is 1x1, so seeding HT with 8/9 makes the first
-         * TX attempts unusable in 2.4 GHz HT20/HT40 and minstrel collapses.
-         */
+        
         if (rate_mode != 2 && init_mcs > 7)
             init_mcs = 7;
         if (channel_band == IEEE80211_BAND_2GHZ && init_mcs > 7)
             init_mcs = 7;
-        /*
-         * v17d: VHT80 AP on W155S1 associates correctly at MCS9 but the first
-         * heavy burst can avalanche into firmware TX failures and disconnects.
-         * Seed AP/VHT80 conservatively; minstrel can still climb after it has
-         * real TX feedback, but the link no longer starts on the cliff edge.
-         */
+        
         if (rate_mode == 2 && sta->sta_wnet_vif != NULL
             && sta->sta_wnet_vif->vm_opmode == WIFINET_M_HOSTAP
             && sta->sta_chbw >= WIFINET_BWC_WIDTH80 && init_mcs > 7)
             init_mcs = 7;
-        /* v15y: surface the actual seed in production dmesg so future
-         * "stuck at MCS 0" reports can be diagnosed without dynamic_debug. */
+        
         pr_info("aml_minstrel_init: band=%u rate_mode=%d sta_chbw=%d fitable_bw=%d init_mcs=%d "
                 "sta_avg_bcn_rssi=%d sta_avg_rssi=%d sta_avg_snr=%d\n",
                 channel_band, rate_mode, sta->sta_chbw, fitable_bw, init_mcs,
@@ -668,10 +534,6 @@ void aml_minstrel_init(
         p_rate_control_ops->rate_init(g_minstel_pri, g_aml_rate_adaptation_dev.sband, p_ieee_sta, p_minstrel_sta_info);
     }
 
-#ifdef AUTO_RATE_SIM
-    g_minstrel_ht_sta_priv = p_minstrel_ht_sta_priv;
-    g_minstrel_sta_info = p_minstrel_sta_info;
-#else
     sta->sta_minstrel_ht_priv = p_minstrel_ht_sta_priv;
     sta->sta_minstrel_info = p_minstrel_sta_info;
     sta->minstrel_init_flag = 1;
@@ -681,7 +543,6 @@ void aml_minstrel_init(
     } else {
         AML_OUTPUT("sta:%p, sta_minstrel_info:%p\n", sta, sta->sta_minstrel_info);
     }
-#endif
 }
 
 void aml_minstrel_deinit(void *p_sta)
@@ -714,7 +575,6 @@ static void rate_control_fill_sta_table(struct ieee80211_sta_aml *sta,
 
     ratetbl = (sta->rates);
 
-    /* Fill remaining rate slots with data from the sta rate table. */
     max_rates = MIN(max_rates, IEEE80211_TX_RATE_TABLE_SIZE);
     for (i = 0; i < max_rates; i++) {
         if ((i < ARRAY_SIZE(info->control.rates)) && (info->control.rates[i].idx >= 0) && info->control.rates[i].count) {
@@ -724,7 +584,7 @@ static void rate_control_fill_sta_table(struct ieee80211_sta_aml *sta,
         } else if (ratetbl) {
             rates[i].idx = ratetbl->rate[i].idx;
             rates[i].flags = ratetbl->rate[i].flags;
-            rates[i].count = 2;//ratetbl->rate[i].count;
+            rates[i].count = 2;
 
         } else {
             rates[i].idx = -1;
@@ -793,7 +653,7 @@ static int minstrel_rate_index_to_vendor_rate_code(int minstrel_rate_idx, struct
 
     } else {
         if (band == IEEE80211_BAND_5GHZ) {
-            /*because 5G band haven't 11b rate ,so need plus 4*/
+            
             return minstrel_rate_idx += 4;
 
         } else {
@@ -828,46 +688,44 @@ static unsigned char minstrel_latency_retry_limit(struct wifi_station *sta)
 static unsigned int protocol_rate_to_vendor_rate(unsigned int protocol_rate)
 {
 
-    //For 11b: (0x82 -0x80) * 500K =  1M
-    //For 11g:  0xc * 500k = 6M
     unsigned int ret = 0;
-    //DPRINTF(AML_DEBUG_RATE,"rate 0x%x %s(%d)\n", protocol_rate, __func__, __LINE__);
+    
     switch(protocol_rate)
     {
-        case  0x02:// 1M
+        case  0x02:
             ret = WIFI_11B_1M;
             break;
-        case   0x04:// 2M
+        case   0x04:
              ret = WIFI_11B_2M;
             break;
-        case   0x0b://5.5M
+        case   0x0b:
             ret = WIFI_11B_5M;
             break;
-        case   0x16://11M
+        case   0x16:
              ret = WIFI_11B_11M;
             break;
-        case   0x0c://6M
+        case   0x0c:
              ret = WIFI_11G_6M;
             break;
-        case   0x12://9M
+        case   0x12:
              ret = WIFI_11G_9M;
             break;
-        case   0x18://12M
+        case   0x18:
             ret = WIFI_11G_12M;
             break;
-        case   0x24: //18M
+        case   0x24: 
             ret = WIFI_11G_18M;
             break;
-        case    0x30: //24M
+        case    0x30: 
             ret = WIFI_11G_24M;
             break;
-        case   0x48:// 36M
+        case   0x48:
             ret = 9;
             break;
-        case    0x60:// 48M
+        case    0x60:
             ret = WIFI_11G_48M;
             break;
-        case    0x6c:// 54M
+        case    0x6c:
              ret = WIFI_11G_54M ;
             break;
         default:
@@ -880,13 +738,10 @@ static unsigned int protocol_rate_to_vendor_rate(unsigned int protocol_rate)
      return ret;
 }
 
-
 unsigned char minstrel_find_rate(
     struct aml_ratecontrol ratectrl[]
-#ifndef AUTO_RATE_SIM
 ,
    void *p_sta
-#endif
 )
 {
     struct ieee80211_tx_info tx_info;
@@ -900,12 +755,6 @@ unsigned char minstrel_find_rate(
     struct minstrel_ht_sta_priv *p_minstrel_ht_sta_priv = NULL;
     struct minstrel_sta_info *p_minstrel_sta_info = NULL;
 
-#ifdef AUTO_RATE_SIM
-    mcs_rate = g_rate_mode;
-    p_ieee_sta = &g_sta;
-    p_minstrel_ht_sta_priv = g_minstrel_ht_sta_priv;
-    p_minstrel_sta_info = g_minstrel_sta_info;
-#else
     p_ieee_sta = &(sta->ieee_sta);
     p_minstrel_ht_sta_priv = sta->sta_minstrel_ht_priv;
     p_minstrel_sta_info = sta->sta_minstrel_info;
@@ -929,7 +778,6 @@ unsigned char minstrel_find_rate(
     } else {
         g_minstel_pri->fixed_rate_idx = ((u32) -1);
     }
-#endif
 
     memset(&tx_info, 0,sizeof(struct ieee80211_tx_info));
     for (i = 0; i < IEEE80211_TX_MAX_RATES; i++) {
@@ -944,7 +792,7 @@ unsigned char minstrel_find_rate(
             ratectrl[i].flags |= HAL_RATECTRL_USE_FIXED_RATE;
             ratectrl[i].bw = (sta->sta_chbw < WIFINET_BWC_WIDTH80) ? sta->sta_chbw : IS_HT_RATE(ratectrl[i].vendor_rate_code) ? WIFINET_BWC_WIDTH40 : sta->sta_chbw;
             ratectrl[i].trynum = 2;
-            /* v15r: was max_4ms_framelen[0][mcs] (= MCS_HT20 row), see aml_max_4ms_framelen() */
+            
             ratectrl[i].maxampdulen = aml_max_4ms_framelen(ratectrl[i].vendor_rate_code,
                                                            ratectrl[i].bw,
                                                            ratectrl[i].shortgi_en);
@@ -974,7 +822,10 @@ unsigned char minstrel_find_rate(
     }
 
     p_rate_control_ops->get_rate(g_minstel_pri, p_ieee_sta, priv_sta, info);
-    if (mcs_rate && check_is_rate_fitable(sta, info, priv_sta)) {
+    
+    if (mcs_rate
+        && (!sta->sta_wnet_vif || sta->sta_wnet_vif->vm_opmode != WIFINET_M_HOSTAP)
+        && check_is_rate_fitable(sta, info, priv_sta)) {
         memset(&tx_info, 0,sizeof(struct ieee80211_tx_info));
         for (i = 0; i < IEEE80211_TX_MAX_RATES; i++) {
             info->control.rates[i].idx = -1;
@@ -992,7 +843,7 @@ unsigned char minstrel_find_rate(
             : info->control.rates[i].flags & IEEE80211_TX_RC_40_MHZ_WIDTH ? BW_40 : BW_20;
 
         if (IS_MCS_RATE(ratectrl[i].vendor_rate_code)) {
-            /* v15r: was max_4ms_framelen[0][mcs] (= MCS_HT20 row), see aml_max_4ms_framelen() */
+            
             ratectrl[i].maxampdulen = aml_max_4ms_framelen(ratectrl[i].vendor_rate_code,
                                                            ratectrl[i].bw,
                                                            ratectrl[i].shortgi_en);
@@ -1001,31 +852,40 @@ unsigned char minstrel_find_rate(
         if (info->control.rates[i].idx < 0) {
             continue;
         }
-        //AML_OUTPUT("ratectrl[%d].rate_index =%d, vendor_rate_code =0x%x, maxampdulen=%d, flags=%x\n", i,
-        //    ratectrl[i].rate_index,ratectrl[i].vendor_rate_code, ratectrl[i].maxampdulen, info->control.rates[i].flags);
+        
     }
 
     if (info->flags & IEEE80211_TX_CTL_RATE_CTRL_PROBE) {
         ratectrl[0].flags |= HAL_RATECTRL_USE_SAMPLE_RATE;
     }
 
-    /* v13 PERF FIX: rate-control retry budget for adaptive-rate path.
-     *
-     * The vendor BSP set ratectrl[2].trynum = minstrel_latency_retry_limit(),
-     * which returned 96 by default (cfg_latency_retry_enable=0). That makes the
-     * firmware spend up to 96 attempts on the slowest fallback rate per frame
-     * before reporting failure. Under any RF interference (e.g. our co-located
-     * mt7601u on the same channel) the slowest fallback dominates air-time,
-     * minstrel sees 96 "successes" at MCS0 and locks the link at 13.5 Mbps.
-     *
-     * The fixed-rate branch a few lines up uses trynum=3 for the same slot,
-     * and 802.11 short/long retry default is 7/4. Mirror that here: cap to a
-     * sensible per-slot count so the FW falls through the rate chain quickly
-     * and minstrel can actually probe higher MCS values.
-     *
-     * Honour cfg_latency_retry_enable for users who explicitly opt into the
-     * "retry forever, ignore throughput" latency mode.
-     */
+    if (mcs_rate
+        && !(info->flags & IEEE80211_TX_CTL_RATE_CTRL_PROBE)
+        && sta->sta_wnet_vif
+        && sta->sta_wnet_vif->vm_opmode == WIFINET_M_HOSTAP
+        && ratectrl[0].rate_index >= 0
+        && IS_MCS_RATE(ratectrl[0].vendor_rate_code)) {
+        unsigned char floor_mcs = get_fitable_mcs_rate(sta, ratectrl[0].bw);
+        
+        if (!(sta->sta_flags & WIFINET_NODE_VHT) && floor_mcs > 7)
+            floor_mcs = 7;
+
+        if ((int)floor_mcs > (int)ratectrl[0].rate_index) {
+            int old_idx = ratectrl[0].rate_index;
+
+            ratectrl[0].rate_index = floor_mcs;
+            ratectrl[0].vendor_rate_code =
+                minstrel_rate_index_to_vendor_rate_code(floor_mcs, p_ieee_sta);
+            ratectrl[0].maxampdulen = aml_max_4ms_framelen(
+                ratectrl[0].vendor_rate_code, ratectrl[0].bw,
+                ratectrl[0].shortgi_en);
+            sta->sta_vendor_rate_code = ratectrl[0].vendor_rate_code;
+            pr_debug_ratelimited("W522A: ap-rate-floor mcs %d->%d bw=%d rssi=%d snr=%d\n",
+                old_idx, (int)floor_mcs, ratectrl[0].bw,
+                sta->sta_avg_rssi, sta->sta_avg_snr);
+        }
+    }
+
     ratectrl[0].trynum = 2;
     ratectrl[1].trynum = 2;
     {
@@ -1047,9 +907,7 @@ unsigned char minstrel_find_rate(
 
 void minstrel_tx_complete(
     struct aml_ratecontrol *rc
-#ifndef AUTO_RATE_SIM
 , void *p_sta
-#endif
 )
 {
     void *priv_sta = NULL;
@@ -1062,11 +920,6 @@ void minstrel_tx_complete(
     int i = 0;
     int mcs_rate = 0;
 
-#ifdef AUTO_RATE_SIM
-    mcs_rate = g_rate_mode;
-    p_minstrel_ht_sta_priv = g_minstrel_ht_sta_priv;
-    p_minstrel_sta_info  =   g_minstrel_sta_info;
-#else
     p_minstrel_ht_sta_priv = sta->sta_minstrel_ht_priv;
     p_minstrel_sta_info = sta->sta_minstrel_info;
 
@@ -1078,8 +931,6 @@ void minstrel_tx_complete(
     if ((sta->sta_flags & WIFINET_NODE_HT) || (sta->sta_flags & WIFINET_NODE_VHT)) {
         mcs_rate = 1;
     }
-#endif
-
 
     memset(&info, 0, sizeof(struct ieee80211_tx_info));
     if (rc[0].flags & HAL_RATECTRL_TX_SEND_SUCCESS) {
@@ -1087,15 +938,6 @@ void minstrel_tx_complete(
         rc[0].flags &= ~HAL_RATECTRL_TX_SEND_SUCCESS;
     }
 
-    /*
-     * v16y RATE-AMPDU-STATUS:
-     * The AP TX path can complete a whole A-MPDU through the first TX
-     * descriptor, but older code reported every completion to minstrel_ht as
-     * a single MPDU.  That pins avg_ampdu_len at 1 frame (4096 fixed-point),
-     * making rate-control underestimate throughput and over-sample/over-retry.
-     * Carry the aggregate length from drv_tx_complete_task() into the generic
-     * ieee80211_tx_info status fields so minstrel sees the real batching.
-     */
     if (rc[3].maxampdulen > 1) {
         info.flags |= IEEE80211_TX_STAT_AMPDU;
         info.status.ampdu_len = rc[3].maxampdulen;
@@ -1108,12 +950,11 @@ void minstrel_tx_complete(
         ar[i].count = 0;
         ar[i].flags = 0;
 
-        if (rc[i].trynum != 0) {//not use if trynum is 0
+        if (rc[i].trynum != 0) {
             ar[i].count = rc[i].trynum;
             ar[i].idx   = rc[i].rate_index;
             ar[i].flags = rc[i].flags;
-            /*only used in vht debug*/
-            //ar[i].flags |= IEEE80211_TX_RC_VHT_MCS;
+            
         }
     }
 

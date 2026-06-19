@@ -1,8 +1,6 @@
 #ifndef __DRV_STATISTIC_H
 #define __DRV_STATISTIC_H
 
-/////////////////////////////// global statistic defination////////////////////////
-
 #define SYS_STS_CLEAR  (0)
 #define SYS_STS_START (1)
 #define SYS_STS_READ   (2)
@@ -46,7 +44,6 @@
 #define IDX_CTS                  (0x1c)
 #define IDX_ACK                  (0x1d)
 
-
 #define STS_MAX_CFG_FILE  (0x40)
 #define SYS_STS_PRT_TAG (0x1)
 #define SYS_STS_PRT_INFO (0x0)
@@ -61,7 +58,6 @@
                                                ((addr) == RG_MAC_RX_DATA_OTHER_CNT) ||\
                                                ((addr) == RG_MAC_RX_DATA_MUTIL_CNT) )
 
-
 #define IS_AGC_STS(addr) ((addr ) == RG_AGC_STATE||\
                                         (addr ) == RG_AGC_OB_IC_GAIN||\
                                         (addr ) == RG_AGC_WATCH1||\
@@ -74,7 +70,6 @@
                                         (addr ) == RG_AGC_OB_CCA_COND23)
 
 #define IS_HOST_SW_STS(addr) ((addr & MOD_VADDR) == MOD_VADDR)
-
 
 enum sts_sys_idx{ 
         sts_mac_irq_txstart_idx,
@@ -224,15 +219,9 @@ enum sts_sys_idx{
         sts_vif_in_amsdu_idx,
         sts_vif_out_amsdu_idx,
 
-
-
-
         sts_hst_sw_max_idx,
 }; 
 
-/*
-    iw dev wlan0 vendor send 0xc3 0xc4  op_code func_code hw_addr obj_0, obj_1, obj_2,obj_3
-*/
 #pragma pack(push ,1)
 struct sts_cfg_data{
       unsigned short addr[STS_MAX_CFG_FILE];
@@ -242,26 +231,25 @@ struct sts_cfg_data{
 
 struct statistic_cmd
 {
-    unsigned char op_code;    // 0x99
+    unsigned char op_code;    
     
-    unsigned char iaddr_high; // hardware reg high part, 
-    unsigned char iaddr_low;  // hardware reg low part
-    unsigned char iobj_0;       // obj_0 to work
-    unsigned char iobj_1;       // obj_1 to work
-    unsigned char iobj_2;      // obj_2 to work
-    unsigned char iobj_3;     // obj_3 to work
+    unsigned char iaddr_high; 
+    unsigned char iaddr_low;  
+    unsigned char iobj_0;       
+    unsigned char iobj_1;       
+    unsigned char iobj_2;      
+    unsigned char iobj_3;     
 
-    unsigned char faddr_high; // hardware reg high part, 
-    unsigned char faddr_low;  // hardware reg low part
-    unsigned char fobj_0;       // obj_0 to work
-    unsigned char fobj_1;       // obj_1 to work
-    unsigned char fobj_2;      // obj_2 to work
-    unsigned char fobj_3;     // obj_3 to work
+    unsigned char faddr_high; 
+    unsigned char faddr_low;  
+    unsigned char fobj_0;       
+    unsigned char fobj_1;       
+    unsigned char fobj_2;      
+    unsigned char fobj_3;     
 
-    unsigned char func_code; //(0x0, stop); (0x1, start) ;(0x2, read)
+    unsigned char func_code; 
     
 };
-
 
 struct sts_iw_if
     {
@@ -298,14 +286,6 @@ void sts_prt_agc_field(unsigned short addr,
 
 unsigned int val_to_idx(unsigned int idx_val[], unsigned int val);
 
-/////////////////////////////// layer statistic defination////////////////////////
-/*
-    iw dev wlan0 vendor send 0xc3 0xc4  op_code(B) ctrl_msg3, ctrl_msg2, ctrl_msg1, ctrl_msg0
-    bit31~bit28: sts module: bit31 wifi_mac layer; bit30 driver layer; bit29 hal layer; bit28 hw  interface 
-    bit27~bit24: sts type:  bit27 tx; bit26 rx; bit25 allocate resource; bit24 free resource
-    bit23~bit0: the detail message by sts type and sts module
-*/
-
 #define STS_MOD_WMAC        BIT(31)
 #define STS_MOD_DRV           BIT(30)
 #define STS_MOD_HAL            BIT(29)
@@ -313,8 +293,6 @@ unsigned int val_to_idx(unsigned int idx_val[], unsigned int val);
 
 #define STS_TYP_TX                (BIT(27))
 #define STS_TYP_RX                (BIT(26))
-
-// RF capture
 
 #define INBUFFER_LEN_VALID_BIT 			(256-2)
 #define INBUFFER_LEN 				(256/8)
@@ -329,8 +307,8 @@ unsigned int val_to_idx(unsigned int idx_val[], unsigned int val);
 #define INBUFFER_LEN_VALID 			((INBUFFER_LEN_VALID_BIT)/8)
 #define TESTBUFFER_LEN				(256-8)
 
-#define SELFTEST 				1  //LG
-#define DA 					0	//LG
+#define SELFTEST 				1  
+#define DA 					0	
 
 #define SW					9
 #define FCS_OK					6
@@ -343,23 +321,22 @@ unsigned int val_to_idx(unsigned int idx_val[], unsigned int val);
 #define AGC_FSM_TRIG				0
 #define CCA_AGC_FSM_TRIG			1
 
-
 #define SDIO_BASE_A		  		   0x00a0b000
 #define CAP_SRAM_SWITCH_BASE	   0x00a0d000
 
-#define TBC_OFFSET_100				(0x100 + SDIO_BASE_A)   //0x2d00
-#define TBC_OFFSET_104				(0x104 + SDIO_BASE_A)   //0x2d04
-#define TBC_OFFSET_108				(0x108 + SDIO_BASE_A)   //0x2d08
-#define TBC_OFFSET_10C				(0x10c + SDIO_BASE_A)   //0x2d0C
-#define TBC_OFFSET_110		       	(0x110 + SDIO_BASE_A)   //0x2d10
-#define TBC_OFFSET_114				(0x114 + SDIO_BASE_A)   //0x2d14
-#define TBC_OFFSET_118				(0x118 + SDIO_BASE_A)   //0x2d18
-#define TBC_OFFSET_11C				(0x11C + SDIO_BASE_A)   //0x2d1C
-#define TBC_OFFSET_120		    	      (0x120 + SDIO_BASE_A)   //0x2d20
-#define TBC_OFFSET_124				(0x124 + SDIO_BASE_A)   //0x2d24
-#define TBC_OFFSET_128				(0x128 + SDIO_BASE_A)   //0x2d28
+#define TBC_OFFSET_100				(0x100 + SDIO_BASE_A)   
+#define TBC_OFFSET_104				(0x104 + SDIO_BASE_A)   
+#define TBC_OFFSET_108				(0x108 + SDIO_BASE_A)   
+#define TBC_OFFSET_10C				(0x10c + SDIO_BASE_A)   
+#define TBC_OFFSET_110		       	(0x110 + SDIO_BASE_A)   
+#define TBC_OFFSET_114				(0x114 + SDIO_BASE_A)   
+#define TBC_OFFSET_118				(0x118 + SDIO_BASE_A)   
+#define TBC_OFFSET_11C				(0x11C + SDIO_BASE_A)   
+#define TBC_OFFSET_120		    	      (0x120 + SDIO_BASE_A)   
+#define TBC_OFFSET_124				(0x124 + SDIO_BASE_A)   
+#define TBC_OFFSET_128				(0x128 + SDIO_BASE_A)   
 
-#define TBC_RAM_SHARE				(0xe4 + CAP_SRAM_SWITCH_BASE)//INTF SRAM SHARE ENABLE BIT31: 1-> CAPTURE BUF
+#define TBC_RAM_SHARE				(0xe4 + CAP_SRAM_SWITCH_BASE)
 
 void batch_dump_reg(struct wiphy *wiphy,unsigned int addr[], unsigned int addr_num);
 

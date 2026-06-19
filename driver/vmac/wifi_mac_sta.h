@@ -1,16 +1,4 @@
-/*
- ****************************************************************************************
- *
- * Copyright (C) Amlogic 2010-2014
- *
- * Project: 11N 80211 mac  layer Software
- *
- * Description:
- *     wifi_mac layer station node control module
- *
- *
- ****************************************************************************************
- */
+
 #ifndef _NET80211_IEEE80211_NODE_H_
 #define _NET80211_IEEE80211_NODE_H_
 
@@ -18,16 +6,6 @@
 #include <linux/rcupdate.h>
 #include <linux/srcu.h>
 
-/* v15b-SRCU: sleepable RCU instance protecting wifi_station readers.
- * v15a used plain rcu_read_lock around wifi_mac_input, but the
- * RX-mgmt branch ends up calling SDIO mutex_lock (sdio_claim_host),
- * which sleeps. With CONFIG_PREEMPT_RCU=y this is technically allowed
- * once (WARN_ON_ONCE), but every sleep-inside-RCU stretches the
- * grace period and prevents kfree_rcu callbacks from firing.
- * Under sustained TX/upload load the grace period never advances,
- * RCU callbacks pile up, and the box ends up wedged or watchdog-rebooted.
- * SRCU readers are explicitly allowed to sleep without affecting
- * other CPUs' grace periods, so this is the proper primitive here. */
 extern struct srcu_struct vlsi_sta_srcu;
 #ifdef CONFIG_NET_WIRELESS
 #include <linux/wireless.h>
@@ -76,7 +54,6 @@ struct wifi_mac;
 struct wlan_net_vif;
 struct wifi_scan_info;
 
-//sta flag
 #define WIFINET_NODE_AUTH 0x0001
 #define WIFINET_NODE_QOS 0x0002
 #define WIFINET_NODE_ERP 0x0004
@@ -94,7 +71,6 @@ struct wifi_scan_info;
 
 #define WIFINET_NODE_VHT 0x2000
 
-//sta ext flag
 #define WIFINET_NODE_MFP 0x0001
 #define WIFINET_NODE_MFP_CONFIRM_DEAUTH 0x0002
 #define WIFINET_NODE_REASSOC 0x0004
@@ -106,7 +82,6 @@ struct wifi_scan_info;
 #define WIFINET_NODE_UAPSD_FLUSH_WAIT_NOA_END 0x2000
 #define WIFINET_NODE_TRIGGER_WAIT_NOA_END 0x4000
 
-//other flag
 #define WIFINET_NODE_SM_EN BIT(0)
 #define WIFINET_NODE_SM_PWRSAV_STAT BIT(1)
 #define WIFINET_NODE_SM_PWRSAV_DYN BIT(2)
@@ -175,7 +150,7 @@ struct wifi_station
 
     void *drv_sta;
     struct wifi_mac_amsdu *sta_amsdu;
-    enum wifi_mac_macmode sta_bssmode; /* current phy mode */
+    enum wifi_mac_macmode sta_bssmode; 
 
     unsigned char wnet_vif_id;
     unsigned char sta_esslen;
@@ -216,17 +191,7 @@ struct wifi_station
     int8_t sta_tmp_nsta;
 
     unsigned short sta_htcap;
-    /* v15s: widened from `unsigned short` to `unsigned int`.
-     * VHT-CAP "Max A-MPDU Length Exponent" is a 3-bit field giving the
-     * peer max as 2^(13+exp)-1 octets. With our v15r wire-IE fix peers
-     * now legitimately advertise exp=7 = 1 MiB - 1 = 0xFFFFF, which
-     * does not fit in 16 bits and silently truncated to 65535.
-     * `wifi_mac_set_ampduparams()` -> `drv_set_ampduparams()` propagates
-     * this into `tx_agg_st.maxampdu` (also widened) -> drv_lookup_rate()
-     * uses it to cap the per-A-MPDU TX budget against `maxampdulen`.
-     * Pre-v15s a VHT80 STA that we associated to with full caps got
-     * its A-MPDU TX-to-AP capped at 65535 B regardless of what the AP
-     * could absorb. */
+    
     unsigned int sta_maxampdu;
     unsigned int sta_mpdudensity;
 
@@ -263,23 +228,23 @@ struct wifi_station
     unsigned short sa_query_seq;
     unsigned short sa_query_try_count;
 
-    int32_t sta_avg_bcn_rssi;    // dbm
+    int32_t sta_avg_bcn_rssi;    
     int32_t sta_avg_rssi;
     int32_t sta_avg_snr;
-    unsigned int sta_last_txrate;  //kbps
-    unsigned int sta_last_rxrate;  //kbps
+    unsigned int sta_last_txrate;  
+    unsigned int sta_last_rxrate;  
     unsigned int sta_last_rx_vendor_rate;
     unsigned int sta_last_rx_bw;
 
-    unsigned char sta_maxrate_vht; /* b0-b3: mcs idx; b4-b7: # streams */
-    unsigned int sta_vhtcap;        /* VHT capability */
+    unsigned char sta_maxrate_vht; 
+    unsigned int sta_vhtcap;        
     unsigned short vht_op_ch_freq_seg2;
-    unsigned short sta_tx_vhtrates;   /* Negotiated Tx VHT rates */
-    unsigned short sta_tx_max_rate;   /* Max VHT Tx Data rate */
-    unsigned short sta_rx_vhtrates;   /* Negotiated Rx VHT rates */
-    unsigned short sta_rx_max_rate;   /* Max VHT Rx Data rate */
-    unsigned short sta_vht_basic_mcs; /* Basic VHT MCS map */
-    unsigned char sta_streams;            /* number of streams supported */
+    unsigned short sta_tx_vhtrates;   
+    unsigned short sta_tx_max_rate;   
+    unsigned short sta_rx_vhtrates;   
+    unsigned short sta_rx_max_rate;   
+    unsigned short sta_vht_basic_mcs; 
+    unsigned char sta_streams;            
     unsigned char sta_lmax_tx_pwr_cnt;
     unsigned char sta_lmax_tx_pwr_unt_intrp;
     unsigned char sta_lmax_tx_pwr_20M;
@@ -287,7 +252,6 @@ struct wifi_station
     unsigned char sta_lmax_tx_pwr_80M;
     unsigned char sta_lmax_tx_pwr_80P80M;
 
-    //ch sw element
     unsigned char sta_new_country_sub_ie[SUB_IE_MAX_LEN];
     unsigned char sta_wide_bw_ch_sw_sub_ie[SUB_IE_MAX_LEN];
     unsigned char sta_new_vht_tx_pw_sub_ie[SUB_IE_MAX_LEN];
@@ -295,26 +259,23 @@ struct wifi_station
     int sta_chan_switch_chan;
     struct os_timer_ext csa_timer;
 
-    //ext bss ld element
     unsigned short sta_mu_mimo_sta_cnt;
     unsigned char sta_ss_ult;
     unsigned char sta_obs_scnd_20mhz;
     unsigned char sta_obs_scnd_40mhz;
     unsigned char sta_obs_scnd_80mhz;
 
-    //quiet channel element
     unsigned char sta_ap_quiet_md;
     unsigned char sta_quiet_cnt;
     unsigned char sta_quiet_prd;
     unsigned char sta_quiet_drt;
     unsigned char sta_quiet_offset;
 
-    //operation mode notify element
     unsigned char sta_opt_mode;
 
 #ifdef CONFIG_WAPI
     unsigned char *sta_wai_ie;
-#endif /* CONFIG_WAPI */
+#endif 
 
 #ifdef CONFIG_P2P
     unsigned char *sta_p2p_ie[MAX_P2PIE_NUM];
@@ -324,8 +285,8 @@ struct wifi_station
     unsigned short sta_p2p_config_methods;
     #ifdef CONFIG_WFD
         unsigned char *sta_wfd_ie;
-    #endif/* CONFIG_WFD */
-#endif /* CONFIG_P2P */
+    #endif
+#endif 
     unsigned char minstrel_init_flag;
     struct ieee80211_sta_rates sta_ieee_rates;
     struct minstrel_ht_sta_priv *sta_minstrel_ht_priv;
@@ -335,13 +296,7 @@ struct wifi_station
     unsigned char sta_vendor_bw;
     unsigned char sta_vendor_rate_code;
     unsigned char is_disconnecting;
-    /* v15-RCU: defer the final kfree until after a grace period so
-     * concurrent readers (RX softirq, TX qdisc, hostapd ioctl handler)
-     * that are walking nt_nsta or holding a sta pointer obtained from
-     * find_sta can safely keep dereferencing through its end. The
-     * existing wm_free_entryq delay (5s) is a fixed timeout, not a
-     * synchronisation primitive: a softirq can be preempted longer.
-     * RCU is the right model here. */
+    
     struct rcu_head sta_rcu;
 };
 
@@ -378,7 +333,6 @@ struct wifi_station_tbl
 #define WME_UAPSD_NODE_ALL_AC_CAN_TRIGGER(_sta) (WME_STA_UAPSD_ALL_AC_ENABLED((_sta)->sta_uapsd))
 #define WME_UAPSD_NODE_MAXQDEPTH    8
 #define WME_UAPSD_NODE_TRIGSEQINIT(_sta)    (memset(&(_sta)->sta_uapsd_trigseq[0], 0xff, sizeof((_sta)->sta_uapsd_trigseq)))
-
 
 #define WIFINET_SAVEQ_INIT(_pstxqueue, _name) do {      \
                 skb_queue_head_init(_pstxqueue);            \
@@ -569,7 +523,6 @@ int wifi_mac_sta_arp_agent_ex (SYS_TYPE param1, SYS_TYPE param2,SYS_TYPE param3,
 #define M_AGE_GET(skb)      (skb->csum)
 #define M_AGE_SUB(skb,adj)  (skb->csum -= adj)
 
-
 #define le16toh(_x) le16_to_cpu(_x)
 #define htole16(_x) cpu_to_le16(_x)
 #define le32toh(_x) le32_to_cpu(_x)
@@ -621,4 +574,4 @@ void os_skb_set_amsdu(struct sk_buff *skb);
 int os_skb_is_amsdu(struct sk_buff *skb);
 int  os_skb_is_uapsd(struct sk_buff *skb);
 void aml_skb_unlink(struct sk_buff *skb, struct sk_buff_head *list);
-#endif /* _NET80211_IEEE80211_NODE_H_ */
+#endif 

@@ -1,16 +1,3 @@
-/*
- ****************************************************************************************
- *
- * Copyright (C) Amlogic 2010-2014
- *
- * Project: 11N 80211 mac  layer Software
- *
- * Description:
- *     wifi_mac layer interface function/interface use by driver layer
- *
- *
- ****************************************************************************************
- */
 
 #ifndef _WIFI_MAC_ARP_H_
 #define _WIFI_MAC_ARP_H_
@@ -57,6 +44,4 @@ typedef struct wifi_udp_pkt {
     unsigned char data[0];
 } wifi_udp_pkt;
 
-
-#endif//_WIFI_MAC_ARP_H_
-
+#endif

@@ -252,7 +252,6 @@ int check_rate(struct wlan_net_vif *wnet_vif, const struct wifi_scan_info *scani
     return 1;
 }
 
-
 int check_ht_rate(struct wlan_net_vif *wnet_vif, const struct wifi_scan_info *scaninfo)
 {
     int i, j, k, mac_mode;
@@ -272,7 +271,6 @@ int check_ht_rate(struct wlan_net_vif *wnet_vif, const struct wifi_scan_info *sc
         htcap = &((struct wifi_mac_ie_htcap *)scaninfo->SI_htcap_ie)->hc_ie;
         htinfo = &((struct wifi_mac_ie_htinfo *)scaninfo->SI_htinfo_ie)->hi_ie;
 
-        /* only support Spatial Stream 1 (mcs 0~7)*/
         for (i = 0; i < 8; i++) {
             if (htcap->hc_mcsset[i / 8] & (1 << (i % 8))) {
                 rrs.dot11_rate[k++] = i | ((htinfo->hi_basicmcsset[i/8] & (1 << (i%8))) ? WIFINET_RATE_BASIC : 0);
@@ -303,7 +301,6 @@ int check_ht_rate(struct wlan_net_vif *wnet_vif, const struct wifi_scan_info *sc
     return 1;
 }
 
-
 int wifi_mac_setup_rates(struct wifi_station *sta, const unsigned char *rates, const unsigned char *xrates, int flags)
 {
     struct wifi_mac_rateset *rs = &sta->sta_rates;
@@ -314,7 +311,7 @@ int wifi_mac_setup_rates(struct wifi_station *sta, const unsigned char *rates, c
 
     if (rates) {
         rrs.dot11_rate_num = rates[1];
-        /* rrs save rates of peer STA/AP */
+        
         memcpy(rrs.dot11_rate, rates + 2, rrs.dot11_rate_num);
     }
 
@@ -331,18 +328,18 @@ int wifi_mac_setup_rates(struct wifi_station *sta, const unsigned char *rates, c
         memcpy(rrs.dot11_rate + rrs.dot11_rate_num, xrates+2, nxrates);
         rrs.dot11_rate_num += nxrates;
     }
-    /* irs pointer local legacy rates*/
+    
     irs = &sta->sta_wnet_vif->vm_legacy_rates;
 
     if (flags & WIFINET_F_DOSORT)
     {
-        /* sort rate array */
+        
         wifi_mac_sort_rate(&rrs);
     }
 
     if (flags & WIFINET_F_DOXSECT)
     {
-        /* get rate intersection of peer and local and saved in rs*/
+        
         wifi_mac_xsect_rate(irs, &rrs, rs);
     }
     else
@@ -350,7 +347,6 @@ int wifi_mac_setup_rates(struct wifi_station *sta, const unsigned char *rates, c
         memcpy(rs, &rrs, sizeof(rrs));
     }
 
-    /* check if rate intersection include static rate we have fixed */
     if (flags & WIFINET_F_DOFRATE)
         if (!wifi_mac_fixed_rate_check(sta, rs))
             return 0;
@@ -382,7 +378,6 @@ static int wifi_mac_mcs_to_numstreams(int mcs)
 
     return numstreams;
 }
-
 
 int wifi_mac_setup_ht_rates(struct wifi_station *sta, unsigned char *ie,int flags)
 {
@@ -424,11 +419,9 @@ int wifi_mac_setup_ht_rates(struct wifi_station *sta, unsigned char *ie,int flag
     rrs.dot11_rate_num = j;
     irs = &wifimac->wm_sup_ht_rates;
 
-    /*sort rate for rate from assoc req frames */
     if (flags & WIFINET_F_DOSORT)
         wifi_mac_sort_rate(&rrs);
 
-    /*get the same rate from assoc req and local, and save */
     if (flags & WIFINET_F_DOXSECT)
         wifi_mac_xsect_rate(irs, &rrs, rs);
     else
@@ -445,7 +438,6 @@ int wifi_mac_setup_ht_rates(struct wifi_station *sta, unsigned char *ie,int flag
             return 0;
     return 1;
 }
-
 
 void wifi_mac_setup_basic_ht_rates(struct wifi_station *sta, unsigned char *ie)
 {
@@ -476,8 +468,6 @@ void wifi_mac_setup_basic_ht_rates(struct wifi_station *sta, unsigned char *ie)
     }
 }
 
-
-
 static void wifi_mac_get_vht_rates(unsigned short map, struct wifi_mac_vht_rate_s *vht)
 {
     int i = 0;
@@ -485,8 +475,6 @@ static void wifi_mac_get_vht_rates(unsigned short map, struct wifi_mac_vht_rate_
 
     memset(vht,0,sizeof(struct wifi_mac_vht_rate_s));
 
-    /* eg. 111111111111 10 10,  spatial 1 -2 support mcs0-9,
-        so 'n < 3' means a spatial */
     for ( ; i < MAX_VHT_STREAMS; i++) 
     {
         n  = map & 0x03;
@@ -511,14 +499,12 @@ static unsigned short wifi_mac_get_vht_rate_map(struct wifi_mac_vht_rate_s *vht)
     return(map);
 }
 
-
 static void  wifi_mac_get_vht_intersect_rates( struct wifi_mac_vht_rate_s *irs,
                   struct wifi_mac_vht_rate_s *srs, struct wifi_mac_vht_rate_s *drs)
 {
     int i = 0;
     irs->num_streams = MIN(srs->num_streams, drs->num_streams);
 
-    /* initialize the rates for all streams with unsupported val (0x3) */
     memset(irs->rates,0x3, MAX_VHT_STREAMS);
 
     for ( ; i < irs->num_streams; i++ ) 
@@ -547,8 +533,6 @@ static int  wifi_mac_vht_basic_rate_check( struct wifi_mac_vht_rate_s *irs, stru
     return 1;
 }
 
-
-
 int wifi_mac_setup_vht_rates(struct wifi_station *sta,
                          unsigned char *ie,
                          int flags)
@@ -556,7 +540,6 @@ int wifi_mac_setup_vht_rates(struct wifi_station *sta,
     struct wifi_mac_vht_rate_s tsrs,rsrs,brs,rx_rrs, tx_rrs, tx_irs, rx_irs; 
     int i = 0;
 
-    /* Our Supported Tx rates,*/
     wifi_mac_get_vht_rates(sta->sta_wnet_vif->vm_vhtcap_max_mcs.tx_mcs_set.mcs_map, &tsrs);
     DPRINTF(AML_DEBUG_RATE,"Our Supported Tx rates,num_streams=%d\n", tsrs.num_streams);
     for( i=0; i<tsrs.num_streams; i++)
@@ -564,7 +547,6 @@ int wifi_mac_setup_vht_rates(struct wifi_station *sta,
         DPRINTF(AML_DEBUG_RATE,"i=%d,rates=0x%x\n ", i, tsrs.rates[i]);
     }
     
-    /* Our Supported Rx rates, */
     wifi_mac_get_vht_rates(sta->sta_wnet_vif->vm_vhtcap_max_mcs.rx_mcs_set.mcs_map, &rsrs);
     DPRINTF(AML_DEBUG_RATE,"Our Supported Rx rates,num_streams=%d\n", rsrs.num_streams);
     for( i=0; i<rsrs.num_streams; i++)
@@ -572,7 +554,6 @@ int wifi_mac_setup_vht_rates(struct wifi_station *sta,
         DPRINTF(AML_DEBUG_RATE,"i=%d,rates=0x%x\n ", i, rsrs.rates[i]);
     }
     
-    /* Our Basic rates */
     wifi_mac_get_vht_rates(sta->sta_wnet_vif->vm_vhtop_basic_mcs, &brs);
     DPRINTF(AML_DEBUG_RATE,"Our Basic rates, num_streams=%d\n",brs.num_streams);
     for( i=0; i<brs.num_streams; i++)
@@ -580,8 +561,6 @@ int wifi_mac_setup_vht_rates(struct wifi_station *sta,
         DPRINTF(AML_DEBUG_RATE,"i=%d,rates=0x%x\n ", i, brs.rates[i]);
     }
 
-    
-    /* Received Rx Rates in (re)assoc req/resp - vht parse had already copied the info to sta */
     wifi_mac_get_vht_rates(sta->sta_rx_vhtrates, &rx_rrs);
     DPRINTF(AML_DEBUG_RATE,"ap support Rx Rates, num_streams=%d\n",  rx_rrs.num_streams);
     for( i=0; i<rx_rrs.num_streams; i++)
@@ -589,7 +568,6 @@ int wifi_mac_setup_vht_rates(struct wifi_station *sta,
         DPRINTF(AML_DEBUG_RATE,"i=%d,rates=0x%x\n ", i, rx_rrs.rates[i]);
     }
     
-    /* Received Tx Rates in (re)assoc req/resp - vht parse has already copied this info to sta */
     wifi_mac_get_vht_rates(sta->sta_tx_vhtrates, &tx_rrs);
     DPRINTF(AML_DEBUG_RATE,"ap support tx Rates num_streams=%d\n", tx_rrs.num_streams );
     for( i=0; i<tx_rrs.num_streams; i++)
@@ -597,7 +575,6 @@ int wifi_mac_setup_vht_rates(struct wifi_station *sta,
         DPRINTF(AML_DEBUG_RATE,"i=%d,rates=0x%x\n ", i, tx_rrs.rates[i]);
     }
 
-    /* Intersection (SRC TX & DST RX) and (SRC RX & DST TX) */ 
     if (flags & WIFINET_F_DOXSECT) 
     {
         wifi_mac_get_vht_intersect_rates(&tx_irs, &rx_rrs, &tsrs);
@@ -619,7 +596,7 @@ int wifi_mac_setup_vht_rates(struct wifi_station *sta,
     {
         for( i = 0; i<10; i++ )
         {
-            /*set mcs0 - mcs9 */
+            
             sta->sta_vhtrates.dot11_rate[i] = i;
             DPRINTF(AML_DEBUG_RATE,"i =%d,dot11_rate=0x%x\n", i, sta->sta_vhtrates.dot11_rate[i]);
         }
@@ -629,7 +606,7 @@ int wifi_mac_setup_vht_rates(struct wifi_station *sta,
     {
          for( i = 0; i<9; i++ )
         {
-            /*set mcs0 - mcs8*/
+            
             sta->sta_vhtrates.dot11_rate[i] = i;
             DPRINTF(AML_DEBUG_RATE,"i =%d,dot11_rate=0x%x\n", i, sta->sta_vhtrates.dot11_rate[i]);
         }
@@ -657,7 +634,6 @@ int wifi_mac_setup_vht_rates(struct wifi_station *sta,
         
     }
 
-    /* Rate control needs intersection of SRC TX rates and DST RX rates */
     sta->sta_streams = tx_irs.num_streams;
     sta->sta_tx_vhtrates = wifi_mac_get_vht_rate_map(&tx_irs);
     sta->sta_rx_vhtrates = wifi_mac_get_vht_rate_map(&rx_irs);
@@ -686,13 +662,12 @@ int wifi_mac_setup_vht_rates(struct wifi_station *sta,
 void wifi_mac_vht_rate_init(struct wlan_net_vif *wnet_vif, unsigned short mcs_map,
                       unsigned short max_datarate, unsigned short basic_mcs)
 {
-    /* Set the VHT Supported MCS subset and highest data rate*/
+    
     wnet_vif->vm_vhtcap_max_mcs.rx_mcs_set.data_rate =
         wnet_vif->vm_vhtcap_max_mcs.tx_mcs_set.data_rate = max_datarate;
     wnet_vif->vm_vhtcap_max_mcs.rx_mcs_set.mcs_map =
         wnet_vif->vm_vhtcap_max_mcs.tx_mcs_set.mcs_map = mcs_map;
 
-    /* Set up the VHT Basic MCS rate set. Use only the relevant 16 bits */
     wnet_vif->vm_vhtop_basic_mcs = basic_mcs;
 }
 
@@ -708,7 +683,6 @@ struct ratecontrol_ops *ratectrl[RATE_ALGORITHM_NUMS] =
 {
     &minstrel_ops,
 };
-
 
 void wifi_mac_rate_ratmod_attach(void *drv)
 {
@@ -726,7 +700,6 @@ void wifi_mac_rate_ratmod_attach(void *drv)
     }
 }
 
-
 void wifi_mac_rate_ratmod_detach(void *drv)
 {
     struct drv_private *drv_priv = (struct drv_private *)drv;
@@ -734,7 +707,6 @@ void wifi_mac_rate_ratmod_detach(void *drv)
     drv_priv->ratctrl_ops->rate_detach();
     drv_priv->ratctrl_ops = NULL;
 }
-
 
 void wifi_mac_rate_newassoc(struct wifi_station *sta, int isnew)
 {
@@ -786,28 +758,28 @@ void wifi_mac_rate_init(void * ieee,
         switch (rt->info[i].phy)
         {
             case WIFINET_T_VHT:
-                /* vht rates */
+                
                 rs = &wifimac->wm_sup_vht_rates;
                 rs->dot11_rate[vht_rate_num++] = rt->info[i].dot11Rate;
                 rs->dot11_rate_num = vht_rate_num;
                 break;
 
             case WIFINET_T_HT:
-                /* ht rates */
+                
                 rs = &wifimac->wm_sup_ht_rates;
                 rs->dot11_rate[ht_rate_num++] = rt->info[i].dot11Rate;
                 rs->dot11_rate_num = ht_rate_num;
                 break;
 
             case WOFDM:
-                /* save 11g rate for p2p GO and vht mode*/
+                
                 rs = &wifimac->wm_11g_rates;
                 rs->dot11_rate[g_rate_index++] = rt->info[i].dot11Rate;
                 rs->dot11_rate_num = g_rate_index;
                 break;
 
             case CCK:
-                /* save 11b rate */
+                
                 rs = &wifimac->wm_11b_rates;
                 rs->dot11_rate[b_rate_index++] = rt->info[i].dot11Rate;
                 rs->dot11_rate_num = b_rate_index;

@@ -1,22 +1,67 @@
-/*
- ****************************************************************************************
- *
- * Copyright (C) Amlogic 2010-2014
- *
- * Project: 11N 80211 driver  layer Software
- *
- * Description:
- *     driver layer receive frame function
- *
- *
- ****************************************************************************************
- */
+
 #include "wifi_mac_com.h"
 #include "wifi_drv_xmit.h"
 
-#define AML_RX_BA_WIN_SAFE 32
+static int w522a_rx_debug = 0;
+module_param_named(rxdebug, w522a_rx_debug, int, 0644);
+MODULE_PARM_DESC(rxdebug, "W522A RX reorder debug trace (0=off, 1=key events, 2=verbose)");
+
+#define W522A_RX_DESYNC_RUN 1
 
 static void drv_rx_flush_tid(struct drv_private *drv_priv, struct drv_rx_scoreboard *RxTidState, int drop);
+
+static unsigned long drv_rx_reorder_timeout(struct drv_private *drv_priv,
+    struct aml_driver_nsta *drv_sta)
+{
+    unsigned char timeout = DRV_RX_TIMEOUT;
+    struct wifi_station *sta;
+
+    if (drv_priv == NULL)
+        return clamp_t(unsigned long, timeout, 1, 200);
+
+    timeout = drv_priv->drv_config.cfg_rx_reorder_timeout;
+
+    if (drv_sta != NULL) {
+        sta = (struct wifi_station *)smp_load_acquire(&drv_sta->net_nsta);
+        if (sta != NULL && sta->sta_wnet_vif != NULL &&
+            sta->sta_wnet_vif->vm_opmode == WIFINET_M_HOSTAP)
+            timeout = drv_priv->drv_config.cfg_ap_rx_reorder_timeout;
+    }
+
+    if (timeout == 0)
+        timeout = DRV_RX_TIMEOUT;
+
+    return clamp_t(unsigned long, timeout, 1, 200);
+}
+
+static int drv_rx_ring_pending(struct drv_rx_scoreboard *RxTidState)
+{
+    return (RxTidState->baw_tail - RxTidState->baw_head) &
+        (DRV_TID_MAX_BUFS - 1);
+}
+
+static int drv_rxaggr_enabled_for_sta(struct drv_private *drv_priv,
+    struct aml_driver_nsta *drv_sta)
+{
+    struct wifi_station *sta;
+
+    if (drv_priv == NULL)
+        return 0;
+
+    if (drv_sta == NULL)
+        return drv_priv->drv_config.cfg_rxaggr;
+
+    sta = (struct wifi_station *)smp_load_acquire(&drv_sta->net_nsta);
+    if (sta != NULL && sta->sta_wnet_vif != NULL &&
+        sta->sta_wnet_vif->vm_opmode == WIFINET_M_HOSTAP)
+        return drv_priv->drv_config.cfg_ap_rxaggr;
+
+    if (sta != NULL && sta->sta_wnet_vif != NULL &&
+        sta->sta_wnet_vif->vm_opmode == WIFINET_M_MONITOR)
+        return drv_priv->drv_config.cfg_monitor_rxaggr;
+
+    return drv_priv->drv_config.cfg_rxaggr;
+}
 
 int drv_rx_init( struct drv_private *drv_priv, int nbufs)
 {
@@ -30,7 +75,6 @@ drv_set_addba_rsp( struct drv_private *drv_priv, void * nsta,
     struct aml_driver_nsta *drv_sta = DRIVER_NODE(nsta);
     struct drv_rx_scoreboard *RxTidState;
 
-    /* v15r: bounds-check before indexing; see drv_rx_addbareq() below. */
     if (drv_sta == NULL || tid_index >= WME_NUM_TID)
         return;
     RxTidState = &drv_sta->rx_scb[tid_index];
@@ -58,51 +102,63 @@ int drv_rx_addbareq(struct drv_private *drv_priv, void *nsta, unsigned char dial
     struct wifi_mac_ba_parameterset *baparamset, unsigned short batimeout, struct wifi_mac_ba_seqctrl basequencectrl)
 {
     struct aml_driver_nsta *drv_sta = DRIVER_NODE(nsta);
-    unsigned short tid_index = baparamset->tid;
+    unsigned short tid_index;
     struct drv_rx_scoreboard *RxTidState;
+    unsigned short rx_ba_window;
+    int rxaggr_enabled;
 
-    /*
-     * v15r RX-ADDBA HARDEN: bounds-check tid before indexing rx_scb[].
-     *
-     * IEEE 802.11 ADDBA-Req carries a 4-bit TID field (0..15) but
-     * `aml_driver_nsta::rx_scb[]` is sized WME_NUM_TID = 8 (indices 0..7).
-     * A malformed or hostile peer sending an ADDBA-Req with tid >= 8
-     * caused an out-of-bounds write into adjacent struct members of
-     * aml_driver_nsta (NULL ptrs / lock state / etc.), producing
-     * intermittent crashes or silent memory corruption that was hard
-     * to attribute. Reject anything outside the supported AC range with
-     * a normal "REFUSED" response instead of dereferencing past the
-     * array.
-     */
-    if (drv_priv == NULL || drv_sta == NULL || baparamset == NULL ||
-        tid_index >= WME_NUM_TID) {
+    if (drv_priv == NULL || drv_sta == NULL || baparamset == NULL) {
         printk_ratelimited(KERN_WARNING
-            "v15r: drv_rx_addbareq REFUSED bad tid=%u (max=%u)\n",
+            "W522A: drv_rx_addbareq REFUSED null input drv=%p sta=%p ba=%p\n",
+            drv_priv, drv_sta, baparamset);
+        return 0;
+    }
+
+    tid_index = baparamset->tid;
+    if (tid_index >= WME_NUM_TID) {
+        printk_ratelimited(KERN_WARNING
+            "W522A: drv_rx_addbareq REFUSED bad tid=%u (max=%u)\n",
             tid_index, WME_NUM_TID - 1);
         return 0;
     }
     RxTidState = &drv_sta->rx_scb[tid_index];
+    
+    {
+        struct wifi_station *_sta;
+        unsigned short raw_baw = drv_priv->drv_config.cfg_rx_ba_window;
+        if (drv_sta != NULL) {
+            _sta = (struct wifi_station *)smp_load_acquire(&drv_sta->net_nsta);
+            if (_sta != NULL && _sta->sta_wnet_vif != NULL &&
+                _sta->sta_wnet_vif->vm_opmode == WIFINET_M_HOSTAP)
+                raw_baw = drv_priv->drv_config.cfg_ap_rx_ba_window;
+        }
+        rx_ba_window = clamp_t(unsigned short, raw_baw, 1, WME_MAX_BA);
+    }
+    rxaggr_enabled = drv_rxaggr_enabled_for_sta(drv_priv, drv_sta);
 
-    /* v15l: trace ADDBA-RX request from AP so we can see whether RX
-     * aggregation is being negotiated at all. */
     {
         static unsigned long _addba_log_cnt;
-        if ((_addba_log_cnt++ & 0xf) == 0) {
-            printk(KERN_INFO "v15l: drv_rx_addbareq cnt=%lu tid=%u "
-                   "bufsz=%u policy=%u cfg_rxaggr=%u dialog=%u\n",
+        if ((_addba_log_cnt++ & 0x3f) == 0) {
+            printk(KERN_INFO "W522A: drv_rx_addbareq cnt=%lu tid=%u "
+                   "bufsz=%u policy=%u role_rxaggr=%u sta_rx=%u ap_rx=%u mon_rx=%u dialog=%u\n",
                    _addba_log_cnt, tid_index,
                    baparamset->buffersize, baparamset->bapolicy,
-                   drv_priv->drv_config.cfg_rxaggr, dialogtoken);
+                   rxaggr_enabled, drv_priv->drv_config.cfg_rxaggr,
+                   drv_priv->drv_config.cfg_ap_rxaggr,
+                   drv_priv->drv_config.cfg_monitor_rxaggr, dialogtoken);
         }
     }
 
     DRV_RXTID_LOCK_BH(RxTidState);
 
-    if (!drv_priv->drv_config.cfg_rxaggr)
+    if (!rxaggr_enabled)
     {
+        static unsigned long _rxaggr_off_log_cnt;
         DPRINTF(AML_DEBUG_ADDBA, "<running> %s %d \n",__func__,__LINE__);
-        printk_ratelimited(KERN_INFO "v15l: drv_rx_addbareq REFUSED "
-                           "tid=%u (cfg_rxaggr=0)\n", tid_index);
+        if ((_rxaggr_off_log_cnt++ & 0x3f) == 0)
+            printk(KERN_INFO "W522A: drv_rx_addbareq REFUSED "
+                   "tid=%u (role_rxaggr=0 cnt=%lu)\n",
+                   tid_index, _rxaggr_off_log_cnt);
         RxTidState->statuscode = WIFINET_STATUS_REFUSED;
     }
     else if (RxTidState->userstatuscode != WIFINET_STATUS_SUCCESS)
@@ -122,9 +178,9 @@ int drv_rx_addbareq(struct drv_private *drv_priv, void *nsta, unsigned char dial
 
         if (baparamset->buffersize) {
             RxTidState->baw_size = clamp_t(unsigned short,
-                baparamset->buffersize, 1, AML_RX_BA_WIN_SAFE);
+                baparamset->buffersize, 1, rx_ba_window);
         } else {
-            RxTidState->baw_size = AML_RX_BA_WIN_SAFE;
+            RxTidState->baw_size = rx_ba_window;
         }
 
         RxTidState->seq_next = basequencectrl.startseqnum;
@@ -157,8 +213,9 @@ int drv_rx_addbareq(struct drv_private *drv_priv, void *nsta, unsigned char dial
         {
             DPRINTF(AML_DEBUG_ADDBA,"<running> %s %d \n",__func__,__LINE__);
             RxTidState->rx_addba_exchangecomplete = 1;
+            RxTidState->rx_old_run = 0;
             printk_ratelimited(KERN_INFO
-                "v15l: drv_rx_addbareq ACCEPT tid=%u win=%u start=%u dialog=%u\n",
+                "W522A: drv_rx_addbareq ACCEPT tid=%u win=%u start=%u dialog=%u\n",
                 tid_index, RxTidState->baw_size,
                 basequencectrl.startseqnum, dialogtoken);
         }
@@ -172,19 +229,14 @@ int drv_rx_addbareq(struct drv_private *drv_priv, void *nsta, unsigned char dial
     return 0;
 }
 
-
 void drv_rx_addbarsp(struct drv_private *drv_priv, void * nsta, unsigned char tid_index)
 {
     struct aml_driver_nsta *drv_sta = DRIVER_NODE(nsta);
-    /* v15h fix: close UAF race vs drv_free_nsta() which does
-     * smp_store_release(&drv_sta->net_nsta, NULL) when the sta is torn
-     * down. Without this RX could deref a stale wifi_station pointer
-     * during reassoc. Pairs with smp_store_release in wifi_drv_main.c. */
+    
     void *nsta_safe;
     struct wifi_station *sta;
     struct drv_rx_scoreboard *RxTidState;
 
-    /* v15r: same OOB guard as drv_rx_addbareq(). */
     if (drv_sta == NULL || tid_index >= WME_NUM_TID)
         return;
     nsta_safe = (void *)smp_load_acquire(&drv_sta->net_nsta);
@@ -214,7 +266,6 @@ void drv_rx_addbarsp(struct drv_private *drv_priv, void * nsta, unsigned char ti
     }
 }
 
-
 void drv_rx_delba(
     struct drv_private *drv_priv, void * nsta,
     struct wifi_mac_delba_parameterset *delbaparamset,
@@ -222,7 +273,7 @@ void drv_rx_delba(
 )
 {
     struct aml_driver_nsta *drv_sta = DRIVER_NODE(nsta);
-    /* v15h fix: see drv_rx_addbarsp. */
+    
     void *nsta_safe;
     struct wifi_station *sta;
     unsigned short tid_index;
@@ -230,11 +281,10 @@ void drv_rx_delba(
     if (drv_sta == NULL || delbaparamset == NULL)
         return;
     tid_index = delbaparamset->tid;
-    /* v15r: same OOB guard as drv_rx_addbareq() - DELBA carries 4-bit TID
-     * but the per-TID structures only cover WME_NUM_TID = 8 entries. */
+    
     if (tid_index >= WME_NUM_TID) {
         printk_ratelimited(KERN_WARNING
-            "v15r: drv_rx_delba ignored bad tid=%u (max=%u)\n",
+            "W522A: drv_rx_delba ignored bad tid=%u (max=%u)\n",
             tid_index, WME_NUM_TID - 1);
         return;
     }
@@ -257,7 +307,6 @@ void drv_rx_delba(
         drv_txampdu_del(drv_priv, drv_sta, tid_index);
 }
 
-
 static int
 drv_rx_bar(struct drv_private *drv_priv, struct aml_driver_nsta *drv_sta,  struct sk_buff *skbbuf)
 {
@@ -268,7 +317,7 @@ drv_rx_bar(struct drv_private *drv_priv, struct aml_driver_nsta *drv_sta,  struc
     int index, desc_id;
     struct sk_buff *twbuf;
     struct wifi_mac_rx_status* rs;
-    /* v15h fix: see drv_rx_addbarsp. */
+    
     void *nsta_safe = (void *)smp_load_acquire(&drv_sta->net_nsta);
 
     if (nsta_safe == NULL) {
@@ -279,7 +328,7 @@ drv_rx_bar(struct drv_private *drv_priv, struct aml_driver_nsta *drv_sta,  struc
     drv_priv->drv_stats.rx_bar_cnt++;
     bar = (struct wifi_mac_frame_bar *)  os_skb_data(skbbuf);
     tid_index = (bar->i_ctl & WIFINET_BAR_CTL_TID_M) >> WIFINET_BAR_CTL_TID_S;
-    /* v15r: BAR TID is 4-bit, rx_scb[] is sized 8. See drv_rx_addbareq(). */
+    
     if (tid_index >= WME_NUM_TID) {
         drv_priv->drv_stats.rx_bardrop_cnt++;
         os_skb_free(skbbuf);
@@ -288,11 +337,39 @@ drv_rx_bar(struct drv_private *drv_priv, struct aml_driver_nsta *drv_sta,  struc
     seqnum = le16toh(bar->i_seq) >> WIFINET_SEQ_SEQ_SHIFT;
     RxTidState = &drv_sta->rx_scb[tid_index];
     DRV_RXTID_LOCK_BH(RxTidState);
+    if (!RxTidState->rx_addba_exchangecomplete || RxTidState->pRxDesc == NULL ||
+        RxTidState->baw_size == 0)
+    {
+        if (w522a_rx_debug)
+            printk_ratelimited(KERN_INFO
+                "W522A: rxdbg BAR drop-no-ba tid=%d seq=%u complete=%d desc=%p baw=%u head=%d tail=%d next=%u\n",
+                tid_index, seqnum, RxTidState->rx_addba_exchangecomplete,
+                RxTidState->pRxDesc, RxTidState->baw_size,
+                RxTidState->baw_head, RxTidState->baw_tail,
+                RxTidState->seq_next);
+        DRV_RXTID_UNLOCK_BH(RxTidState);
+        drv_priv->drv_stats.rx_bardrop_cnt++;
+        os_skb_free(skbbuf);
+        return WIFINET_FC0_TYPE_CTL;
+    }
+
     index = DRV_BA_INDEX(RxTidState->seq_next, seqnum);
+    if (w522a_rx_debug)
+        printk_ratelimited(KERN_INFO
+            "W522A: rxdbg BAR tid=%d seq=%u idx=%d next=%u head=%d tail=%d pending=%d baw=%u\n",
+            tid_index, seqnum, index, RxTidState->seq_next,
+            RxTidState->baw_head, RxTidState->baw_tail,
+            drv_rx_ring_pending(RxTidState), RxTidState->baw_size);
 
     if ((index > RxTidState->baw_size) &&
         (index > (WIFINET_SEQ_MAX - (RxTidState->baw_size << 2))))
     {
+        if (w522a_rx_debug)
+            printk_ratelimited(KERN_INFO
+                "W522A: rxdbg BAR drop-old tid=%d seq=%u idx=%d next=%u head=%d tail=%d pending=%d baw=%u\n",
+                tid_index, seqnum, index, RxTidState->seq_next,
+                RxTidState->baw_head, RxTidState->baw_tail,
+                drv_rx_ring_pending(RxTidState), RxTidState->baw_size);
         DRV_RXTID_UNLOCK_BH(RxTidState);
         drv_priv->drv_stats.rx_bardrop_cnt++;
         os_skb_free(skbbuf);
@@ -345,7 +422,7 @@ int drv_rx_input( struct drv_private *drv_priv, void *nsta,
     int b_mcast, tid, index, desc_id, rxdiff, is4addr;
     unsigned short rxseq;
     struct aml_driver_nsta *drv_sta = (struct aml_driver_nsta *)nsta;
-    /* v15h fix: see drv_rx_addbarsp. */
+    
     void *nsta_safe = (void *)smp_load_acquire(&drv_sta->net_nsta);
 
     if (nsta_safe == NULL) {
@@ -356,6 +433,18 @@ int drv_rx_input( struct drv_private *drv_priv, void *nsta,
     wh = (struct wifi_frame *)os_skb_data(skbbuf);
     is4addr = (wh->i_fc[1] & WIFINET_FC1_DIR_MASK) == WIFINET_FC1_DIR_DSTODS;
     drv_priv->drv_stats.rx_ampdu_cnt++;
+    if (w522a_rx_debug && ((drv_priv->drv_stats.rx_ampdu_cnt &
+        (w522a_rx_debug > 1 ? 0x3ff : 0xfff)) == 0)) {
+        printk_ratelimited(KERN_INFO
+            "W522A: rx-stats ampdu=%u ok=%u nonqos=%u dup=%u bar=%u bardrop=%u skipped=%u\n",
+            drv_priv->drv_stats.rx_ampdu_cnt,
+            drv_priv->drv_stats.rx_ok_cnt,
+            drv_priv->drv_stats.rx_nonqos_cnt,
+            drv_priv->drv_stats.rx_dup_cnt,
+            drv_priv->drv_stats.rx_bar_cnt,
+            drv_priv->drv_stats.rx_bardrop_cnt,
+            drv_priv->drv_stats.rx_skipped_cnt);
+    }
 
     if ((wh->i_fc[0] & WIFINET_FC0_VERSION_MASK) != WIFINET_FC0_VERSION_0)
     {
@@ -374,7 +463,6 @@ int drv_rx_input( struct drv_private *drv_priv, void *nsta,
         return drv_rx_bar(drv_priv, drv_sta, skbbuf);
     }
 
-    /*receive a mmpdu or broad/multicast packets*/
     if (type != WIFINET_FC0_TYPE_DATA ||
         subtype != WIFINET_FC0_SUBTYPE_QOS || (b_mcast))
     {
@@ -393,16 +481,7 @@ int drv_rx_input( struct drv_private *drv_priv, void *nsta,
         whqos = (struct wifi_qos_frame *) wh;
         tid = whqos->i_qos[0] & WIFINET_QOS_TID;
     }
-    /*
-     * v15r RX OOB GUARD: WIFINET_QOS_TID is a 4-bit mask (0..15) but
-     * `rx_scb[]` only has WME_NUM_TID = 8 entries. A peer that sends
-     * a QoS data frame with tid >= 8 (some buggy 11n APs do this for
-     * voice subqueues, or a hostile peer crafts it deliberately)
-     * caused us to dereference past the end of rx_scb into adjacent
-     * fields of aml_driver_nsta. Bypass the reorder buffer for any
-     * out-of-range TID and just deliver the frame as a non-aggregated
-     * QoS packet via the legacy MAC-input path.
-     */
+    
     if (tid >= WME_NUM_TID) {
         drv_priv->drv_stats.rx_nonqos_cnt++;
         return drv_priv->net_ops->wifi_mac_input(nsta_safe, skbbuf, rs);
@@ -428,10 +507,33 @@ int drv_rx_input( struct drv_private *drv_priv, void *nsta,
 
     if (index > (WIFINET_SEQ_MAX - (RxTidState->baw_size << 2)))
     {
-        DRV_RXTID_UNLOCK_BH(RxTidState);
-        os_skb_free(skbbuf);
-        return WIFINET_FC0_TYPE_DATA;
+        
+        if (RxTidState->baw_head == RxTidState->baw_tail &&
+            ++RxTidState->rx_old_run >= W522A_RX_DESYNC_RUN)
+        {
+            if (w522a_rx_debug)
+                printk_ratelimited(KERN_INFO
+                    "W522A: rx-desync-resync tid=%d rxseq=%u old_next=%u run=%d\n",
+                    tid, rxseq, RxTidState->seq_next, RxTidState->rx_old_run);
+            RxTidState->rx_old_run = 0;
+            RxTidState->seq_next = rxseq;
+            index = 0;
+        }
+        else
+        {
+            if (w522a_rx_debug)
+                printk_ratelimited(KERN_INFO
+                    "W522A: rxdbg drop-old tid=%d rxseq=%u idx=%d next=%u run=%d head=%d tail=%d pending=%d baw=%u\n",
+                    tid, rxseq, index, RxTidState->seq_next, RxTidState->rx_old_run,
+                    RxTidState->baw_head, RxTidState->baw_tail,
+                    drv_rx_ring_pending(RxTidState), RxTidState->baw_size);
+            DRV_RXTID_UNLOCK_BH(RxTidState);
+            os_skb_free(skbbuf);
+            return WIFINET_FC0_TYPE_DATA;
+        }
     }
+    
+    RxTidState->rx_old_run = 0;
 
     if (index >= RxTidState->baw_size)
     {
@@ -457,6 +559,12 @@ int drv_rx_input( struct drv_private *drv_priv, void *nsta,
 
     if (pRxDesc->rx_wbuf != NULL)
     {
+        if (w522a_rx_debug)
+            printk_ratelimited(KERN_INFO
+                "W522A: rxdbg dup tid=%d rxseq=%u idx=%d desc=%d next=%u head=%d tail=%d pending=%d baw=%u\n",
+                tid, rxseq, index, desc_id, RxTidState->seq_next,
+                RxTidState->baw_head, RxTidState->baw_tail,
+                drv_rx_ring_pending(RxTidState), RxTidState->baw_size);
         DRV_RXTID_UNLOCK_BH(RxTidState);
         drv_priv->drv_stats.rx_dup_cnt++;
         
@@ -475,6 +583,16 @@ int drv_rx_input( struct drv_private *drv_priv, void *nsta,
         CIRCLE_Add_One(RxTidState->baw_tail, DRV_TID_MAX_BUFS);
     }
 
+    if (w522a_rx_debug &&
+        (index >= 8 || drv_rx_ring_pending(RxTidState) >= (RxTidState->baw_size >> 1)))
+    {
+        printk_ratelimited(KERN_INFO
+            "W522A: rxdbg queue tid=%d rxseq=%u idx=%d desc=%d rxdiff=%d next=%u head=%d tail=%d pending=%d baw=%u\n",
+            tid, rxseq, index, desc_id, rxdiff, RxTidState->seq_next,
+            RxTidState->baw_head, RxTidState->baw_tail,
+            drv_rx_ring_pending(RxTidState), RxTidState->baw_size);
+    }
+
     while (RxTidState->baw_head != RxTidState->baw_tail)
     {
         pRxDesc = RxTidState->pRxDesc + RxTidState->baw_head;
@@ -490,9 +608,14 @@ int drv_rx_input( struct drv_private *drv_priv, void *nsta,
         CIRCLE_Add_One(RxTidState->seq_next, WIFINET_SEQ_MAX);
     }
 
-    if (RxTidState->baw_head != RxTidState->baw_tail)
-        os_timer_ex_start(&RxTidState->timer);
-    else
+    if (RxTidState->baw_head != RxTidState->baw_tail) {
+        
+        if (!os_timer_ex_active(&RxTidState->timer)) {
+            os_set_timer_period(&RxTidState->timer,
+                clamp_t(unsigned long, drv_rx_reorder_timeout(drv_priv, RxTidState->drv_sta), 1, 200));
+            os_timer_ex_start(&RxTidState->timer);
+        }
+    } else
         os_timer_ex_cancel(&RxTidState->timer, CANCEL_NO_SLEEP);
     DRV_RXTID_UNLOCK_BH(RxTidState);
     return WIFINET_FC0_TYPE_DATA;
@@ -505,17 +628,16 @@ static void drv_rx_sort_timer_ex(SYS_TYPE param1, SYS_TYPE param2,
     struct drv_rx_scoreboard *RxTidState = (struct drv_rx_scoreboard *) param1;
     struct aml_driver_nsta *drv_sta = RxTidState->drv_sta;
     struct drv_private *drv_priv = drv_sta->sta_drv_priv;
-    int nosched = OS_TIMER_NOT_REARMED;
+    int rearm_uses_custom_period = 0;
     struct drv_rxdesc *pRxDesc;
     int count = 0;
     unsigned long diff;
     int bawhead;
-    /* v15h fix: see drv_rx_addbarsp. Timer callback could fire after
-     * sta teardown released net_nsta. */
+    
     void *nsta_safe = (void *)smp_load_acquire(&drv_sta->net_nsta);
 
     if (nsta_safe == NULL) {
-        /* sta torn down; flush remaining buffers without uploading. */
+        
         DRV_RXTID_LOCK_BH(RxTidState);
         drv_rx_flush_tid(drv_priv, RxTidState, 1);
         DRV_RXTID_UNLOCK_BH(RxTidState);
@@ -529,38 +651,50 @@ static void drv_rx_sort_timer_ex(SYS_TYPE param1, SYS_TYPE param2,
         pRxDesc = RxTidState->pRxDesc + bawhead;
         if (!pRxDesc->rx_wbuf)
         {
+            
             count++;
             CIRCLE_Add_One(bawhead, DRV_TID_MAX_BUFS);
+            CIRCLE_Add_One(RxTidState->baw_head, DRV_TID_MAX_BUFS);
+            CIRCLE_Add_One(RxTidState->seq_next, WIFINET_SEQ_MAX);
             continue;
         }
-        /*
-            for example, (10), 11, 12, (13), 14.... Packet 10/13 are missed and we are waiting for 10/13.
-            When sort_timer timeout, we upload 11/12 at most, if the 'diff' of packet11/12 are greater than
-            DRV_RX_TIMEOUT. We can upload packet14 in this time period if the 'diff' of packet14 is greater
-            than DRV_RX_TIMEOUT, otherwise, we shall set timer and wait for 13, upload 14 in next time period.
-        */
-        //attention: MUST transfer to long type to avoid the timer wrapping, by zqh
+        
         diff = (long)OS_GET_TIMESTAMP() - (long)pRxDesc->rx_time;
-        if (diff < DRV_RX_TIMEOUT)
+        if (diff < drv_rx_reorder_timeout(drv_priv, RxTidState->drv_sta))
         {
-            os_set_timer_period(&RxTidState->timer, DRV_RX_TIMEOUT - diff);
+            if (w522a_rx_debug)
+                printk_ratelimited(KERN_INFO
+                    "W522A: rxdbg timer-wait count=%d diff=%lu timeout=%lu next=%u head=%d scan=%d tail=%d pending=%d\n",
+                    count, diff, drv_rx_reorder_timeout(drv_priv, RxTidState->drv_sta),
+                    RxTidState->seq_next, RxTidState->baw_head, bawhead,
+                    RxTidState->baw_tail, drv_rx_ring_pending(RxTidState));
+            os_set_timer_period(&RxTidState->timer,
+                drv_rx_reorder_timeout(drv_priv, RxTidState->drv_sta) - diff);
+            rearm_uses_custom_period = 1;
             break;
         }
 
         drv_priv->drv_stats.rx_ok_cnt++;
         drv_priv->net_ops->wifi_mac_input(nsta_safe, pRxDesc->rx_wbuf, &pRxDesc->rs);
         pRxDesc->rx_wbuf = NULL;
-        count++;
 
         CIRCLE_Add_One(bawhead, DRV_TID_MAX_BUFS);
-        RxTidState->seq_next = CIRCLE_Addition2(RxTidState->seq_next, count, WIFINET_SEQ_MAX);
-        /* move baw_head to current mpdu we are processing. */
-        RxTidState->baw_head = bawhead;
+        CIRCLE_Add_One(RxTidState->baw_head, DRV_TID_MAX_BUFS);
+        CIRCLE_Add_One(RxTidState->seq_next, WIFINET_SEQ_MAX);
+        if (w522a_rx_debug)
+            printk_ratelimited(KERN_INFO
+                "W522A: rxdbg timer-release count=%d diff=%lu next=%u head=%d tail=%d pending=%d\n",
+                count + 1, diff, RxTidState->seq_next, RxTidState->baw_head,
+                RxTidState->baw_tail, drv_rx_ring_pending(RxTidState));
         count = 0;
     }
 
-    if (RxTidState->baw_head != RxTidState->baw_tail)
+    if (RxTidState->baw_head != RxTidState->baw_tail) {
+        if (!rearm_uses_custom_period)
+            os_set_timer_period(&RxTidState->timer,
+                drv_rx_reorder_timeout(drv_priv, RxTidState->drv_sta));
         os_timer_ex_start(&RxTidState->timer);
+    }
     DRV_RXTID_UNLOCK_BH(RxTidState);
 }
 
@@ -598,8 +732,7 @@ drv_rx_flush_tid(struct drv_private *drv_priv, struct drv_rx_scoreboard *RxTidSt
         }
         else
         {
-            /* v15h fix: load net_nsta once with smp_load_acquire and
-             * NULL-check before passing to upper layer. */
+            
             void *nsta_safe = (void *)smp_load_acquire(&RxTidState->drv_sta->net_nsta);
             if (nsta_safe != NULL) {
                 drv_priv->net_ops->wifi_mac_input(nsta_safe, pRxDesc->rx_wbuf,
@@ -614,7 +747,6 @@ drv_rx_flush_tid(struct drv_private *drv_priv, struct drv_rx_scoreboard *RxTidSt
         CIRCLE_Add_One(RxTidState->seq_next, WIFINET_SEQ_MAX);
     }
 }
-
 
 void
 drv_rxampdu_del(struct drv_private *drv_priv, struct aml_driver_nsta *drv_sta, unsigned char tid_index)
@@ -641,11 +773,10 @@ drv_rxampdu_del(struct drv_private *drv_priv, struct aml_driver_nsta *drv_sta, u
     DRV_RXTID_UNLOCK_IRQ(RxTidState,lockflags);
 }
 
-
 void
 drv_rx_nsta_init(struct drv_private *drv_priv, struct aml_driver_nsta *drv_sta)
 {
-    if (drv_priv->drv_config.cfg_rxaggr)
+    if (drv_priv->drv_config.cfg_rxaggr || drv_priv->drv_config.cfg_ap_rxaggr)
     {
         struct drv_rx_scoreboard *RxTidState;
         int tid_index;
@@ -657,9 +788,11 @@ drv_rx_nsta_init(struct drv_private *drv_priv, struct aml_driver_nsta *drv_sta)
             RxTidState->seq_next = 0;
             RxTidState->baw_size = WME_MAX_BA;
             RxTidState->baw_head = RxTidState->baw_tail = 0;
+            RxTidState->rx_old_run = 0;
             RxTidState->pRxDesc = NULL;
 
-            os_timer_ex_initialize(&RxTidState->timer, DRV_RX_TIMEOUT, drv_rx_sort_timer, RxTidState);
+            os_timer_ex_initialize(&RxTidState->timer,
+                drv_rx_reorder_timeout(drv_priv, RxTidState->drv_sta), drv_rx_sort_timer, RxTidState);
 
             DRV_RXTID_LOCK_INIT(RxTidState);
 
@@ -671,7 +804,7 @@ drv_rx_nsta_init(struct drv_private *drv_priv, struct aml_driver_nsta *drv_sta)
 
 void drv_rx_nsta_clean(struct drv_private *drv_priv, struct aml_driver_nsta *drv_sta)
 {
-    if (drv_priv->drv_config.cfg_rxaggr)
+    if (drv_priv->drv_config.cfg_rxaggr || drv_priv->drv_config.cfg_ap_rxaggr)
     {
         struct drv_rx_scoreboard *RxTidState;
         int tid_index,i;
@@ -709,7 +842,6 @@ void drv_rx_nsta_clean(struct drv_private *drv_priv, struct aml_driver_nsta *drv
         }
     }
 }
-
 
 void drv_rx_nsta_free(struct drv_private *drv_priv, struct aml_driver_nsta *drv_sta)
 {

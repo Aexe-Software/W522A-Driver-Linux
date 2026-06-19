@@ -1,13 +1,6 @@
 #ifndef AML_SDIO_H
 #define AML_SDIO_H
 
-/* Stand sdio function number from 0~7
-** Func1: For register operation, cmd52
-** Func2: For sram operation,cmd53
-** Func3: For writer CMD,cmd53,irq fw arc
-** Func4: For Tx/Rx operaton,cmd53
-** Func5: For BT use only currently
-*/
 enum SDIO_STD_FUNNUM {
 	SDIO_FUNC0=0,
 	SDIO_FUNC1,
@@ -50,12 +43,12 @@ struct hal_thr_thread_test
     struct task_struct* work_thread;
     struct semaphore work_thread_sem;
     int work_thread_quit;
-    struct completion work_thread_completion; /* thread completion */
+    struct completion work_thread_completion; 
 
     struct task_struct* sdio_thread;
     struct semaphore sdio_thread_sem;
     int sdio_thread_quit;
-    struct completion   sdio_thread_completion; /* thread completion */
+    struct completion   sdio_thread_completion; 
 };
 
 void Init_B2B_Resource(void);
@@ -64,33 +57,27 @@ struct amlw_hwif_sdio {
     struct sdio_func * sdio_func_if[SDIO_FUNCNUM_MAX];
     bool scatter_enabled;
 
-    /* protects access to scat_req */
     OS_LOCK scat_lock;
 
-    /* scatter request list head */
     struct amlw_hif_scatter_req *scat_req;
-    /* Page-aligned persistent bounce buffer for FUNC6 RX DMA.
-     * Pre-allocated at scatter init to avoid per-call GFP_ATOMIC large-order
-     * allocations that fail under memory pressure, causing DMA fallback to PIO. */
+    
     void *bounce_buf;
     unsigned int bounce_buf_size;
 };
 
-/* Common msglevel constants */
-#define SDH_ERROR_VAL		0x0001	/* Error */
-#define SDH_TRACE_VAL		0x0002	/* Trace */
-#define SDH_INFO_VAL		0x0004	/* Info */
-#define SDH_DEBUG_VAL		0x0008	/* Debug */
-#define SDH_DATA_VAL		0x0010	/* Data */
-#define SDH_CTRL_VAL		0x0020	/* Control Regs */
-#define SDH_LOG_VAL		0x0040	/* Enable log */
-#define SDH_DMA_VAL		0x0080	/* DMA */
-#define SDH_SGLIST_VAL		0x0100	/* SgList */
+#define SDH_ERROR_VAL		0x0001	
+#define SDH_TRACE_VAL		0x0002	
+#define SDH_INFO_VAL		0x0004	
+#define SDH_DEBUG_VAL		0x0008	
+#define SDH_DATA_VAL		0x0010	
+#define SDH_CTRL_VAL		0x0020	
+#define SDH_LOG_VAL		0x0040	
+#define SDH_DMA_VAL		0x0080	
+#define SDH_SGLIST_VAL		0x0100	
 
 #define SDIOH_API_RC_SUCCESS            (0x00)
 #define SDIOH_API_RC_FAIL	               (0x01)
 #define SDIOH_API_SUCCESS(status)     (status == 0)
-
 
 int aml_sdio_bottom_write8(unsigned char  func_num, int addr, unsigned char data);
 unsigned char aml_sdio_bottom_read8(unsigned char  func_num, int addr);
@@ -110,7 +97,7 @@ void  aml_sdio_write_reg8(unsigned long sram_addr,unsigned long sramdata);
 unsigned long aml_sdio_read_reg32(unsigned long sram_addr);
 int  aml_sdio_write_reg32(unsigned long sram_addr,unsigned long sramdata);
 void  aml_sdio_write_cmd32(unsigned long sram_addr,unsigned long sramdata);
-/*For BT use only start */
+
 void aml_bt_sdio_read_sram (unsigned char *buf,unsigned char *addr,SYS_TYPE len);
 void aml_bt_sdio_write_sram (unsigned char *buf,unsigned char *addr,SYS_TYPE len);
 void aml_bt_hi_write_word(unsigned int addr,unsigned int data);
@@ -130,7 +117,6 @@ int sdio_call_task( void );
 void aml_enable_wifi(void);
 void aml_disable_wifi(void);
 
-
 void aml_aon_write_reg(unsigned int addr,unsigned int data);
 unsigned int aml_aon_read_reg(unsigned int addr);
 
@@ -149,10 +135,7 @@ int aml_sdio_scat_rw(struct scatterlist *sg_list, unsigned int sg_num, unsigned 
 
 #include <asm/io.h>
 #include <asm/uaccess.h>
-/* These functions are Amlogic-kernel-specific.
- * On Armbian (NOT_AMLOGIC_PLATFORM) the SDIO host controller is already
- * initialised by the kernel; we just register our SDIO driver and let the
- * MMC framework call our probe. */
+
 #ifndef NOT_AMLOGIC_PLATFORM
 extern void amlwifi_set_sdio_host_clk(int clk);
 extern void sdio_reinit(void);
@@ -206,11 +189,6 @@ extern void sdio_read_write(int idx, int addr, svBitPackedArrRef buff, int len, 
 
     struct sdio_func *aml_priv_to_func(int func_n);
 
-/* v16k-refined: centralised extern for the SDIO-link-alive flag (was previously
- * re-declared locally in wifi_mac_if.c and wifi_sdio.c).  The variable is
- * defined and EXPORT_SYMBOL'd in vmac/w1_sdio/w1_sdio.c, so any source file
- * that touches the TX-direct-drain path or the SDIO disable/enable path can
- * just include wifi_sdio.h instead of carrying its own ABI-coupled extern. */
 extern unsigned char w1_wifi_sdio_access;
 
-#endif //AML_SDIO_H
+#endif 

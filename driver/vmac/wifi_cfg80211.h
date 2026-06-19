@@ -1,16 +1,3 @@
-/*
- ****************************************************************************************
- *
- * Copyright (C) Amlogic 2010-2014
- *
- * Project: 11N 80211 mac  layer Software
- *
- * Description:
- *     wifi_mac layer nl80211 iocontrol module
- *
- *
- ****************************************************************************************
- */
 
 #ifndef __WIFI_CFG80211_H__
 #define __WIFI_CFG80211_H__
@@ -34,7 +21,6 @@
 
 #define AML_2G_CHANNELS_NUM 14
 #define AML_5G_CHANNELS_NUM 25
-
 
 extern struct ieee80211_channel aml_2ghz_channels[AML_2G_CHANNELS_NUM];
 extern struct ieee80211_channel aml_5ghz_channels[AML_5G_CHANNELS_NUM];
@@ -67,23 +53,20 @@ extern struct ieee80211_rate aml_rates[AML_G_RATES_NUM];
 #define STATION_INFO_PEER_PM        BIT(NL80211_STA_INFO_PEER_PM)
 #define STATION_INFO_NONPEER_PM     BIT(NL80211_STA_INFO_NONPEER_PM)
 #define STATION_INFO_ASSOC_REQ_IES  0
-#endif /* Linux kernel >= 4.0.0 */
+#endif 
 
-//allign issue please pay attention to
  struct _iwVendorCmdStruct
 {
-    unsigned int first_eight_byte; // base addr
-    unsigned int second_eight_byte; // mac write pointer
-    unsigned char last_byte; // fw read pointer
+    unsigned int first_eight_byte; 
+    unsigned int second_eight_byte; 
+    unsigned char last_byte; 
 } ;
 
-/**vendor sub command*/
 enum vendor_sub_command {
     sub_cmd_set_drvdbg = 0,
     sub_cmd_max,
 };
 
-/**vendor event*/
 enum vendor_event {
     event_hang = 0,
     event_reg_value =1,
@@ -159,7 +142,7 @@ enum vm_vendor_command_attr{
     VM_NL80211_VENDER_SYS_INFO_STATISTIC_DEFAULT_CFG=0x96,
     VM_NL80211_VENDER_SYS_INFO_STATISTIC_UPDATE_CFG=0x97,
     VM_NL80211_VENDER_SYS_INFO_STATISTIC_OPT=0x98,
-    /*a special code 0x99 for the vip function*/
+    
     VM_NL80211_VENDER_STS_BY_LAYER=0x99,
 
     VM_NL80211_VENDER_PT_RX_START = 0x9a,
@@ -287,7 +270,7 @@ struct vm_wdev_priv
     int send_action_id;
 #ifdef CONFIG_P2P
     struct wifi_mac_p2p p2p;
-#endif //CONFIG_P2P
+#endif 
 };
 
 struct vm_netdev_priv_indicator
@@ -316,7 +299,7 @@ enum
     WIFINET_MACCMD_POLICY_DENY  = 2,
     WIFINET_MACCMD_FLUSH        = 3,
     WIFINET_MACCMD_DETACH       = 4,
-};//yishu
+};
 
 struct wifi_macreq_key
 {
@@ -330,12 +313,10 @@ struct wifi_macreq_key
     unsigned char ik_keyrsc[WIFINET_TID_SIZE];
     u_int64_t ik_keytsc;
     unsigned char ik_keydata[WIFINET_KEYBUF_SIZE + WIFINET_MICBUF_SIZE];
-};//yishu
+};
 
-//yishu
 #define WIFINET_MAX_OPT_IE  256
 #define WIFINET_MAX_WDF_IE  256
-
 
 int vm_cfg80211_vnd_cmd_set_para(struct wiphy *wiphy, struct wireless_dev *wdev,const void *data, int data_len);
 struct device *wl_cfg80211_get_parent_dev(void);
@@ -390,4 +371,3 @@ int vm_cfg80211_set_bitrate_mask(struct wiphy *wiphy,
     const struct cfg80211_bitrate_mask *mask);
 #endif
 #endif
-

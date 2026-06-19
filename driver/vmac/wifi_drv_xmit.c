@@ -1,16 +1,4 @@
-/*
- ****************************************************************************************
- *
- * Copyright (C) Amlogic 2010-2014
- *
- * Project: 11N 80211 driver  layer Software
- *
- * Description:
- *     driver layer send frame module
- *
- *
- ****************************************************************************************
- */
+
 #include "wifi_mac_com.h"
 #include "wifi_drv_uapsd.h"
 #include "wifi_hal.h"
@@ -31,17 +19,12 @@ extern struct tasklet_struct amsdu_tasklet;
 extern void wifi_mac_tx_lock_timer_attach(void);
 extern void wifi_mac_tx_lock_timer_cancel(void);
 
-/*
- * v17a AP A-MPDU low-latency wait:
- * Keep cfg_ampdu_subframes as the hard build ceiling, but do not make AP mode
- * wait for a full 16/32-deep software queue before handing frames to HAL.
- * On this SDIO part that wait turns into high ping and shallow real A-MPDUs.
- */
-#define AP_AMPDU_WAIT_TARGET 2
-#define AP_AMPDU_HT20_LIMIT 2
-#define AP_AMPDU_WIDE_LIMIT 8
-#define AP_AMPDU_PENDING_LIMIT 16
-#define AP_ADDBA_EXCHANGE_ATTEMPTS 3
+#define AP_AMPDU_PENDING_LIMIT     64   /* was 16: too low, caused PENDING_FUSE quarantine on normal bursts */
+#define AP_ADDBA_EXCHANGE_ATTEMPTS  8   /* was 3: too few, gave up ADDBA after 3 glitches; STA uses 10 */
+#define AP_TXBA_FW_FAIL_THRESHOLD   4   /* quarantine only after this many consecutive per-frame AP AMPDU TX fails */
+
+#define AP_TXBA_COOLDOWN  (3 * HZ)      /* was 30s: one lost ACK blocked aggr for 30s; 3s is aggressive enough */
+#define STA_TXBA_COOLDOWN (10 * HZ)
 #define STA_AMPDU_RSSI_WEAK      (-70)
 #define STA_AMPDU_RSSI_VERY_WEAK (-76)
 #define STA_AMPDU_WEAK_LIMIT     2
@@ -53,6 +36,30 @@ enum drv_tx_sw_drop_reason {
     DRV_TX_SW_DROP_INVARIANT,
     DRV_TX_SW_DROP_SCHED,
 };
+
+enum drv_txba_fault_code {
+    DRV_TXBA_FAULT_NONE = 0,
+    DRV_TXBA_FAULT_ADDBA_TIMEOUT,
+    DRV_TXBA_FAULT_ADDBA_REFUSED,
+    DRV_TXBA_FAULT_PENDING_FUSE,
+    DRV_TXBA_FAULT_FW_END_FAIL,
+    DRV_TXBA_FAULT_HAL_TX_FAIL,
+    DRV_TXBA_FAULT_CLEANUP,
+};
+
+static const char *drv_txba_fault_name(enum drv_txba_fault_code code)
+{
+    switch (code) {
+    case DRV_TXBA_FAULT_ADDBA_TIMEOUT: return "ADDBA_TIMEOUT";
+    case DRV_TXBA_FAULT_ADDBA_REFUSED: return "ADDBA_REFUSED";
+    case DRV_TXBA_FAULT_PENDING_FUSE:  return "PENDING_FUSE";
+    case DRV_TXBA_FAULT_FW_END_FAIL:   return "FW_END_FAIL";
+    case DRV_TXBA_FAULT_HAL_TX_FAIL:   return "HAL_TX_FAIL";
+    case DRV_TXBA_FAULT_CLEANUP:       return "CLEANUP";
+    case DRV_TXBA_FAULT_NONE:
+    default:                           return "NONE";
+    }
+}
 
 static int drv_tid_is_hostap(struct drv_tx_scoreboard *tid)
 {
@@ -71,12 +78,165 @@ static int drv_tid_is_hostap(struct drv_tx_scoreboard *tid)
         sta->sta_wnet_vif->vm_opmode == WIFINET_M_HOSTAP;
 }
 
-static int drv_tid_hostap_txampdu_allowed(struct drv_tx_scoreboard *tid)
+static int drv_tid_is_hostap_vht80(struct drv_tx_scoreboard *tid)
 {
+    struct aml_driver_nsta *drv_sta;
+    struct wifi_station *sta;
+
+    if (!drv_tid_is_hostap(tid))
+        return 0;
+
+    drv_sta = tid->drv_sta;
+    if (drv_sta == NULL)
+        return 0;
+
+    sta = (struct wifi_station *)smp_load_acquire(&drv_sta->net_nsta);
+    return sta && sta->sta_chbw >= WIFINET_BWC_WIDTH80;
+}
+
+static int drv_tid_is_monitor(struct drv_tx_scoreboard *tid)
+{
+    struct aml_driver_nsta *drv_sta;
+    struct wifi_station *sta;
+
+    if (tid == NULL)
+        return 0;
+
+    drv_sta = tid->drv_sta;
+    if (drv_sta == NULL)
+        return 0;
+
+    sta = (struct wifi_station *)smp_load_acquire(&drv_sta->net_nsta);
+    return sta && sta->sta_wnet_vif &&
+        sta->sta_wnet_vif->vm_opmode == WIFINET_M_MONITOR;
+}
+
+static int drv_cfg_ap_ampdu_wait_target(struct drv_private *drv_priv)
+{
+    int target = drv_priv ? drv_priv->drv_config.cfg_ap_ampdu_wait_target :
+        DEFAULT_AP_AMPDU_WAIT_TARGET;
+
+    return clamp_t(int, target, DEFAULT_TXAMPDU_SUB_MIN, DEFAULT_TXAMPDU_SUB_MAX);
+}
+
+static int drv_cfg_ap_ampdu_limit(struct drv_private *drv_priv,
+    struct wifi_station *sta)
+{
+    int limit;
+
+    if (sta != NULL && sta->sta_chbw <= WIFINET_BWC_WIDTH20)
+        limit = drv_priv ? drv_priv->drv_config.cfg_ap_ampdu_ht20_limit :
+            DEFAULT_AP_AMPDU_HT20_LIMIT;
+    else
+        limit = drv_priv ? drv_priv->drv_config.cfg_ap_ampdu_wide_limit :
+            DEFAULT_AP_AMPDU_WIDE_LIMIT;
+
+    return clamp_t(int, limit, DEFAULT_TXAMPDU_SUB_MIN, DEFAULT_TXAMPDU_SUB_MAX);
+}
+
+static int drv_cfg_allow_ap_vht80_txaggr(struct drv_private *drv_priv)
+{
+    return drv_priv != NULL && drv_priv->drv_config.cfg_ap_vht80_txaggr;
+}
+
+static int drv_txba_quarantined(struct drv_tx_scoreboard *tid)
+{
+    if (tid == NULL || tid->txba_disabled_until == 0)
+        return 0;
+
+    if (time_before(jiffies, tid->txba_disabled_until))
+        return 1;
+
+    pr_info_ratelimited("W522A: txba: cooldown expired tid=%u last_fault=%u:%s failures=%u\n",
+        tid->tid_index, tid->txba_fault_code,
+        drv_txba_fault_name(tid->txba_fault_code), tid->addba_failures);
+    tid->txba_disabled_until = 0;
+    tid->txba_fault_code = DRV_TXBA_FAULT_NONE;
+    tid->addba_failures = 0;
+    return 0;
+}
+
+static int drv_ap_txba_global_quarantined(struct drv_private *drv_priv)
+{
+    unsigned long until;
+
+    if (drv_priv == NULL)
+        return 0;
+
+    until = READ_ONCE(drv_priv->ap_txba_disabled_until);
+    if (until == 0)
+        return 0;
+
+    if (time_before(jiffies, until))
+        return 1;
+
+    WRITE_ONCE(drv_priv->ap_txba_disabled_until, 0);
+    pr_info_ratelimited("W522A: txba: AP global cooldown expired\n");
+    return 0;
+}
+
+static void drv_txba_quarantine(struct drv_private *drv_priv,
+    struct drv_tx_scoreboard *tid, enum drv_txba_fault_code code)
+{
+    unsigned long cooldown;
+
+    if (tid == NULL)
+        return;
+
+    cooldown = drv_tid_is_hostap(tid) ? AP_TXBA_COOLDOWN : STA_TXBA_COOLDOWN;
+    /* VHT80 double-cooldown removed: at the new 3s base it adds no value and
+     * disproportionately penalises 80 MHz clients for transient RF glitches. */
+
+    tid->txba_fault_code = code;
+    tid->txba_fw_fail_cnt = 0;   /* reset so next run starts counting from zero */
+    if (tid->addba_failures < 255)
+        tid->addba_failures++;
+    tid->txba_disabled_until = jiffies + cooldown;
+    tid->addba_exchangecomplete = 0;
+    tid->addba_exchangeattempts = 0;
+    tid->addba_exchangestatuscode = WIFINET_STATUS_UNSPECIFIED;
+    atomic_set(&tid->addba_exchangeinprogress, 0);
+
+    if (tid->paused > 0)
+        tid->paused = 0;
+
+    pr_warn_ratelimited("W522A: txba: quarantine code=%u:%s tid=%u hostap=%d vht80=%d failures=%u cooldown=%lus paused=%u\n",
+        code, drv_txba_fault_name(code), tid->tid_index,
+        drv_tid_is_hostap(tid), drv_tid_is_hostap_vht80(tid),
+        tid->addba_failures, cooldown / HZ, tid->paused);
+}
+
+static int drv_tid_hostap_txampdu_allowed(struct drv_private *drv_priv,
+    struct drv_tx_scoreboard *tid)
+{
+    if (drv_txba_quarantined(tid))
+        return 0;
+
+    if (drv_priv == NULL)
+        return 0;
+
+    if (drv_tid_is_monitor(tid))
+        return drv_priv->drv_config.cfg_monitor_txaggr;
+
+    if (!drv_tid_is_hostap(tid) && !drv_priv->drv_config.cfg_txaggr)
+        return 0;
+
     if (!drv_tid_is_hostap(tid))
         return 1;
 
-    return tid->tid_index == 0 || tid->tid_index == 3;
+    if (!drv_priv->drv_config.cfg_ap_txaggr)
+        return 0;
+
+    if (drv_ap_txba_global_quarantined(drv_priv))
+        return 0;
+
+    if (drv_tid_is_hostap_vht80(tid) &&
+        !drv_cfg_allow_ap_vht80_txaggr(drv_priv)) {
+        pr_warn_ratelimited("W522A: AP VHT80 TX BA blocked by cfg_ap_vht80_txaggr=0\n");
+        return 0;
+    }
+
+    return 1;
 }
 
 static int drv_tx_ampdu_wait_target(struct drv_private *drv_priv,
@@ -87,7 +247,7 @@ static int drv_tx_ampdu_wait_target(struct drv_private *drv_priv,
     unsigned int real_fail;
     unsigned int sw_drop;
     unsigned int tx_done;
-    int target = AP_AMPDU_WAIT_TARGET;
+    int target = drv_cfg_ap_ampdu_wait_target(drv_priv);
 
     if (tid == NULL || ampdu_subframes <= DEFAULT_TXAMPDU_SUB_MIN)
         return ampdu_subframes;
@@ -101,12 +261,7 @@ static int drv_tx_ampdu_wait_target(struct drv_private *drv_priv,
         return ampdu_subframes;
 
     if (sta->sta_wnet_vif->vm_opmode == WIFINET_M_HOSTAP) {
-        /*
-         * v17b: keep AP latency low when the link is dirty, but let clean
-         * links gather a little more before handing an A-MPDU to HAL.  This
-         * is deliberately conservative: cfg_ampdu_subframes remains the hard
-         * maximum, this only controls the "wait before first send" threshold.
-         */
+        
         if (drv_priv != NULL) {
             sw_drop = drv_priv->drv_stats.tx_ampdu_sw_drop_badaggr_cnt
                 + drv_priv->drv_stats.tx_ampdu_sw_drop_hal_cnt
@@ -124,15 +279,6 @@ static int drv_tx_ampdu_wait_target(struct drv_private *drv_priv,
         return clamp_t(int, target, DEFAULT_TXAMPDU_SUB_MIN, ampdu_subframes);
     }
 
-    /*
-     * v17p STA weak-link A-MPDU pacing:
-     * In STA mode we used to wait for cfg_ampdu_subframes unconditionally.
-     * On the W155S1 this makes weak VHT links (-70 dBm and below) build long
-     * software bursts that the peer/air cannot drain cleanly, so retries grow
-     * and latency explodes.  Keep A-MPDU enabled, but start smaller bursts on
-     * dirty links so minstrel can recover instead of wedging behind a 16-deep
-     * queue.
-     */
     if ((sta->sta_flags & (WIFINET_NODE_HT | WIFINET_NODE_VHT)) &&
         sta->sta_avg_bcn_rssi <= STA_AMPDU_RSSI_VERY_WEAK)
         target = STA_AMPDU_VERY_WEAK_LIMIT;
@@ -165,16 +311,17 @@ static int drv_tx_ampdu_subframe_limit(struct drv_private *drv_priv,
 
     if (sta->sta_wnet_vif->vm_opmode == WIFINET_M_HOSTAP &&
         (sta->sta_flags & (WIFINET_NODE_HT | WIFINET_NODE_VHT))) {
-        if (sta->sta_chbw <= WIFINET_BWC_WIDTH20)
-            limit = AP_AMPDU_HT20_LIMIT;
-        else
-            limit = AP_AMPDU_WIDE_LIMIT;
+        limit = drv_cfg_ap_ampdu_limit(drv_priv, sta);
     } else if (sta->sta_wnet_vif->vm_opmode != WIFINET_M_HOSTAP &&
         (sta->sta_flags & (WIFINET_NODE_HT | WIFINET_NODE_VHT))) {
         if (sta->sta_avg_bcn_rssi <= STA_AMPDU_RSSI_VERY_WEAK)
             limit = STA_AMPDU_VERY_WEAK_LIMIT;
         else if (sta->sta_avg_bcn_rssi <= STA_AMPDU_RSSI_WEAK)
             limit = STA_AMPDU_WEAK_LIMIT;
+        
+        if ((sta->sta_flags & WIFINET_NODE_VHT) &&
+            limit > DEFAULT_VHT_STA_AMPDU_LIMIT)
+            limit = DEFAULT_VHT_STA_AMPDU_LIMIT;
     }
 
     if (tid->baw_size > 0 && (unsigned short)limit > tid->baw_size)
@@ -182,10 +329,6 @@ static int drv_tx_ampdu_subframe_limit(struct drv_private *drv_priv,
 
     return clamp_t(int, limit, DEFAULT_TXAMPDU_SUB_MIN, ampdu_subframes);
 }
-
-/* N-D1: drv_tx_ack_optimize removed — dead code (no callers found).
- * TCP ACK coalescing feature was disabled. If re-enabled in future,
- * add DRV_TXQ_LOCK before list traversal and call from drv_send(). */
 
 static void drv_retransmit_tasklet(unsigned long arg)
 {
@@ -245,7 +388,7 @@ struct drv_txlist *drv_txlist_initial(struct drv_private *drv_priv, int queue_id
         INIT_LIST_HEAD(&txlist->tx_tcp_queue);
         DRV_TX_BACKUPQ_LOCK_INIT(txlist);
         txlist->txlist_qcnt = 0;
-        txlist->txds_pending_cnt = 0; /* FIX-13: reset on init to prevent stale count after reconnect */
+        txlist->txds_pending_cnt = 0; 
 
         drv_priv->drv_txqueue_map |= 1<<queue_id;
         drv_tx_bk_list_init(txlist);
@@ -289,8 +432,6 @@ int drv_txlist_setup(struct drv_private *drv_priv)
     return 1;
 }
 
-
-
 int drv_update_wmmq_param(struct drv_private *drv_priv,
     unsigned char wnet_vif_id,int ac, int aifs,
     int cwmin,int cwmax,int txoplimit)
@@ -328,9 +469,6 @@ static unsigned char aml_convert_tid(struct drv_txdesc *ptxdesc)
     return TID;
 }
 
-
-
-// if there is free buf in TxShareFifoBuf
 int aml_tx_hal_buffer_full(struct drv_private *drv_priv,
     unsigned char queue_id,int txaggrneed,int txprivneed)
 {
@@ -343,7 +481,6 @@ int aml_tx_hal_buffer_full(struct drv_private *drv_priv,
     txpriv_qspace = drv_priv->hal_priv->hal_ops.hal_get_priv_cnt(queue_id);
     txpriv_qspace = txpriv_qspace >= 2 ? txpriv_qspace - 1 : 0;
 
-    //not full
     if (txpriv_qspace >= txprivneed) {
         return 0;
 
@@ -353,7 +490,6 @@ int aml_tx_hal_buffer_full(struct drv_private *drv_priv,
         }
     }
 
-    //full
     return 1;
 }
 
@@ -365,11 +501,11 @@ static void aml_prepare_agg_tx_priv_param(struct drv_private *drv_priv,
 
     cnt++;
 
-    agg_content->CurrentRate = ptxdesc->txdesc_rateinfo[0].vendor_rate_code ;//& RATE_MASK;//WIFI_11N_MCS3
+    agg_content->CurrentRate = ptxdesc->txdesc_rateinfo[0].vendor_rate_code ;
 
-    agg_content->TxTryRate1 =  ptxdesc->txdesc_rateinfo[1].vendor_rate_code ;//& RATE_MASK;
-    agg_content->TxTryRate2 =  ptxdesc->txdesc_rateinfo[2].vendor_rate_code ;//& RATE_MASK;
-    agg_content->TxTryRate3 =  ptxdesc->txdesc_rateinfo[3].vendor_rate_code ;//& RATE_MASK;
+    agg_content->TxTryRate1 =  ptxdesc->txdesc_rateinfo[1].vendor_rate_code ;
+    agg_content->TxTryRate2 =  ptxdesc->txdesc_rateinfo[2].vendor_rate_code ;
+    agg_content->TxTryRate3 =  ptxdesc->txdesc_rateinfo[3].vendor_rate_code ;
 
     agg_content->TxTryNum0 = ptxdesc->txdesc_rateinfo[0].trynum;
     agg_content->TxTryNum1 = ptxdesc->txdesc_rateinfo[1].trynum;
@@ -380,17 +516,6 @@ static void aml_prepare_agg_tx_priv_param(struct drv_private *drv_priv,
                ((sta->sta_ucastkey.wk_keylen == 13 )|| \
                 (sta->sta_ucastkey.wk_keylen == 26))? HAL_KEY_TYPE_WEP128 :ptxdesc->txinfo->key_type;
 
-    /*
-     * v16w AP-DL-STAID-FIX:
-     * AP association IDs carry the two high 802.11 flag bits (0xc000).
-     * The firmware station/key tables are registered with the plain AID
-     * (see hal_phy_register_sta_id()/drv_hal_keyset(), both mask the AID
-     * before talking to HAL).  Feeding 0xc001 into TX descriptors makes
-     * encrypted AP->STA data look up the wrong station/key slot: WPA 4-way
-     * can complete, uplink DHCP DISCOVER reaches dnsmasq, but downlink
-     * DHCPOFFER never reaches the phone.  Keep STA mode at firmware STAID 1
-     * and strip the AP assoc flag bits for HOSTAP/P2P-GO TX.
-     */
     agg_content->StaId = (sta->sta_wnet_vif->vm_opmode == WIFINET_M_STA) ?
         1 : (sta->sta_associd & ~0xc000);
     agg_content->KeyId = ptxdesc->txinfo->key_index;
@@ -424,8 +549,7 @@ static void aml_prepare_agg_tx_priv_param(struct drv_private *drv_priv,
             }
         }
     }
-    //protect
-
+    
     if (WIFI_MCS_RATE(agg_content->CurrentRate))
     {
         if ((sta->sta_wnet_vif->vm_flags & WIFINET_F_RDG) && (ptxdesc->txinfo->b_datapkt))
@@ -499,20 +623,6 @@ static void aml_prepare_agg_tx_priv_param(struct drv_private *drv_priv,
         agg_content->FLAG2 |= TX_DESCRIPTER_BEACON;
     }
 
-#ifdef CONFIG_P2P
-    /* legacy ps and uapsd both are unicast, mcast here is for code safe */
-    if ((M_PWR_SAV_GET((struct sk_buff *)(ptxdesc->txdesc_mpdu)) 
-        || M_FLAG_GET((struct sk_buff *)(ptxdesc->txdesc_mpdu), M_UAPSD))
-        && !(ptxdesc->txinfo->b_mcast))
-    {
-        struct wifi_mac_p2p *p2p = sta->sta_wnet_vif->vm_p2p;
-        if (p2p->p2p_flag & P2P_NOA_START_FLAG_HI)
-        {
-            agg_content->FLAG2 |= TX_DESCRIPTER_P2P_PS_NOA_TRIGRSP;
-            agg_content->HiP2pNoaCountNow = p2p->HiP2pNoaCountNow;
-        }
-    }
-#endif
     if (ptxdesc->txinfo->b_hwtkipmic)
     {
         agg_content->FLAG2 |= TX_DESCRIPTER_MIC;
@@ -535,13 +645,11 @@ static void drv_init_txpriv (struct hi_tx_priv_hdr * txpriv_content, struct drv_
     txpriv_content->Delimiter = ptxdesc->txdesc_delimit;
     txpriv_content->Seqnum = ptxdesc->txinfo->seqnum;
 
-
     txpriv_content->hostreserve = (SYS_TYPE)ptxdesc;
     txpriv_content->FrameControl = ptxdesc->txdesc_framectrl;
     txpriv_content->Flag = WIFI_MORE_AGG|WIFI_FIRST_BUFFER;
 }
 
- //in the three-demo fifo and txlist_q which indexed by id from drv_list[0..7]
 int drv_to_hal(struct drv_private *drv_priv, struct drv_txlist *txlist, struct list_head *head)
 {
     struct drv_txdesc *ptxdesc, *first;
@@ -556,13 +664,7 @@ int drv_to_hal(struct drv_private *drv_priv, struct drv_txlist *txlist, struct l
     struct hal_private *hal_priv = NULL;
 
     hal_priv = hal_get_priv();
-    /* v15o-B: every early -1 below leaves the caller's `head` list intact.
-     * The caller (drv_tx_sched_aggr / drv_tx_send_normal) treats failure by
-     * draining the list with drv_tx_complete_list(.., txok=0), so we MUST
-     * NOT touch txlist->txlist_qcnt on these paths -- the increment at the
-     * very bottom of this function is the only legitimate update. The
-     * pre-v15o behaviour was already correct in this regard; the comment is
-     * just a reminder for future edits. */
+    
     if (drv_priv == NULL || txlist == NULL || head == NULL || hal_priv == NULL || drv_priv->hal_priv == NULL || list_empty(head)) {
         return -1;
     }
@@ -572,10 +674,7 @@ int drv_to_hal(struct drv_private *drv_priv, struct drv_txlist *txlist, struct l
         return -1;
     }
     drv_sta = (struct aml_driver_nsta *)ptxdesc->txdesc_sta;
-    /* N-H2 fix: use smp_load_acquire to close UAF race window between
-     * NULL-check and dereference. Another CPU may call wifi_mac_free_sta()
-     * → drv_free_nsta() → net_nsta=NULL between our check and use.
-     * smp_load_acquire pairs with the smp_store_release in drv_free_nsta. */
+    
     sta = (struct wifi_station *)smp_load_acquire(&drv_sta->net_nsta);
     if (sta == NULL) {
         return -1;
@@ -589,7 +688,6 @@ int drv_to_hal(struct drv_private *drv_priv, struct drv_txlist *txlist, struct l
     }
     qh = (struct wifi_qos_frame *)ptxdesc->txdesc_ddraddr;
 
-    //rate & retry
     rateinfo = &ptxdesc->txdesc_rateinfo[0];
     ptxdesc->txdesc_chanbw = rateinfo->bw;
     memset(&agg_content,0,sizeof(agg_content));
@@ -618,7 +716,6 @@ int drv_to_hal(struct drv_private *drv_priv, struct drv_txlist *txlist, struct l
 
     drv_priv->hal_priv->hal_ops.hal_fill_agg_start(&agg_content, &txpriv_content);
 
-   //loop the residue mpdus for ampdu
     do
     {
         if (list_is_last(&ptxdesc->txdesc_queue,head))
@@ -627,17 +724,10 @@ int drv_to_hal(struct drv_private *drv_priv, struct drv_txlist *txlist, struct l
         }
         txdesc_queue = ptxdesc->txdesc_queue.next;
 
-#ifdef DRV_TCP_RETRANSMISSION
-        if ((ptxdesc->drv_pkt_info.pkt_info[0].b_tcp) && (!ptxdesc->drv_pkt_info.pkt_info[0].b_tcp_saved_flag)) {
-            list_del_init(&ptxdesc->txdesc_queue);
-            list_add_tail(&ptxdesc->txdesc_queue, &txlist->tx_tcp_queue);
-            ptxdesc->drv_pkt_info.pkt_info[0].b_tcp_saved_flag=1;
-        }
-#endif
         ptxdesc = list_entry(txdesc_queue, struct drv_txdesc, txdesc_queue);
         mpdunum++;
         qh = (struct wifi_qos_frame *) ptxdesc->txdesc_ddraddr;
-        //rate & retry
+        
         memcpy(&ptxdesc->txdesc_rateinfo[0], rateinfo, 4*sizeof(struct aml_ratecontrol));
         ptxdesc->txdesc_chanbw = rateinfo->bw;
         drv_init_txpriv(&txpriv_content, ptxdesc);
@@ -653,20 +743,13 @@ int drv_to_hal(struct drv_private *drv_priv, struct drv_txlist *txlist, struct l
     }
     while (1);
 
-#ifdef DRV_TCP_RETRANSMISSION
-    if ((ptxdesc->drv_pkt_info.pkt_info[0].b_tcp) && (!ptxdesc->drv_pkt_info.pkt_info[0].b_tcp_saved_flag)) {
-        list_del_init(&ptxdesc->txdesc_queue);
-        list_add_tail(&ptxdesc->txdesc_queue, &txlist->tx_tcp_queue);
-        ptxdesc->drv_pkt_info.pkt_info[0].b_tcp_saved_flag=1;
-    }
-#endif
-
     up(&hal_priv->hi_irq_thread_sem);
 
-    /*Saving txdesc which are sent to hal layer.  And will be freed when txcomplete,
-    so we need to protect txlist_q.*/
     if (!list_empty(head))
     {
+        struct drv_txdesc *mark_desc = NULL;
+        list_for_each_entry(mark_desc, head, txdesc_queue)
+            WRITE_ONCE(mark_desc->txdesc_in_hw, 1);
         txlist->txlist_qcnt += list_first_entry(head, struct drv_txdesc, txdesc_queue)->txdesc_pktnum;
         list_splice_tail_init((head), &txlist->txlist_q);
     }
@@ -710,7 +793,6 @@ drv_aggr_query(struct drv_private *drv_priv, struct aml_driver_nsta *drv_sta, st
     if (tid == NULL)
         return 0;
 
-    //if ps, disable agg
     if (M_PWR_SAV_GET(skb) || M_FLAG_GET(skb, M_UAPSD)) {
         return 0;
     }
@@ -753,27 +835,7 @@ static void drv_tx_get_spec_frm_rate(struct drv_private *drv_priv, struct sk_buf
     ratectrl[0].rate_index = drv_rate_findindex_from_ratecode(rt, ratectrl[0].vendor_rate_code);
     ratectrl[1].vendor_rate_code = ratectrl[2].vendor_rate_code = ratectrl[3].vendor_rate_code = ratectrl[0].vendor_rate_code;
     ratectrl[0].trynum = retry_times;
-    /* v15g: do NOT zero ratectrl[1..3].trynum and do NOT override
-     * ptxdesc->txdesc_chanbw here. v15f used to do both and that broke
-     * AP-mode broadcast/multicast traffic:
-     *
-     *  - Zeroing trynum[1..3] killed the retry chain for broadcast ARP
-     *    replies, EAPOL handshake, DHCP-OFFER and probe responses. A
-     *    single collision under upload load made the frame disappear
-     *    and the client started ARP-storming, which fed the SDIO bus
-     *    with more RX and starved TX further -- the textbook positive
-     *    feedback loop that locked up the AP under iperf3-upload.
-     *
-     *  - Forcing txdesc_chanbw = sta->sta_chbw on broadcast meant
-     *    multicast went out at AP's HT/VHT bandwidth (40/80 MHz)
-     *    instead of the legacy 20 MHz mandatory rate that 802.11
-     *    requires for broadcast/multicast. Clients on 20 MHz only
-     *    or with narrower receive bandwidth missed broadcasts entirely.
-     *
-     * Reverting both leaves trynum[1..3] at whatever the upstream
-     * minstrel/fixed-rate path left there (already valid retry slots)
-     * and lets txdesc_chanbw stay at its caller-supplied value, which
-     * matches w1-aml upstream behaviour. */
+    
 }
 
 static void drv_tx_lower_rate_when_signal_weak(struct wlan_net_vif *wnet_vif, struct drv_txdesc *ptxdesc)
@@ -897,21 +959,7 @@ static void drv_tx_lower_rate_when_signal_weak(struct wlan_net_vif *wnet_vif, st
             ptxdesc->txdesc_rateinfo[i].rate_index = ptxdesc->txdesc_rateinfo[i].vendor_rate_code & 0x0f;
 
             if (IS_MCS_RATE(ptxdesc->txdesc_rateinfo[i].vendor_rate_code)) {
-                /*
-                 * v15s: same fix as the two call sites in
-                 * rc80211_minstrel_init.c (drv_attach_ratectrl /
-                 * drv_lookup_rate). The vendor BSP read
-                 * max_4ms_framelen[0][...] here too - that is row 0
-                 * = MCS_HT20, the smallest budget. Even though we
-                 * just demoted bw / cleared SGI right above, "demoted"
-                 * could still be HT40 or VHT80 (with SGI cleared); the
-                 * old code would then over-cap the A-MPDU at HT20 long-
-                 * GI byte budget (~28 KB at MCS9) instead of the
-                 * correct HT40/VHT80 long-GI row (~57/~130 KB at MCS9).
-                 * Use the shared helper to pick the right row from
-                 * the rate's bw / shortgi_en (we just cleared SGI so
-                 * this becomes the long-GI row of the demoted bw).
-                 */
+                
                 ptxdesc->txdesc_rateinfo[i].maxampdulen = aml_max_4ms_framelen(
                     ptxdesc->txdesc_rateinfo[i].vendor_rate_code,
                     ptxdesc->txdesc_rateinfo[i].bw,
@@ -963,7 +1011,7 @@ static int drv_tx_prepare(struct drv_private *drv_priv, struct sk_buff *skbbuf,s
         } else if (txinfo->b_nulldata) {
             drv_tx_get_spec_frm_rate(drv_priv, skbbuf, ptxdesc, ratectrl, DRV_MGT_TXMAXTRY);
 
-        } else {// unicast packet
+        } else {
             struct drv_tx_scoreboard *tid;
             if (txinfo->tid_index >= WME_NUM_TID)
                 return 0;
@@ -977,24 +1025,14 @@ static int drv_tx_prepare(struct drv_private *drv_priv, struct sk_buff *skbbuf,s
                 }
             }
 
-            /* no need to do aggr in legacy/drv_cfg
-             * not support/bar-ba session fail: need to add vht case , t.b.d/zqh
-            */
-            /*
-             * v16m: AP TX AMPDU runs through the normal STA path. The runtime
-             * AMPDU sub-frame count is driven by cfg_ampdu_subframes; tune in
-             * the config file rather than gating the code path. STA mode is
-             * unchanged.
-             */
             if (IS_MCS_RATE(ratectrl[0].vendor_rate_code) && txinfo->ht
                 && drv_priv->drv_config.cfg_txaggr
+                && (wnet_vif->vm_opmode != WIFINET_M_HOSTAP || drv_priv->drv_config.cfg_ap_txaggr)
                 && drv_aggr_query(drv_priv, sta->drv_sta, skbbuf)) {
-                /*assign a new seq num with specify tid */
+                
                 if (likely(!(txinfo->b_txfrag))) {
                     *(unsigned short*)wh->i_seq = htole16(tid->seq_next << WIFINET_SEQ_SEQ_SHIFT);
-                    /* the flag of assign new seq,
-                     * for qos data which can be aggregated.
-                     */
+                    
                     txinfo->b_Ampdu = 1;
                     CIRCLE_Add_One(tid->seq_next, WIFINET_SEQ_MAX);
                     seq_assign_flag = 1;
@@ -1026,7 +1064,6 @@ static int drv_tx_prepare(struct drv_private *drv_priv, struct sk_buff *skbbuf,s
         drv_tx_get_spec_frm_rate(drv_priv, skbbuf, ptxdesc, ratectrl, DRV_MGT_TXMAXTRY);
     }
 
-    //seq not assign
     if ((!seq_assign_flag) && (!txinfo->b_PsPoll) && !txinfo->b_pmf) {
         if (!txinfo->b_txfrag) {
             *(unsigned short *)&wh->i_seq[0] = htole16(sta->sta_txseqs[txinfo->tid_index] << WIFINET_SEQ_SEQ_SHIFT);
@@ -1035,11 +1072,8 @@ static int drv_tx_prepare(struct drv_private *drv_priv, struct sk_buff *skbbuf,s
     }
 
     ptxdesc->rate_valid = 1;
-    txinfo->seqnum = *(unsigned short *)wh->i_seq >> WIFINET_SEQ_SEQ_SHIFT;//seqnum
-    //pr_debug("%s ptxdesc:%p, skbbuf:%p, vid:%d, sta:%p, tid:%d, sn:%04x, ampdu:%d, qos:%d, rate_code:%02x, frame_control:%04x, mcast:%d, data:%d, dhcp:%d, eap:%d\n",
-    //    __func__, ptxdesc, skbbuf, wnet_vif->wnet_vif_id, sta, txinfo->tid_index, txinfo->seqnum, txinfo->b_Ampdu, txinfo->b_qosdata,
-    //    ratectrl->vendor_rate_code, *((unsigned short *)&(wh->i_fc[0])), txinfo->b_mcast, txinfo->b_datapkt, mac_pkt_info->b_dhcp, mac_pkt_info->b_eap);
-
+    txinfo->seqnum = *(unsigned short *)wh->i_seq >> WIFINET_SEQ_SEQ_SHIFT;
+    
     if (txinfo->b_pmf) {
         pr_debug("%s vid:%d, sta:%p, sn:%04x, frame_control:%04x, mcast:%d\n",
             __func__, wnet_vif->wnet_vif_id, sta, txinfo->seqnum, *((unsigned short *)&(wh->i_fc[0])), txinfo->b_mcast);
@@ -1073,36 +1107,10 @@ int drv_tx_start( struct drv_private *drv_priv, struct sk_buff *skbbuf)
     if (sta)
         wnet_vif = sta->sta_wnet_vif;
 
-    /*
-     * v16u TX-STA-NULL-FIX:
-     *
-     * Before this patch the gate below printed an unconditional
-     *   ERROR_DEBUG_OUT("sta/txinfo/vif invalid")
-     * (resolves to pr_err with __func__/__LINE__) once per dropped
-     * skb. Under the v16t TX-zero regression that fires on every
-     * outgoing packet → dmesg gets flooded with
-     *   "FUNCTION: drv_tx_start LINE: 915: sta is NULL ..."
-     * which by itself stalls the TX softirq.
-     *
-     * Worse, the upper caller (wifi_mac_if.c::wifi_mac_tx_send line
-     * ~840) does
-     *   if (drv_ops.tx_start(...) != 0) { skbbuf = next_wbuf; ... }
-     * and frees only the *subsequent* skbs in the chain — the failing
-     * skbbuf itself is dropped on the floor and leaked. Under a
-     * sustained 100% drop that leaks one skb per TX → OOM in seconds.
-     *
-     * Two changes here:
-     *   1) Per-condition diagnostic so future log forensics can tell
-     *      which of {sta, txinfo, ptxdesc, tid_index, wnet_vif,
-     *      wm_wmac} actually fired, and rate-limit so the storm does
-     *      not stall TX softirq.
-     *   2) Free the offending skb in-place so the caller path does
-     *      not have to grow ownership of it.
-     */
     if (!sta || txinfo == NULL || txinfo->ptxdesc == NULL || tid_index >= WME_NUM_TID ||
         wnet_vif == NULL || wnet_vif->vm_wmac == NULL) {
         printk_ratelimited(KERN_WARNING
-            "v16u: drv_tx_start DROP "
+            "W522A: drv_tx_start DROP "
             "sta=%p txinfo=%p ptxdesc=%p tid=%u "
             "wnet_vif=%p wm_wmac=%p (sta_null=%d txinfo_null=%d "
             "ptxdesc_null=%d tid_oob=%d vif_null=%d wmac_null=%d)\n",
@@ -1118,9 +1126,6 @@ int drv_tx_start( struct drv_private *drv_priv, struct sk_buff *skbbuf)
             wnet_vif == NULL,
             (wnet_vif != NULL) && (wnet_vif->vm_wmac == NULL));
 
-        /* Caller (wifi_mac_tx_send) does NOT free the failing skb on
-         * tx_start() != 0; free it here to avoid a per-drop skb leak
-         * under the v16t TX-zero storm. */
         os_skb_free(skbbuf);
         return -1;
     }
@@ -1169,23 +1174,9 @@ int drv_tx_start( struct drv_private *drv_priv, struct sk_buff *skbbuf)
             os_timer_ex_start(&wnet_vif->vm_pwrsave.ips_timer_presleep);
         }
 
-    #ifdef  CONFIG_CONCURRENT_MODE
-        if (((wnet_vif->vm_wmac->wm_vsdb_slot != CONCURRENT_SLOT_NONE)
-            && (wnet_vif->wnet_vif_id != wnet_vif->vm_wmac->wm_vsdb_slot))
-            || (wnet_vif->vm_wmac->wm_vsdb_flags & CONCURRENT_CHANNEL_SWITCH)) {
-            DPRINTF(AML_DEBUG_WARNING, "backup due to vid:%d, slot:%d, flag:%04x\n",
-                wnet_vif->wnet_vif_id, wnet_vif->vm_wmac->wm_vsdb_slot, wnet_vif->vm_wmac->wm_vsdb_flags);
-            drv_priv->net_ops->wifi_mac_buffer_txq_enqueue(&wnet_vif->vm_tx_buffer_queue, skbbuf);
-            return 0;
-        }
-    #endif
-
-        //if no need backup for powersave (M_PWR_SAV_BYPASS), bypass here. such as nulldata
-        //if not triggered uapsd frame to peer sta, also bypass here.
         if (!M_FLAG_GET(skbbuf, M_PWR_SAV_BYPASS) && !M_FLAG_GET(skbbuf, M_UAPSD))
         {
-            //if p2p ps frame, backup
-            //if ps4quiet frame, backup; but if probereq, just send out
+            
             if ((wnet_vif->vm_pstxqueue_flags & WIFINET_PSQUEUE_MASK) &&
                 !(((wnet_vif->vm_pstxqueue_flags & WIFINET_PSQUEUE_MASK) == WIFINET_PSQUEUE_PS4QUIET) && (WIFINET_IS_PROBEREQ(wh))))
             {
@@ -1205,21 +1196,15 @@ int drv_tx_start( struct drv_private *drv_priv, struct sk_buff *skbbuf)
                 break;
             }
 
-            //for ap/go, if peer sta is in powersave, backup
-            /* v16e reverted: belt-and-suspenders PS-bypass in HOSTAP
-             * was tried but regressed throughput from 124 KB/s to
-             * 5 KB/s and did not solve Bug #2 (post-burst lockup).
-             * Restored original behaviour. */
             if (sta->sta_flags & WIFINET_NODE_PWR_MGT)
             {
-                //pr_debug("ap buffer queue\n");
+                
                 drv_priv->net_ops->wifi_mac_pwrsave_psqueue_enqueue(sta, skbbuf);
                 error = 0;
                 break;
             }
         }
 
-        //if vmac is in sleep, but ps=0 in frame, so need to wakeup first
         if (drv_priv->net_ops->wifi_mac_pwrsave_is_wnet_vif_sleeping(wnet_vif) == 0) {
             DRV_PS_LOCK(drv_priv);
             if (!(wh->i_fc[1] & WIFINET_FC1_PWR_MGT) && !drv_priv->add_wakeup_work) {
@@ -1237,7 +1222,7 @@ int drv_tx_start( struct drv_private *drv_priv, struct sk_buff *skbbuf)
         }
 
         if (M_PWR_SAV_GET(skbbuf)) {
-            //bufferd pkt under ps-poll scheme should send in wm_mng_qid
+            
             txinfo->queue_id = sta->sta_wmac->wm_mng_qid;
         }
 
@@ -1302,12 +1287,6 @@ enum tx_frame_flag drv_set_tx_frame_flag(struct sk_buff *skbbuf)
     } else if (p2p_act && (p2p_act->category == AML_CATEGORY_P2P) && (p2p_act->subtype == P2P_PRESENCE_REQ)) {
         ret = TX_P2P_PRESENCE_REQ;
     }
-#ifdef CTS_VERIFIER_GAS
-    else if (p2p_pub_act && (p2p_pub_act->category == AML_CATEGORY_PUBLIC)
-        && ((p2p_pub_act->action == WIFINET_ACT_PUBLIC_GAS_REQ) || (p2p_pub_act->action == WIFINET_ACT_PUBLIC_GAS_RSP))) {
-        ret = TX_P2P_GAS;
-    }
-#endif
 
     if (WIFINET_IS_PROBEREQ(wh)) {
         ret = TX_MGMT_PROBE_REQ;
@@ -1338,7 +1317,6 @@ enum tx_frame_flag drv_set_tx_frame_flag(struct sk_buff *skbbuf)
 
     return ret;
 }
-
 
 int drv_send(struct sk_buff *skbbuf, struct drv_private *drv_priv)
 {
@@ -1379,13 +1357,11 @@ int drv_send(struct sk_buff *skbbuf, struct drv_private *drv_priv)
     ptxdesc->txinfo = txinfo;
     list_add_tail(&ptxdesc->txdesc_queue, &txdesc_list_head);
 
-    //build separated tx desc: set tx_info/calc pages/set skbbuf/next ptr/last_ptr/subframe for agg/
     ptxdesc->txdesc_queue_next = NULL;
     ptxdesc->txdesc_frame_flag = drv_set_tx_frame_flag(skbbuf);
 
-    /*protect from get txdesc to enqueue tid_queue by DRV_TXQ_LOCK */
     DRV_TXQ_LOCK(txlist);
-    //get a fitable rate according tx_info
+    
     if (!drv_tx_prepare(drv_priv, skbbuf, ptxdesc)) {
         ERROR_DEBUG_OUT("drv_tx_prepare not ok\n");
         goto bad;
@@ -1395,8 +1371,8 @@ int drv_send(struct sk_buff *skbbuf, struct drv_private *drv_priv)
     ptxdesc->txdesc_mpdu = skbbuf;
     ptxdesc->txdesc_agglen = txinfo->packetlen;
     ptxdesc->txdesc_aggr_page_num = drv_priv->hal_priv->hal_ops.hal_calc_mpdu_page(ptxdesc->txinfo->mpdulen);
-    ptxdesc->txdesc_queue_lastframe = ptxdesc;  // pointer to itself
-    ptxdesc->txdesc_queue_last = ptxdesc;          //pointer to itself
+    ptxdesc->txdesc_queue_lastframe = ptxdesc;  
+    ptxdesc->txdesc_queue_last = ptxdesc;          
     ptxdesc->txdesc_pktnum = 1;
     drv_txdesc_set_rts_cts(drv_priv, ptxdesc);
 
@@ -1407,7 +1383,6 @@ int drv_send(struct sk_buff *skbbuf, struct drv_private *drv_priv)
         return 0;
     }
 
-    /*send qos data frames : not frag and set agg flag*/
     if (txinfo->b_Ampdu) {
         if (drv_tx_send_ampdu(drv_priv, txlist, tid, &txdesc_list_head)) {
             ERROR_DEBUG_OUT("<running> drv_tx_send_ampdu fail\n");
@@ -1416,10 +1391,10 @@ int drv_send(struct sk_buff *skbbuf, struct drv_private *drv_priv)
 
     } else {
         DRV_TXQ_UNLOCK(txlist);
-        /*no aggregated: data frames,  mgmt frames and multicast/broad frames*/
+        
         if (txinfo->b_mcast) {
 #ifdef  AML_MCAST_QUEUE
-            //mcast backup also use txlist_backup_qcnt
+            
             if (txinfo->ps) {
                 drv_tx_mcastq_addbuf(drv_priv, &txdesc_list_head);
                 pr_debug("%s mcastq\n", __func__);
@@ -1440,7 +1415,6 @@ int drv_send(struct sk_buff *skbbuf, struct drv_private *drv_priv)
     DRV_TXQ_UNLOCK(txlist);
     return 0;
 
-// recycle tx_ds resource
 bad:
     DRV_TXQ_UNLOCK(txlist);
     DPRINTF(AML_DEBUG_INFO,"<running> %s ret:%d\n",__func__, ret);
@@ -1456,13 +1430,10 @@ void drv_tx_complete(struct drv_private *drv_priv, struct drv_txdesc *ptxdesc, i
     unsigned char ampdu;
     int b_aggr;
 
-#ifdef DRV_TCP_RETRANSMISSION
-    struct wifi_mac_pkt_info *mac_pkt_info = NULL;
-#endif
-
     if (drv_priv == NULL || drv_priv->net_ops == NULL || ptxdesc == NULL)
         return;
 
+    WRITE_ONCE(ptxdesc->txdesc_in_hw, 0);
     skbbuf = ptxdesc->txdesc_mpdu;
     txinfo = ptxdesc->txinfo;
     if (skbbuf == NULL) {
@@ -1479,41 +1450,77 @@ void drv_tx_complete(struct drv_private *drv_priv, struct drv_txdesc *ptxdesc, i
         return;
     }
 
-#ifdef DRV_TCP_RETRANSMISSION
-    mac_pkt_info = &ptxdesc->drv_pkt_info.pkt_info[0];
-#endif
-
     if (txok) {
         ampdu = txinfo->b_Ampdu;
         b_aggr = txinfo->b_aggr;
 
-        /*
-         * v17c: tx_end_fail_cnt must mean a real failed completion.  The
-         * vendor branch counted every successful aggregated MPDU as "fail"
-         * because b_aggr=true fell into the old else path; v17b adaptive wait
-         * then correctly reacted to a bogus signal and collapsed to wait=2.
-         */
-        if (ampdu && b_aggr)
+        if (ampdu && b_aggr) {
             drv_priv->drv_stats.tx_end_ampdu_cnt++;
-        else
+            /* Successful AMPDU TX: reset the consecutive-failure counter so
+             * transient single-frame losses don't accumulate toward the
+             * quarantine threshold.  Skip the lookup if b_Ampdu is clear. */
+            if (txinfo->tid_index < WME_NUM_TID &&
+                ptxdesc->txdesc_sta != NULL) {
+                struct aml_driver_nsta *drv_sta_s =
+                    DRIVER_NODE(ptxdesc->txdesc_sta);
+                if (drv_sta_s) {
+                    struct drv_tx_scoreboard *tid_s =
+                        DRV_GET_TIDTXINFO(drv_sta_s, txinfo->tid_index);
+                    if (tid_s && drv_tid_is_hostap(tid_s) &&
+                        tid_s->txba_fw_fail_cnt > 0)
+                        tid_s->txba_fw_fail_cnt = 0;
+                }
+            }
+        } else {
             drv_priv->drv_stats.tx_end_normal_cnt++;
+        }
 
         drv_priv->drv_stats.tx_total_bytes += txinfo->packetlen;
 
     } else {
         drv_priv->drv_stats.tx_end_fail_cnt++;
-        /*
-         * v17v-netdev-txerr-filter:
-         *
-         * The firmware reports many normal 802.11 TX outcomes as a failed
-         * completion: management retries, null/powersave frames, multicast and
-         * frames sent while the peer is changing state.  Rate control and the
-         * driver's private counters already consume the real txok/status above,
-         * so do not mirror every wireless no-ACK into net_device.tx_errors.
-         * That counter is supposed to mean a netdev-level transmit fault, and
-         * making it climb on harmless MAC retries made a stable AP look broken.
-         */
-        pr_debug("v17v: tx noack qid=%u tid=%u data=%u null=%u mcast=%u "
+        
+        if (txinfo->b_Ampdu && ptxdesc->txdesc_sta != NULL &&
+            txinfo->tid_index < WME_NUM_TID) {
+            struct aml_driver_nsta *drv_sta_e = DRIVER_NODE(ptxdesc->txdesc_sta);
+            if (drv_sta_e != NULL) {
+                struct drv_tx_scoreboard *tid_e =
+                    DRV_GET_TIDTXINFO(drv_sta_e, txinfo->tid_index);
+                if (tid_e != NULL && drv_tid_is_hostap(tid_e)) {
+                    /* AP_TXBA_FW_FAIL_THRESHOLD was defined but txba_fw_fail_cnt
+                     * was never incremented, so every single no-ACK immediately
+                     * quarantined the TID for 3 seconds regardless of the
+                     * threshold.  In a real RF environment this fired constantly,
+                     * cycling: ADDBA → 1 loss → 3s blackout → ADDBA → ...
+                     * causing the observed ~8 Mbps ceiling.  Now we count
+                     * consecutive failures and quarantine only when the threshold
+                     * is exceeded. */
+                    /* DIAG: dump what the firmware rejected so we can tell an
+                     * unknown-StaId / bad-rate AMPDU from a genuine no-BlockAck.
+                     * StaId==0 here means the AID wasn't resolved -> firmware
+                     * can't match a BA agreement -> guaranteed fail. */
+                    {
+                        struct wifi_station *_s =
+                            (struct wifi_station *)smp_load_acquire(&drv_sta_e->net_nsta);
+                        pr_warn_ratelimited(
+                          "W522A: AMPDU-FAIL tid=%u aggr=%u staid=%lu associd=0x%x rate=%02x retry=%u/%u len=%u\n",
+                          txinfo->tid_index, txinfo->b_aggr,
+                          _s ? (unsigned long)(_s->sta_associd & ~0xc000) : 0,
+                          _s ? _s->sta_associd : 0,
+                          ptxdesc->txdesc_rateinfo[0].vendor_rate_code,
+                          ptxdesc->txdesc_rateinfo[0].trynum,
+                          ptxdesc->txdesc_rateinfo[1].trynum,
+                          txinfo->packetlen);
+                    }
+                    if (tid_e->txba_fw_fail_cnt < 255)
+                        tid_e->txba_fw_fail_cnt++;
+                    if (tid_e->txba_fw_fail_cnt >= AP_TXBA_FW_FAIL_THRESHOLD)
+                        drv_txba_quarantine(drv_priv, tid_e, DRV_TXBA_FAULT_FW_END_FAIL);
+                }
+            }
+        }
+        
+        pr_debug("W522A: tx noack qid=%u tid=%u data=%u null=%u mcast=%u "
                  "len=%u rate=%02x aggr=%u ampdu=%u\n",
                  (unsigned int)txinfo->queue_id,
                  (unsigned int)txinfo->tid_index,
@@ -1547,9 +1554,6 @@ void drv_tx_complete(struct drv_private *drv_priv, struct drv_txdesc *ptxdesc, i
                     {
                         if (drv_priv->net_ops->wifi_mac_pwrsave_fullsleep)
                             drv_priv->net_ops->wifi_mac_pwrsave_fullsleep(wnet_vif, SLEEP_AFTER_TX_NULL_WITH_PS);
-#ifdef USER_UAPSD_TRIGGER
-                        os_timer_ex_start(&(wnet_vif->vm_pwrsave.ips_timer_uapsd_trigger));
-#endif
                     }
                     else
                     {
@@ -1571,30 +1575,12 @@ void drv_tx_complete(struct drv_private *drv_priv, struct drv_txdesc *ptxdesc, i
 
             if (wnet_vif != NULL && ((queue_id == HAL_WME_MCAST) || (queue_id == HAL_WME_UAPSD) || M_PWR_SAV_GET(skbbuf)))
             {
-#ifdef CONFIG_P2P
-                if (wnet_vif->vm_p2p != NULL && (wnet_vif->vm_p2p->p2p_flag & P2P_OPPPS_CWEND_FLAG_HI))
-                {
-                    drv_p2p_go_opps_cwend_may_sleep(wnet_vif);
-                }
-#endif
             }
         }
     }
 
-#ifdef DRV_TCP_RETRANSMISSION
-    if (mac_pkt_info == NULL || !mac_pkt_info->b_tcp)
-    {
-        if (drv_priv->net_ops->wifi_mac_tx_complete)
-            drv_priv->net_ops->wifi_mac_tx_complete(wnet_vif, skbbuf, &ts);
-    }
-    else
-    {
-        mac_pkt_info->b_tcp_free = 1;
-    }
-#else
     if (drv_priv->net_ops->wifi_mac_tx_complete)
         drv_priv->net_ops->wifi_mac_tx_complete(wnet_vif, skbbuf, &ts);
-#endif
 }
 
 static void reset_connected_sta_keepalive_time(struct wifi_station *sta)
@@ -1609,39 +1595,11 @@ static void drv_tx_complete_mgmt_handle(struct drv_private *drv_priv,struct drv_
     struct wlan_net_vif *wnet_vif = NULL;
     int txok = (status == TX_DESCRIPTOR_STATUS_SUCCESS);
     int mgmt_arg;
-    /* M-7 FIX: was "static int deauth_fail_time = 0" — shared across ALL VIFs and threads.
-     * In AP+STA mode a deauth failure on AP VIF would corrupt STA VIF state.
-     * Moved to per-VIF field wnet_vif->vm_deauth_fail_time. */
-
+    
     if (drv_priv == NULL || ptxdesc == NULL || sta == NULL || sta->sta_wnet_vif == NULL)
         return;
 
     wnet_vif = sta->sta_wnet_vif;
-
-#ifdef CONFIG_P2P
-    if (wnet_vif->vm_p2p != NULL && ((ptxdesc->txdesc_frame_flag == TX_P2P_OTHER_GO_NEGO_FRAME)
-        || (ptxdesc->txdesc_frame_flag == TX_P2P_GO_NEGO_CONF)
-        || (ptxdesc->txdesc_frame_flag == TX_P2P_PRESENCE_REQ))) {
-
-        pr_debug("%s, txdesc_frame_flag=%d, status=%d\n", __func__, ptxdesc->txdesc_frame_flag, status);
-        if (txok) {
-            wnet_vif->vm_p2p->tx_status_flag = WIFINET_TX_STATUS_SUCC;
-            wnet_vif->vm_p2p->send_tx_status_flag = 1;
-            cfg80211_mgmt_tx_status(wnet_vif->vm_wdev, wnet_vif->vm_p2p->cookie,
-                wnet_vif->vm_p2p->raw_action_pkt, wnet_vif->vm_p2p->raw_action_pkt_len, txok, GFP_KERNEL);
-
-        } else {
-            if (ptxdesc->txdesc_frame_flag == TX_P2P_GO_NEGO_CONF || ptxdesc->txdesc_frame_flag == TX_P2P_PRESENCE_REQ) {
-                wnet_vif->vm_p2p->action_retry_time = DEFAULT_MGMT_RETRY_INTERVAL;
-
-            } else {
-                wnet_vif->vm_p2p->action_retry_time = DEFAULT_P2P_ACTION_RETRY_INTERVAL;
-            }
-            wnet_vif->vm_p2p->tx_status_flag = WIFINET_TX_STATUS_FAIL;
-            os_timer_ex_start_period(&wnet_vif->vm_actsend, wnet_vif->vm_p2p->action_retry_time);
-        }
-    }
-#endif
 
 #if defined(CTS_VERIFIER_GAS) && defined(CONFIG_P2P)
     if (wnet_vif->vm_p2p != NULL && ptxdesc->txdesc_frame_flag == TX_P2P_GAS) {
@@ -1754,6 +1712,13 @@ static void drv_tx_complete_task(struct drv_private *drv_priv, struct drv_txlist
     } else {
         if (hif != NULL)
             hif->HiStatus.tx_fail_num++;
+        
+        if (sta != NULL && wnet_vif != NULL &&
+            (wnet_vif->vm_opmode == WIFINET_M_HOSTAP) &&
+            ((ptxdesc->txdesc_framectrl & WIFINET_FC0_SUBTYPE_MASK) == WIFINET_FC0_SUBTYPE_NODATA) &&
+            ((ptxdesc->txdesc_framectrl & WIFINET_FC0_TYPE_MASK) == WIFINET_FC0_TYPE_DATA)) {
+            reset_connected_sta_keepalive_time(sta);
+        }
     }
 
     if (txlist == drv_priv->drv_uapsdqueue) {
@@ -1766,14 +1731,7 @@ static void drv_tx_complete_task(struct drv_private *drv_priv, struct drv_txlist
 
     INIT_LIST_HEAD(&txdesc_list_head);
 
-#ifdef DRV_TCP_RETRANSMISSION
-    if (!mac_pkt_info->b_tcp)
-    {
-        list_add_tail(&ptxdesc->txdesc_queue, &txdesc_list_head);
-    }
-#else
     list_add_tail(&ptxdesc->txdesc_queue, &txdesc_list_head);
-#endif
 
     if (drv_sta != NULL) {
         int noratectrl;
@@ -1905,28 +1863,12 @@ static void drv_tx_complete_task(struct drv_private *drv_priv, struct drv_txlist
                 drv_priv->net_ops->wifi_mac_uapsd_eosp_indicate(drv_sta->net_nsta, ptxdesc->txdesc_mpdu, txok);
                 DRV_TXQ_UNLOCK(txlist);
             }
-#ifdef DRV_SUPPORT_TX_WITHDRAW
-            if (status == TX_DESCRIPTOR_STATUS_P2P_NOA_WITHDRAW)
-            {
-                DPRINTF(AML_DEBUG_PWR_SAVE, "%s %d uapsd withdraw\n",__func__,__LINE__);
-                drv_tx_withdraw_uapsd_addbuf(drv_priv, txdesc_list_head, drv_sta);
-                break;
-            }
-#endif
             drv_tx_complete(drv_priv, ptxdesc, txok);
             break;
         }
 
         if (ptxdesc->txdesc_mpdu != NULL && M_PWR_SAV_GET((struct sk_buff *)(ptxdesc->txdesc_mpdu)))
         {
-#ifdef DRV_SUPPORT_TX_WITHDRAW
-            if (status == TX_DESCRIPTOR_STATUS_P2P_NOA_WITHDRAW)
-            {
-                DPRINTF(AML_DEBUG_PWR_SAVE, "%s %d legacy ps withdraw\n",__func__,__LINE__);
-                drv_tx_withdraw_legacyps_addbuf(drv_priv, txdesc_list_head, drv_sta);
-                break;
-            }
-#endif
             drv_tx_complete(drv_priv, ptxdesc, txok);
             break;
         }
@@ -1975,17 +1917,9 @@ void drv_tx_irq_tasklet(void *drv_priv_s, struct txdonestatus *tx_done_status,
     struct drv_txdesc *ptxdesc = (struct drv_txdesc *)callback;
     struct drv_txlist *txlist;
 
-#ifdef DRV_TCP_RETRANSMISSION
-    struct wifi_mac_pkt_info *mac_pkt_info = NULL;
-#endif
-
     if (drv_priv == NULL || tx_done_status == NULL || ptxdesc == NULL || queue_id >= HAL_NUM_TX_QUEUES) {
         return;
     }
-
-#ifdef DRV_TCP_RETRANSMISSION
-    mac_pkt_info = &ptxdesc->drv_pkt_info.pkt_info[0];
-#endif
 
     if (DRV_TXQUEUE_VALUE(drv_priv, queue_id))
     {
@@ -1993,19 +1927,20 @@ void drv_tx_irq_tasklet(void *drv_priv_s, struct txdonestatus *tx_done_status,
 
         DRV_TXQ_LOCK(txlist);
         if (ptxdesc->txdesc_sta == NULL) {
-            pr_warn("%s pkt has already freed\n", __func__);
+            pr_debug_ratelimited("%s late orphan completion\n", __func__);
+            if (!READ_ONCE(ptxdesc->txdesc_in_hw)) {
+                DRV_TXQ_UNLOCK(txlist);
+                return;
+            }
+            list_del_init(&ptxdesc->txdesc_queue);
+            if (txlist->txlist_qcnt > 0)
+                 txlist->txlist_qcnt--;
             DRV_TXQ_UNLOCK(txlist);
+            drv_tx_complete(drv_priv, ptxdesc, 0);
             return;
         }
 
-#ifdef DRV_TCP_RETRANSMISSION
-        if (mac_pkt_info == NULL || !mac_pkt_info->b_tcp)
-        {
-            list_del_init(&ptxdesc->txdesc_queue);
-        }
-#else
         list_del_init(&ptxdesc->txdesc_queue);
-#endif
 
         if (txlist->txlist_qcnt > 0)
              txlist->txlist_qcnt--;
@@ -2044,8 +1979,25 @@ static void drv_txlist_free_all_by_vid(struct drv_private *drv_priv, struct drv_
         ptxdesc = list_first_entry(&txlist->txlist_q, struct drv_txdesc, txdesc_queue);
         list_del_init(&ptxdesc->txdesc_queue);
         desc_sta = ptxdesc->txdesc_sta;
+        if (ptxdesc->txinfo == NULL) {
+            ptxdesc->txdesc_sta = NULL;
+            if (READ_ONCE(ptxdesc->txdesc_in_hw))
+                list_add_tail(&ptxdesc->txdesc_queue, &txdesc_list_head_not_free);
+            else {
+                if (txlist->txlist_qcnt > 0)
+                    txlist->txlist_qcnt--;
+                DRV_TXQ_UNLOCK(txlist);
+                drv_tx_complete(drv_priv, ptxdesc, 0);
+                DRV_TXQ_LOCK(txlist);
+            }
+            continue;
+        }
         if ((ptxdesc->txinfo->wnet_vif_id == vid) || (vid == 3)) {
             ptxdesc->txdesc_sta = NULL;
+            if (READ_ONCE(ptxdesc->txdesc_in_hw)) {
+                list_add_tail(&ptxdesc->txdesc_queue, &txdesc_list_head_not_free);
+                continue;
+            }
 
             DRV_TXQ_UNLOCK(txlist);
             pTxDPape = (struct hi_tx_desc *)os_skb_data(ptxdesc->txdesc_mpdu);
@@ -2058,7 +2010,7 @@ static void drv_txlist_free_all_by_vid(struct drv_private *drv_priv, struct drv_
                 drv_tx_complete(drv_priv, ptxdesc, 0);
             }
             DRV_TXQ_LOCK(txlist);
-            /* KP-5 FIX: decrement txlist_qcnt inside the spinlock to prevent race with IRQ tasklet */
+            
             if (pTxDPape && !pTxDPape->TxOption.pkt_position) {
                 txlist->txlist_qcnt--;
             }
@@ -2100,10 +2052,16 @@ static void drv_txlist_free_all_by_drv_sta(struct drv_private *drv_priv, struct 
         list_del_init(&ptxdesc->txdesc_queue);
 
         if (ptxdesc->txdesc_sta == drv_sta) {
-            txlist->txlist_qcnt--;
             ptxdesc->txdesc_sta = NULL;
+            if (READ_ONCE(ptxdesc->txdesc_in_hw)) {
+                list_add_tail(&ptxdesc->txdesc_queue, &txdesc_list_head_not_free);
+                continue;
+            }
+            if (txlist->txlist_qcnt > 0)
+                txlist->txlist_qcnt--;
 
-            pr_debug("free qid:%d, drv_sta:%p\n", ptxdesc->txinfo->queue_id, drv_sta);
+            pr_debug("free qid:%d, drv_sta:%p\n",
+                ptxdesc->txinfo ? ptxdesc->txinfo->queue_id : -1, drv_sta);
             DRV_TXQ_UNLOCK(txlist);
             drv_tx_complete(drv_priv, ptxdesc, 0);
             DRV_TXQ_LOCK(txlist);
@@ -2119,7 +2077,6 @@ static void drv_txlist_free_all_by_drv_sta(struct drv_private *drv_priv, struct 
     DRV_TXQ_UNLOCK(txlist);
 }
 
-
 void drv_txlist_flushfree(struct drv_private *drv_priv, unsigned char vid)
 {
     int i;
@@ -2127,7 +2084,7 @@ void drv_txlist_flushfree(struct drv_private *drv_priv, unsigned char vid)
     for (i = 0; i < HAL_NUM_TX_QUEUES; i++) {
         if (DRV_TXQUEUE_VALUE(drv_priv, i)) {
             drv_txlist_free_all_by_vid(drv_priv, &drv_priv->drv_txlist_table[i], vid);
-            /* FIX-13: clear HW-pending count; TX_complete IRQs won't fire after disconnect */
+            
             drv_priv->drv_txlist_table[i].txds_pending_cnt = 0;
         }
     }
@@ -2155,7 +2112,7 @@ void drv_set_pkt_drop(struct drv_private *drv_priv, unsigned char vid, unsigned 
 
 void drv_set_is_mother_channel(struct drv_private *drv_priv, unsigned char vid, unsigned char enable)
 {
-    //pr_debug("vid:%d mother channel is:%d\n", vid, enable);
+    
     drv_priv->is_mother_channel[vid] = enable;
 }
 
@@ -2169,13 +2126,12 @@ void drv_free_normal_buffer_queue(struct drv_private *drv_priv, unsigned char vi
         ptxdesc = list_first_entry(&drv_priv->drv_normal_buffer_queue[vid], struct drv_txdesc, txdesc_queue);
         list_del_init(&ptxdesc->txdesc_queue);
         drv_tx_complete(drv_priv, ptxdesc, 0);
-        //pr_debug("%s\n", __func__);
+        
     }
 
     drv_priv->drv_normal_buffer_count[vid] = 0;
     DRV_TX_NORMAL_BUF_UNLOCK(drv_priv);
 }
-
 
 void drv_flush_normal_buffer_queue(struct drv_private *drv_priv, unsigned char vid)
 {
@@ -2253,7 +2209,7 @@ unsigned short drv_tx_pending_pkt(struct drv_private *drv_priv)
     {
         if (DRV_TXQUEUE_VALUE(drv_priv, queue_id)) {
             pending_cnt += drv_priv->drv_txlist_table[queue_id].txlist_qcnt
-                + drv_priv->drv_txlist_table[queue_id].txds_pending_cnt;// all frame in amlmain
+                + drv_priv->drv_txlist_table[queue_id].txds_pending_cnt;
         }
     }
 
@@ -2370,7 +2326,7 @@ int drv_aggr_check( struct drv_private *drv_priv, void * nsta, unsigned char tid
         return 0;
     }
 
-    if (!drv_tid_hostap_txampdu_allowed(tid)) {
+    if (!drv_tid_hostap_txampdu_allowed(drv_priv, tid)) {
         return 0;
     }
 
@@ -2405,7 +2361,7 @@ int drv_aggr_tid( struct drv_private *drv_priv, void * nsta, unsigned char tid_i
         return 0;
     }
 
-    if (!drv_tid_hostap_txampdu_allowed(tid)) {
+    if (!drv_tid_hostap_txampdu_allowed(drv_priv, tid)) {
         return 0;
     }
 
@@ -2442,7 +2398,7 @@ int drv_aggr_allow_to_send(struct drv_private *drv_priv, void * nsta, unsigned c
         return 0;
     }
 
-    if (!drv_tid_hostap_txampdu_allowed(tid)) {
+    if (!drv_tid_hostap_txampdu_allowed(drv_priv, tid)) {
         return 1;
     }
 
@@ -2470,18 +2426,10 @@ int drv_get_amsdu_supported(struct drv_private *drv_priv, void *nsta, int tid_in
             sta->sta_wnet_vif->vm_opmode == WIFINET_M_HOSTAP) {
             return 0;
         }
-        /*
-         * v17o: A-MSDU inside TX BA is only a win on clean links. On the
-         * W155S1 STA/VHT80 test link (-74..-76 dBm) enabling cfg_txamsdu made
-         * upload collapse from ~15 Mbit/s to ~4 Mbit/s while retry counters
-         * exploded. Keep TX A-MPDU enabled, but avoid building large A-MSDUs
-         * when rate control already sees a weak peer. This still lets an
-         * "all aggr" config negotiate BA, without feeding the firmware jumbo
-         * MSDUs it retransmits poorly.
-         */
+        
         if (sta && (sta->sta_flags & WIFINET_NODE_VHT) &&
             sta->sta_avg_bcn_rssi < -68) {
-            pr_info_ratelimited("v17o amsdu-gate: deny txamsdu tid=%d rssi=%d chbw=%d\n",
+            pr_info_ratelimited("W522A: amsdu-gate: deny txamsdu tid=%d rssi=%d chbw=%d\n",
                 tid_index, sta->sta_avg_bcn_rssi, sta->sta_chbw);
             return 0;
         }
@@ -2490,7 +2438,6 @@ int drv_get_amsdu_supported(struct drv_private *drv_priv, void *nsta, int tid_in
 
     return 0;
 }
-
 
 static void
 drv_addba_timer_ex(unsigned long param1,unsigned long param2,
@@ -2507,6 +2454,8 @@ drv_addba_timer_ex(unsigned long param1,unsigned long param2,
     driv_ps_wakeup(drv_priv);
     if (atomic_cmpxchg(&tid->addba_exchangeinprogress, 1, 0) == 1)
     {
+        
+        drv_txba_quarantine(drv_priv, tid, DRV_TXBA_FAULT_ADDBA_TIMEOUT);
         tid->addba_exchangestatuscode = WIFINET_STATUS_UNSPECIFIED;
         tid->tid_tx_buff_sending = 1;
         wifi_mac_buffer_txq_send(&tid->tid_tx_buffer_queue);
@@ -2520,7 +2469,6 @@ drv_addba_timer_ex(unsigned long param1,unsigned long param2,
     return ;
 }
 
-// static unsigned int my_drvaddbatimer_taskid,my_drvaddbatimer_once=0;
 static int
 drv_addba_timer(void *arg)
 {
@@ -2552,6 +2500,11 @@ void drv_addba_req_setup(struct drv_private *drv_priv, void * nsta, unsigned cha
     if (tid == NULL)
         return;
 
+    if (drv_txba_quarantined(tid)) {
+        tid->addba_exchangestatuscode = WIFINET_STATUS_REFUSED;
+        return;
+    }
+
     sta = (struct wifi_station *)smp_load_acquire(&drv_sta->net_nsta);
     baparamset->amsdusupported = (drv_priv->drv_config.cfg_txamsdu);
     if (sta && sta->sta_wnet_vif &&
@@ -2575,7 +2528,6 @@ void drv_addba_req_setup(struct drv_private *drv_priv, void * nsta, unsigned cha
     DPRINTF(AML_DEBUG_ADDBA,"%s %d addba_exchangecomplete=%d ,addba_exchangeinprogress=%d\n",
             __func__,__LINE__,tid->addba_exchangecomplete , atomic_read(&tid->addba_exchangeinprogress));
 }
-
 
 void
 drv_addba_rsp_process(
@@ -2623,7 +2575,17 @@ drv_addba_rsp_process(
             __func__, baparamset->amsdusupported, tid->seq_start, tid->seq_next);
 
         tid->addba_exchangecomplete = 1;
+        
+        tid->addba_failures = 0;
+        tid->txba_fault_code = DRV_TXBA_FAULT_NONE;
+        tid->txba_disabled_until = 0;
         tid->baw_size = clamp_t(unsigned short, baparamset->buffersize, 1, WME_BA_BMP_SIZE);
+
+        pr_info("W522A: addba-rsp peer=%pM tid=%u baw=%u peer_buf=%u amsdu=%u status=%u\n",
+            sta ? sta->sta_macaddr : NULL,
+            tid->tid_index, tid->baw_size,
+            baparamset->buffersize,
+            baparamset->amsdusupported, statuscode);
 
         if (drv_priv->drv_config.cfg_txamsdu && baparamset->amsdusupported) {
             tid->addba_amsdusupported = 1;
@@ -2648,6 +2610,8 @@ drv_addba_rsp_process(
     else
     {
         DPRINTF(AML_DEBUG_ADDBA,"<running> %s %d fail \n",__func__,__LINE__);
+        
+        drv_txba_quarantine(drv_priv, tid, DRV_TXBA_FAULT_ADDBA_REFUSED);
 
         if (resume)
         {
@@ -2655,7 +2619,6 @@ drv_addba_rsp_process(
         }
     }
 }
-
 
 unsigned short
 drv_addba_status( struct drv_private *drv_priv, void * nsta, unsigned char tid_index)
@@ -2684,7 +2647,6 @@ drv_addba_status( struct drv_private *drv_priv, void * nsta, unsigned char tid_i
     return status;
 }
 
-
 void
 drv_addba_clear( struct drv_private *drv_priv, void * nsta)
 {
@@ -2701,6 +2663,10 @@ drv_addba_clear( struct drv_private *drv_priv, void * nsta)
         tid = &drv_sta->tx_agg_st.tid[i];
         if (atomic_read(&tid->addba_exchangeinprogress))
             atomic_cmpxchg(&tid->addba_exchangeinprogress, 1, 0);
+        
+        tid->addba_failures = 0;
+        tid->txba_fault_code = DRV_TXBA_FAULT_NONE;
+        tid->txba_disabled_until = 0;
         if (tid->addba_exchangecomplete)
         {
             tid->addba_exchangecomplete = 0;
@@ -2749,45 +2715,6 @@ static void drv_tx_add2baw(struct drv_private *drv_priv, struct drv_tx_scoreboar
     }
 }
 
-/*
- * v15p drv_tx_update_ba_win():
- *
- * Pure natural-slide BA-window update. One seqnum in -> at most one
- * slot freed, then walk forward across contiguous NULL slots.
- *
- * The v15o-B "force-clear head if window saturated" branch is removed:
- *
- *   The vendor BSP and v15n/v15o-B all carried a workaround that
- *   forcibly NULL'd tid->tx_desc[baw_head] when the window appeared
- *   saturated and head was stuck. The workaround was originally added
- *   to cover a firmware-reorder bug where TX-completion events for a
- *   AMPDU's middle MPDUs were occasionally dropped, leaving a NULL-
- *   surrounded "live" head slot that never freed. After tracing the
- *   firmware path (every MPDU yields its own drv_tx_complete_task
- *   call — see wifi_drv_xmit.c:1454), we confirmed that the dropped-
- *   completion bug does not actually happen on the current firmware:
- *   missed completions are recovered through the BA-retry path
- *   (drv_tx_complete_aggr_pkts) or the cleanup timer.
- *
- *   Keeping the force-clear in place was actively harmful:
- *
- *     - The ptxdesc at the "force-cleared" slot remained on
- *       txlist->txlist_q with no slot pointer back from the scoreboard.
- *       drv_tx_complete() for it would later see tx_desc == NULL,
- *       follow the legacy "noaggr" complete path, and either drop the
- *       frame outright or double-free it.
- *     - The slot was reclaimed with seq_start advanced past the live
- *       MPDU's seqnum, so the BA-retry path on the next firmware NACK
- *       saw "seqnum outside window" and dropped retries, which the
- *       stats tab counted as tx_errors. This is what produced the
- *       "tx_errors trickle" the user reported.
- *
- * If a "real" stuck head ever happens, the only safe recovery is to
- * tear the BA session down (BA-Timeout / DELBA) and let it be
- * renegotiated. The cleanup path in drv_tx_complete_aggr_pkts and the
- * baw timer already do that. Slip-papering it here only masks the
- * underlying bug and corrupts ptxdesc accounting.
- */
 static void drv_tx_update_ba_win(struct drv_private *drv_priv, struct drv_tx_scoreboard *tid, int seqnum, struct drv_txlist *txlist)
 {
     int index, desc_id;
@@ -2798,10 +2725,7 @@ static void drv_tx_update_ba_win(struct drv_private *drv_priv, struct drv_tx_sco
         return;
 
     index = DRV_BA_INDEX(tid->seq_start, seqnum);
-    /* Off-the-window updates can legitimately happen on the boundary
-     * where TX-completion arrives just after the window already slid
-     * past it (e.g. STA roamed, BAW reset by a recent DELBA). Drop
-     * silently rather than poisoning the head slot. */
+    
     if (index < 0 || index >= DRV_TID_MAX_BUFS ||
         (tid->baw_size && index >= tid->baw_size))
         return;
@@ -2809,10 +2733,6 @@ static void drv_tx_update_ba_win(struct drv_private *drv_priv, struct drv_tx_sco
     desc_id = (tid->baw_head + index) & (DRV_TID_MAX_BUFS - 1);
     tid->tx_desc[desc_id] = NULL;
 
-    /* The window can never be larger than baw_size, so we'll never
-     * iterate more than baw_size + 1 times. The bound stops a
-     * pathological infinite loop if both head==tail logic and the
-     * tx_desc array somehow disagree (paranoia). */
     slide_limit = (int)tid->baw_size + 1;
 
     baw_iter = 0;
@@ -2843,10 +2763,14 @@ drv_txlist_pause_for_sta_tid(struct drv_private *drv_priv, struct drv_tx_scorebo
     DPRINTF(AML_DEBUG_XMIT,"<running> %s %d    tid->paused++ \n",__func__,__LINE__);
 
     DRV_TXQ_LOCK(txlist);
-    tid->paused++;
+    
+    if (tid->paused < 255)
+        tid->paused++;
+    else
+        pr_warn_ratelimited("W522A: txba: pause saturation tid=%u queue=%u\n",
+            tid->tid_index, tid->ac->queue_id);
     DRV_TXQ_UNLOCK(txlist);
 }
-
 
 static void
 drv_txlist_resume_for_sta_tid(struct drv_private *drv_priv, struct drv_tx_scoreboard *tid)
@@ -3009,7 +2933,6 @@ drv_txampdu_del(struct drv_private *drv_priv,
         __func__, tid->baw_head, tid->baw_tail, tid->seq_start, tid->seq_next, tid->paused, atomic_read(&tid->cleanup_inprogress));
 }
 
-
 void drv_txrxampdu_del( struct drv_private *drv_priv, 
     void * nsta, unsigned char tid_index, unsigned char initiator)
 {
@@ -3023,8 +2946,6 @@ void drv_txrxampdu_del( struct drv_private *drv_priv,
     else
         drv_rxampdu_del(drv_priv, drv_sta, tid_index);
 }
-
-
 
 static  void
 drv_tx_queue_tid(struct drv_txlist *txlist, struct drv_tx_scoreboard *tid)
@@ -3040,7 +2961,6 @@ drv_tx_queue_tid(struct drv_txlist *txlist, struct drv_tx_scoreboard *tid)
         return;
     }
 
-    // connect tid 2 ac: ac->tid_queue->tid1->tid2....
     tid->b_work = 1;
     list_add_tail(&tid->tid_queue_elem, &ac->tid_queue);
 
@@ -3049,7 +2969,6 @@ drv_tx_queue_tid(struct drv_txlist *txlist, struct drv_tx_scoreboard *tid)
         return;
     }
 
-    // connect ac node 2 txlist: tx->txlist_acq->ac1->ac2...
     ac->b_work = 1;
     list_add_tail(&ac->ac_queue, &txlist->txlist_acq);
 }
@@ -3098,7 +3017,7 @@ drv_tx_normal(struct drv_private *drv_priv, struct drv_txlist *txlist, struct li
 
             ptxdesc->txinfo->b_Ampdu = 0;
             ptxdesc->txdesc_pktnum = 1;
-            ptxdesc->txdesc_queue_last = ptxdesc->txdesc_queue_lastframe; /* one single frame */
+            ptxdesc->txdesc_queue_last = ptxdesc->txdesc_queue_lastframe; 
 
             DRV_TXQ_LOCK(txlist);
             drv_to_hal(drv_priv, txlist, txdesc_list_head);
@@ -3133,6 +3052,8 @@ static int drv_tx_send_ampdu(struct drv_private *drv_priv, struct drv_txlist *tx
 
     if (drv_tid_is_hostap(tid) &&
         txlist->txds_pending_cnt >= AP_AMPDU_PENDING_LIMIT) {
+        
+        drv_txba_quarantine(drv_priv, tid, DRV_TXBA_FAULT_PENDING_FUSE);
         ptxdesc->txinfo->b_Ampdu = 0;
         return drv_tx_normal(drv_priv, txlist, txdesc_list_head, tid->vid);
     }
@@ -3144,16 +3065,6 @@ static int drv_tx_send_ampdu(struct drv_private *drv_priv, struct drv_txlist *tx
 
     ampdu_subframes = clamp_t(int, drv_priv->drv_config.cfg_ampdu_subframes, DEFAULT_TXAMPDU_SUB_MIN, DEFAULT_TXAMPDU_SUB_MAX);
 
-    /* v15i AP-TX FIX: honour the STA's negotiated BA window. Vendor BSP holds
-     * frames in tid->txds_queue waiting for cfg_ampdu_subframes (32 by default)
-     * before shipping, but legacy 11n peers like mt7601u advertise buffersize=8
-     * in their ADDBA-Response. Aggregating 32 frames against a 8-slot BA window
-     * means the back half is always outside the window — frames sit in the swq
-     * until something flushes the tid (cleanup/disassoc/baw-reset), at which
-     * point drv_tx_complete(.., txok=0) is called for each one and the netdev
-     * tx_errors counter explodes (~33% in AP→STA upload reply traffic) while
-     * firmware tx_fail stays 0. Cap the aggregation wait by tid->baw_size so
-     * we ship as soon as we have a full BA-window worth of frames. */
     ampdu_subframes = drv_tx_ampdu_subframe_limit(drv_priv, tid, ampdu_subframes);
     ampdu_wait_target = drv_tx_ampdu_wait_target(drv_priv, tid, ampdu_subframes);
 
@@ -3169,27 +3080,14 @@ static int drv_tx_send_ampdu(struct drv_private *drv_priv, struct drv_txlist *tx
     wifi_mac_tx_lock_timer_cancel();
     DRV_HRTIMER_UNLOCK(drv_priv);
 
-#if 0
-    tasklet_schedule(&drv_priv->ampdu_tasklet);
-#else
     drv_txlist_task(drv_priv, txlist);
-#endif
     return 0;
 }
 
 unsigned int drv_lookup_rate(struct drv_private *drv_priv, struct aml_driver_nsta *drv_sta,   struct aml_ratecontrol *txdesc_rateinfo)
 {
     unsigned char i;
-    /*
-     * v15r: maxampdu / aggr_limit MUST be unsigned int.
-     *
-     * `drv_sta->tx_agg_st.maxampdu` is unsigned int and now carries the
-     * peer's negotiated A-MPDU cap (up to 1 MiB - 1 with the v15r wire IE
-     * fix). `cfg_ampdu_limit` and `frame_length` are also unsigned int.
-     * Assigning them to unsigned short here silently masked everything
-     * down to <= 65535 even when the rate table / peer advertised a 4 ms
-     * VHT80 SGI budget around 267 KB. Widen to match the value domain.
-     */
+    
     unsigned int maxampdu;
     unsigned int aggr_limit;
     unsigned int maxampdulen, frame_length;
@@ -3224,11 +3122,7 @@ unsigned int drv_lookup_rate(struct drv_private *drv_priv, struct aml_driver_nst
         return 0;
     }
     DRV_MINSTREL_UNLOCK(drv_priv);
-    /*
-     * v15r: start the per-call ceiling at the HW descriptor's hard
-     * limit (AGGR_len is u16 = 65535). Pre-v15r this constant was 32768
-     * which forced every A-MPDU under 32 KiB regardless of peer caps.
-     */
+    
     maxampdulen = (WIFINET_AMPDU_LIMIT_MAX < 65535u) ? 65535u
                                                      : WIFINET_AMPDU_LIMIT_MAX;
 
@@ -3236,14 +3130,7 @@ unsigned int drv_lookup_rate(struct drv_private *drv_priv, struct aml_driver_nst
     {
         if (IS_MCS_RATE(txdesc_rateinfo[i].vendor_rate_code) && txdesc_rateinfo[i].trynum)
         {
-            /* v15r: vendor BSP passed `bw=0, short_gi=0` so the
-             * "max bytes in a 4 ms PPDU" budget was always computed
-             * as if we were transmitting at 20 MHz long-GI - the
-             * smallest possible value. For VHT80 SGI peers this
-             * under-estimates the byte budget by ~10x and caps the
-             * outgoing A-MPDU well below what the radio can carry.
-             * Use the actual per-rate bw / short_gi fields.
-             */
+            
             frame_length = max_send_packet_len(txdesc_rateinfo[i].vendor_rate_code,
                                                txdesc_rateinfo[i].bw,
                                                txdesc_rateinfo[i].shortgi_en, 1);
@@ -3270,23 +3157,23 @@ unsigned int drv_lookup_rate(struct drv_private *drv_priv, struct aml_driver_nst
 
 static const unsigned int bits_per_symbol[][2] =
 {
-    /* 20MHz 40MHz */
-    {    26,   54 },     //  0: BPSK
-    {    52,  108 },     //  1: QPSK 1/2
-    {    78,  162 },     //  2: QPSK 3/4
-    {   104,  216 },     //  3: 16-QAM 1/2
-    {   156,  324 },     //  4: 16-QAM 3/4
-    {   208,  432 },     //  5: 64-QAM 2/3
-    {   234,  486 },     //  6: 64-QAM 3/4
-    {   260,  540 },     //  7: 64-QAM 5/6
-    {    52,  108 },     //  8: BPSK
-    {   104,  216 },     //  9: QPSK 1/2
-    {   156,  324 },     // 10: QPSK 3/4
-    {   208,  432 },     // 11: 16-QAM 1/2
-    {   312,  648 },     // 12: 16-QAM 3/4
-    {   416,  864 },     // 13: 64-QAM 2/3
-    {   468,  972 },     // 14: 64-QAM 3/4
-    {   520, 1080 },     // 15: 64-QAM 5/6
+    
+    {    26,   54 },     
+    {    52,  108 },     
+    {    78,  162 },     
+    {   104,  216 },     
+    {   156,  324 },     
+    {   208,  432 },     
+    {   234,  486 },     
+    {   260,  540 },     
+    {    52,  108 },     
+    {   104,  216 },     
+    {   156,  324 },     
+    {   208,  432 },     
+    {   312,  648 },     
+    {   416,  864 },     
+    {   468,  972 },     
+    {   520, 1080 },     
 };
 
 static  int
@@ -3357,22 +3244,7 @@ drv_txampdu_build(struct drv_private *drv_priv, struct drv_tx_scoreboard *tid,
     struct drv_txdesc *ptxdesc, *bf_first, *bf_prev = NULL;
     struct list_head txdesc_list_head;
     int nframes = 0, ndelim;
-    /*
-     * v15r TX-AMPDU FIX: aggr_limit MUST be unsigned int.
-     *
-     * `aml_ratecontrol::maxampdulen` is `unsigned int` and for VHT80 SGI
-     * peers carries values up to ~267000 bytes (max_4ms_framelen at
-     * MCS9 80 MHz SGI). When this 32-bit value was assigned to an
-     * `unsigned short` aggr_limit the high bits were silently dropped
-     * and aggr_limit landed at e.g. 5006 bytes instead of 267150 —
-     * effectively capping every VHT80 STA's TX A-MPDU at a single MPDU
-     * worth of data.
-     *
-     * Also: `al`, `bpad`, `al_delta` are summed against this limit and
-     * each `al_delta = DRV_AGGR_DELIM_SZ + packetlen`; with jumbo
-     * A-MSDUs (~7871 bytes) those sums can themselves exceed 16-bit
-     * once we have more than ~8 MPDUs queued. Widen them all.
-     */
+    
     unsigned int aggr_limit = 4096;
     unsigned int al = 0, bpad = 0, al_delta;
     unsigned short h_baw;
@@ -3389,9 +3261,7 @@ drv_txampdu_build(struct drv_private *drv_priv, struct drv_tx_scoreboard *tid,
 
     ampdu_subframes = clamp_t(int, drv_priv->drv_config.cfg_ampdu_subframes, DEFAULT_TXAMPDU_SUB_MIN, DEFAULT_TXAMPDU_SUB_MAX);
     ampdu_subframes = drv_tx_ampdu_subframe_limit(drv_priv, tid, ampdu_subframes);
-    /* v15o-B: previously this was baw_size/2, which threw away half of the
-     * negotiated BA window "for safety". The cap by ampdu_subframes and the
-     * BAW_WITHIN check below already protect us. */
+    
     h_baw = max_t(unsigned short, tid->baw_size, 1);
     bf_first = list_first_entry(&tid->txds_queue, struct drv_txdesc, txdesc_queue);
     if (bf_first == NULL || bf_first->txinfo == NULL)
@@ -3420,14 +3290,6 @@ drv_txampdu_build(struct drv_private *drv_priv, struct drv_tx_scoreboard *tid,
     if (aggr_limit == 0)
         aggr_limit = DEFAULT_TXAMPDU_LEN_MAX;
 
-    /*
-     * v15r: clamp to the HW descriptor's AGGR_len upper limit (u16).
-     * `agg_content->AGGR_len` is unsigned short, so even though our
-     * rate table can request 267 KB at VHT80 SGI MCS9, the radio
-     * descriptor can only describe up to 65535 bytes. Cap here so
-     * the accumulator below stops at a meaningful size and never
-     * silently truncates the stored agglen.
-     */
     if (aggr_limit > 65535u)
         aggr_limit = 65535u;
 
@@ -3505,7 +3367,7 @@ static void drv_txampdu_tasklet(unsigned long arg)
     unsigned char i = 0;
     unsigned char wait_mpdu_timeout;
     unsigned char wait_mpdu_timeout_status_change = 0;
-    /* KP-2 FIX: use atomic_t instead of static int to prevent SMP race on ARM64 */
+    
     static atomic_t s_txampdu_send_flag = ATOMIC_INIT(0);
 
     if (drv_priv == NULL)
@@ -3526,8 +3388,6 @@ static void drv_txampdu_tasklet(unsigned long arg)
 
         DRV_TXQ_LOCK(txlist);
 
-        /* OPT: reset wait_mpdu_timeout BEFORE processing VO queue so VO
-         * traffic gets priority immediately, not on the next iteration. */
         if ((i == HAL_WME_AC_VO) && wait_mpdu_timeout && wait_mpdu_timeout_status_change) {
             drv_priv->wait_mpdu_timeout = 0;
         }
@@ -3546,7 +3406,7 @@ static void drv_txampdu_tasklet(unsigned long arg)
     }
     DRV_TX_TIMEOUT_UNLOCK(drv_priv);
 
-    atomic_set(&s_txampdu_send_flag, 0); /* KP-2 FIX */
+    atomic_set(&s_txampdu_send_flag, 0); 
 }
 
 static void drv_tx_note_sw_drop(struct drv_private *drv_priv, enum drv_tx_sw_drop_reason reason)
@@ -3596,7 +3456,7 @@ static void drv_tx_ampdu_health_report(struct drv_private *drv_priv,
         + drv_priv->drv_stats.tx_ampdu_sw_drop_invariant_cnt
         + drv_priv->drv_stats.tx_ampdu_sw_drop_sched_cnt;
 
-    pr_info("v17b ampdu-health q=%u wait=%d pending=%u aggr=%u [1:%u 2:%u 3:%u 4:%u 8:%u 16:%u] one=%u end_ampdu=%u end_fail=%u swdrop=%u bad:%u hal:%u inv:%u sched:%u retry=%u\n",
+    pr_debug("W522A: ampdu-health q=%u wait=%d pending=%u aggr=%u [1:%u 2:%u 3:%u 4:%u 8:%u 16:%u] one=%u end_ampdu=%u end_fail=%u swdrop=%u bad:%u hal:%u inv:%u sched:%u retry=%u\n",
         txlist->txlist_qnum, ampdu_wait_target, txlist->txds_pending_cnt, total,
         txlist->tx_aggr_status[0], txlist->tx_aggr_status[1],
         txlist->tx_aggr_status[2], txlist->tx_aggr_status[3],
@@ -3645,7 +3505,7 @@ static void drv_tx_sched_aggr(struct drv_private *drv_priv, struct drv_txlist *t
     }
 
     if (!drv_priv->is_mother_channel[tid->vid]) {
-        //pr_debug("%s not mother channel vid:%d\n", __func__, tid->vid);
+        
         return;
     }
 
@@ -3655,25 +3515,22 @@ static void drv_tx_sched_aggr(struct drv_private *drv_priv, struct drv_txlist *t
     ampdu_wait_target = drv_tx_ampdu_wait_target(drv_priv, tid, ampdu_subframes);
     drv_tx_ampdu_health_report(drv_priv, txlist, ampdu_wait_target);
 
-    /* v15o-B: re-check is_mother_channel on every iteration. If a concurrent
-     * scan / vmac switch clears it mid-loop, drain the local tx_queue with
-     * txok=0 so skbs and tx_desc[] slots don't leak. */
     while (drv_priv->is_mother_channel[tid->vid])
     {
         if (txlist->txds_pending_cnt < ampdu_wait_target)
         {
             if (!drv_priv->wait_mpdu_timeout) {
-                //not allowed to form ampdu when pending mpdu less than cfg_ampdu_subframes
+                
                 break;
 
             } else {
-                //compel to form ampdu when pending mpdu less than cfg_ampdu_subframes except hal pending too much data
+                
                 if (drv_priv->hal_priv == NULL || drv_priv->hal_priv->hal_ops.hal_get_priv_cnt == NULL)
                     break;
                 hal_co_get_cnt = drv_priv->hal_priv->hal_ops.hal_get_priv_cnt(txlist->txlist_qnum);
                 if (HI_AGG_TXD_NUM_PER_QUEUE - hal_co_get_cnt >= ampdu_wait_target) {
                     AML_PRINT(AML_DBG_MODULES_TX, "wait more mpdu to form ampdu due to hal_co_get_cnt:%d\n", hal_co_get_cnt);
-                    drv_priv->wait_mpdu_timeout = 0;//wait another tx_ok or pending enough mpdu
+                    drv_priv->wait_mpdu_timeout = 0;
                     break;
                 }
             }
@@ -3689,7 +3546,6 @@ static void drv_tx_sched_aggr(struct drv_private *drv_priv, struct drv_txlist *t
             break;
         }
 
-        //get tx_ds from txlist  to local tx_queue
         status = drv_txampdu_build(drv_priv, tid, &tx_queue, &bf_lastaggr, txlist);
 
         if (list_empty(&tx_queue))
@@ -3738,6 +3594,8 @@ static void drv_tx_sched_aggr(struct drv_private *drv_priv, struct drv_txlist *t
             DPRINTF(AML_DEBUG_INFO,"<running> %s %d ptxdesc->txdesc_pktnum=1,tidq_qcnt %d, txlist_qcnt %d \n",__func__,__LINE__,txlist->txds_pending_cnt,txlist->txlist_qcnt);
             ret = drv_to_hal(drv_priv, txlist, &tx_queue);
             if (ret < 0) {
+                
+                drv_txba_quarantine(drv_priv, tid, DRV_TXBA_FAULT_HAL_TX_FAIL);
                 drv_tx_complete_list(drv_priv, &tx_queue, 0, DRV_TX_SW_DROP_HAL);
             }
             break;
@@ -3753,15 +3611,14 @@ static void drv_tx_sched_aggr(struct drv_private *drv_priv, struct drv_txlist *t
 
         ret=drv_to_hal(drv_priv, txlist, &tx_queue);
         if (ret < 0) {
+            
+            drv_txba_quarantine(drv_priv, tid, DRV_TXBA_FAULT_HAL_TX_FAIL);
             drv_tx_complete_list(drv_priv, &tx_queue, 0, DRV_TX_SW_DROP_HAL);
             break;
         }
     }
 }
 
-//txlist->acq->ac1->ac2...
-//ac->tid1->tid2..
-//
 void drv_txlist_task(struct drv_private *drv_priv, struct drv_txlist *txlist)
 {
     struct drv_queue_ac *ac;
@@ -3772,12 +3629,10 @@ void drv_txlist_task(struct drv_private *drv_priv, struct drv_txlist *txlist)
         return;
     }
 
-    // get ac from txlist by data type (index)
     ac = list_first_entry(&txlist->txlist_acq, struct drv_queue_ac, ac_queue);
     list_del_init(&ac->ac_queue);
     ac->b_work = 0;
 
-  //get one tid node  and process the txdesc which linked on the AC
     do
     {
         if (list_empty(&ac->tid_queue))
@@ -3794,7 +3649,6 @@ void drv_txlist_task(struct drv_private *drv_priv, struct drv_txlist *txlist)
             continue;
         }
 
-        //process one tid get from ac->tid_queue, agg only happens by tid unit
         drv_tx_sched_aggr(drv_priv, txlist, tid);
 
         if (!list_empty(&tid->txds_queue))
@@ -3863,7 +3717,11 @@ drv_tid_cleanup(struct drv_private *drv_priv,
 
     if (tid->baw_head != tid->baw_tail)
     {
-        tid->paused++;
+        
+        if (drv_tid_is_hostap(tid))
+            drv_txba_quarantine(drv_priv, tid, DRV_TXBA_FAULT_CLEANUP);
+        if (tid->paused < 255)
+            tid->paused++;
         atomic_set(&tid->cleanup_inprogress, 1);
     }
     else
@@ -3936,6 +3794,10 @@ void drv_txlist_init_for_sta(struct drv_private *drv_priv, struct aml_driver_nst
         os_timer_ex_initialize(&tid->addba_requesttimer, ADDBA_TIMEOUT, drv_addba_timer, tid);
         WIFINET_SAVEQ_INIT(&tid->tid_tx_buffer_queue, "tid_tx_buffer_queue");
         tid->addba_exchangestatuscode = WIFINET_STATUS_UNSPECIFIED;
+        
+        tid->addba_failures = 0;
+        tid->txba_fault_code = DRV_TXBA_FAULT_NONE;
+        tid->txba_disabled_until = 0;
     }
 
     for (acindex = 0, ac = &drv_sta->tx_agg_st.ac[acindex]; acindex < WME_NUM_AC; acindex++, ac++)
@@ -3960,7 +3822,6 @@ void drv_txlist_init_for_sta(struct drv_private *drv_priv, struct aml_driver_nst
     }
 
 }
-
 
 void drv_txlist_cleanup_for_sta(struct drv_private *drv_priv, struct aml_driver_nsta *drv_sta)
 {
@@ -4022,7 +3883,6 @@ void drv_txlist_cleanup_for_sta(struct drv_private *drv_priv, struct aml_driver_
     }
 }
 
-
 void drv_txlist_free_for_sta(struct drv_private *drv_priv, struct aml_driver_nsta *drv_sta)
 {
     if (drv_priv->drv_config.cfg_txaggr) {
@@ -4077,8 +3937,6 @@ void drv_txlist_resume_for_sta(struct drv_private *drv_priv,
     }
 }
 
-/* v15s: widened maxampdu from `unsigned short` to `unsigned int`; see
- * wifi_mac_sta.h sta_maxampdu for rationale. */
 void drv_set_ampduparams( struct drv_private *drv_priv,
                 void * nsta, unsigned int maxampdu,unsigned int mpdudensity)
 {

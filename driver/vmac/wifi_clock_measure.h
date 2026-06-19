@@ -1,6 +1,6 @@
 #ifndef __CLOCK_MEASURE__
 #define __CLOCK_MEASURE__
-//clock mux
+
 typedef enum clock_mux {
 
     CTS_CLK_11BRX_POS      = 0,
@@ -23,7 +23,7 @@ typedef enum clock_mux {
 } CLOCK_MUX;
 
 #define  SYS_OSCIN_I          40000000 
-//#define  VIRTUAL_CLK_500M     500000000 
+
 #define  CTS_RTC_CLK          32000 
 #define  CTS_CLK_CPU          40000000 
 #define  WF_ADC_CLK_320M      320000000 
@@ -34,7 +34,6 @@ typedef enum clock_mux {
 #define  WF_BBP_CLK_240M      240000000 
 #define  WF_DIG_OUT           1250000
 
-//reg addr
 #define INTF_BASE_ADDR     0xa0d000
 
 #define DF_REG_A18  (INTF_BASE_ADDR +0x048)
@@ -57,4 +56,3 @@ typedef enum clock_mux {
 void host_clk_msr(CLOCK_MUX clk_mux);
 
 #endif
-

@@ -1,18 +1,3 @@
-/*
- * AES (Rijndael) cipher - encrypt
- *
- * Modifications to public domain implementation:
- * - cleanup
- * - use C pre-processor to make it easier to change S table access
- * - added option (AES_SMALL_TABLES) for reducing code size by about 8 kB at
- *   cost of reduced throughput (quite small difference on Pentium 4,
- *   10-25% when using -O1 or -O2 optimization)
- *
- * Copyright (c) 2003-2012, Jouni Malinen <j@w1.fi>
- *
- * This software may be distributed under the terms of the BSD license.
- * See README for more details.
- */
 
 #include "aml_crypto_wrap.h"
 
@@ -23,12 +8,8 @@ static void rijndaelEncrypt(const u32 rk[], int Nr, const u8 pt[16], u8 ct[16])
 	u32 s0, s1, s2, s3, t0, t1, t2, t3;
 #ifndef FULL_UNROLL
 	int r;
-#endif /* ?FULL_UNROLL */
+#endif 
 
-	/*
-	 * map byte array block to cipher state
-	 * and add initial round key:
-	 */
 	s0 = GETU32(pt     ) ^ rk[0];
 	s1 = GETU32(pt +  4) ^ rk[1];
 	s2 = GETU32(pt +  8) ^ rk[2];
@@ -62,9 +43,8 @@ d##3 = TE0(s##3) ^ TE1(s##0) ^ TE2(s##1) ^ TE3(s##2) ^ rk[4 * i + 3]
 
 	rk += Nr << 2;
 
-#else  /* !FULL_UNROLL */
+#else  
 
-	/* Nr - 1 full rounds: */
 	r = Nr >> 1;
 	for (;;) {
 		ROUND(1,t,s);
@@ -74,14 +54,10 @@ d##3 = TE0(s##3) ^ TE1(s##0) ^ TE2(s##1) ^ TE3(s##2) ^ rk[4 * i + 3]
 		ROUND(0,s,t);
 	}
 
-#endif /* ?FULL_UNROLL */
+#endif 
 
 #undef ROUND
 
-	/*
-	 * apply last round and
-	 * map cipher state to byte array block:
-	 */
 	s0 = TE41(t0) ^ TE42(t1) ^ TE43(t2) ^ TE44(t3) ^ rk[0];
 	PUTU32(ct     , s0);
 	s1 = TE41(t1) ^ TE42(t2) ^ TE43(t3) ^ TE44(t0) ^ rk[1];
@@ -91,7 +67,6 @@ d##3 = TE0(s##3) ^ TE1(s##0) ^ TE2(s##1) ^ TE3(s##2) ^ rk[4 * i + 3]
 	s3 = TE41(t3) ^ TE42(t0) ^ TE43(t1) ^ TE44(t2) ^ rk[3];
 	PUTU32(ct + 12, s3);
 }
-
 
 void * aes_encrypt_init(const u8 *key, size_t len)
 {
@@ -113,14 +88,12 @@ void * aes_encrypt_init(const u8 *key, size_t len)
 	return rk;
 }
 
-
 int aes_encrypt(void *ctx, const u8 *plain, u8 *crypt)
 {
 	u32 *rk = ctx;
 	rijndaelEncrypt(ctx, rk[AES_PRIV_NR_POS], plain, crypt);
 	return 0;
 }
-
 
 void aes_encrypt_deinit(void *ctx)
 {

@@ -1,23 +1,3 @@
-/*
- ****************************************************************************************
- *
- * Copyright (C) Amlogic 2010-2014
- *
- * Project: 11N 80211 HAL  layer Software
- *
- * Description:
- *   sdio interface function,used by HAL write/read sdio function
- *
- *
- ****************************************************************************************
- */
-
-#ifdef HAL_SIM_VER
-#ifdef FW_NAME
-namespace FW_NAME
-{
-#endif
-#endif
 
 #include "wifi_hal.h"
 #include "wifi_hif.h"
@@ -28,7 +8,6 @@ namespace FW_NAME
 #include "wifi_pt_init.h"
 #include "wifi_pt_network.h"
 
-#if defined (HAL_FPGA_VER)
 struct amlw_hwif_sdio g_amlw_hwif_sdio;
 
 static inline struct amlw_hwif_sdio *aml_sdio_priv(void)
@@ -39,9 +18,7 @@ static inline struct amlw_hwif_sdio *aml_sdio_priv(void)
     return &w1_g_w1_hwif_sdio;
 #endif
 }
-#endif
 
-#if defined (HAL_FPGA_VER)
 #include "wifi_mac_com.h"
 #include <linux/gfp.h>
 #include <linux/mmc/sdio_func.h>
@@ -65,23 +42,20 @@ static void aml_sdio_dma_free(void *buf, size_t size)
         free_pages((unsigned long)buf, get_order(size));
 }
 
-#ifdef    DRIVER_FOR_BT  // access bt domain need more slower clk for cross the AHB bridge
+#ifdef    DRIVER_FOR_BT  
 int sdioclk = 3000000;
 #else
 #ifdef RF_T9026
-    /* H-10 FIX: was 200000000 (200MHz) — G12B SDIO is nominally 200MHz but unstable
-     * at that rate on most boards due to PCB impedance; real stable max is ~100-150MHz.
-     * 200MHz causes bit errors → retransmits → firmware upload failures → kernel panic.
-     * Default lowered to 100MHz; tune via module param sdioclk= if board supports more. */
-    int sdioclk = 100000000;
+    
+    int sdioclk = 200000000;
 #else
-    int sdioclk = 100000000;
+    int sdioclk = 200000000;
 #endif
 #endif
 module_param(sdioclk, int, 0644);
-MODULE_PARM_DESC(sdioclk, "SDIO clock frequency in Hz (default/max: 100000000). Higher values are clamped for W155S1 stability.");
+MODULE_PARM_DESC(sdioclk, "SDIO clock frequency in Hz (default/max: 200000000 for SDR104 test profile).");
 
-#define AML_SDIO_CLK_SAFE_MAX 100000000
+#define AML_SDIO_CLK_SAFE_MAX 200000000
 
 static inline bool aml_sdio_is_rx_bounce_func(unsigned char func_num)
 {
@@ -186,10 +160,8 @@ static int aml_sdio_validate_scat_req(struct amlw_hif_scatter_req *scat_req,
     return 0;
 }
 #endif
-#endif//HAL_FPGA_VER
 
 #ifndef SDIO_BUILD_IN
-#if defined (HAL_FPGA_VER)
 static int _aml_sdio_request_byte(unsigned char   func_num,
                                     unsigned char   write,
                                     unsigned int      reg_addr,
@@ -198,36 +170,22 @@ static int _aml_sdio_request_byte(unsigned char   func_num,
     int err_ret;
     struct sdio_func * func = aml_priv_to_func(func_num );
 
-#if defined(DBG_PRINT_COST_TIME)
-    struct timespec64 now, before;
-    ktime_get_real_ts64(&before); /* KP-4 FIX: getnstimeofday removed in 5.6 */
-#endif /* End of DBG_PRINT_COST_TIME */
-
     ASSERT(func != NULL);
     ASSERT(byte != NULL);
     ASSERT(func->num == func_num);
 
-    /* Claim host controller */
     sdio_claim_host(func);
 
     if (write) {
-        /* CMD52 Write */
+        
         sdio_writeb(func, *byte, reg_addr, &err_ret);
     }
     else {
-        /* CMD52 Read */
+        
         *byte = sdio_readb(func, reg_addr, &err_ret);
     }
 
-    /* Release host controller */
     sdio_release_host(func);
-
-#if defined(DBG_PRINT_COST_TIME)
-    ktime_get_real_ts64(&now); /* KP-4 FIX */
-
-    pr_debug("[sdio byte]: len=1 cost=%lds %luus\n",
-        now.tv_sec-before.tv_sec, now.tv_nsec/1000 - before.tv_nsec/1000);
-#endif /* End of DBG_PRINT_COST_TIME */
 
     return (err_ret == 0) ? SDIOH_API_RC_SUCCESS : SDIOH_API_RC_FAIL;
 }
@@ -244,67 +202,48 @@ static int _aml_sdio_request_buffer(unsigned char func_num,
     struct sdio_func * func = aml_priv_to_func(func_num);
     bool fifo = (fix_incr == SDIO_OPMODE_FIXED);
 
-#if defined(DBG_PRINT_COST_TIME)
-    struct timespec64 now, before;
-
-    ktime_get_real_ts64(&before); /* KP-4 FIX: getnstimeofday removed in 5.6 */
-#endif /* End of DBG_PRINT_COST_TIME */
-
-
     ASSERT(buf != NULL);
     ASSERT(func != NULL);
     ASSERT(fix_incr == SDIO_OPMODE_FIXED|| fix_incr == SDIO_OPMODE_INCREMENT);
     ASSERT(func->num == func_num);
 
-    /* Claim host controller */
     sdio_claim_host(func);
 
     if (write && !fifo)
     {
-        /* write, increment */
+        
         align_nbytes = sdio_align_size(func, nbytes);
         err_ret = sdio_memcpy_toio(func, addr, buf, align_nbytes);
     }
     else if (write)
     {
-        /* write, fifo */
+        
         err_ret = sdio_writesb(func, addr, buf, align_nbytes);
     }
     else if (fifo)
     {
-        /* read */
+        
         err_ret = sdio_readsb(func, buf, addr, align_nbytes);
     }
     else
     {
-        /* read */
+        
         align_nbytes = sdio_align_size(func, nbytes);
         err_ret = sdio_memcpy_fromio(func, buf, addr, align_nbytes);
     }
 
-    /* Release host controller */
     sdio_release_host(func);
-
-#if defined(DBG_PRINT_COST_TIME)
-    ktime_get_real_ts64(&now); /* KP-4 FIX */
-
-    pr_debug("[sdio buffer]: len=%d cost=%lds %luus\n",
-        nbytes, now.tv_sec-before.tv_sec, now.tv_nsec/1000 - before.tv_nsec/1000);
-#endif /* End of DBG_PRINT_COST_TIME */
 
     return (err_ret == 0) ? SDIOH_API_RC_SUCCESS : SDIOH_API_RC_FAIL;
 }
-#endif//HAL_FPGA_VER
 
 void aml_sdio_write_word(unsigned int addr, unsigned int data)
 {
-    /* H-6 FIX: was kmalloc(4, GFP_DMA|GFP_ATOMIC) + kfree on every call — thousands per second.
-     * Use a static 4-byte buffer protected by the SDIO host claim (sdio_claim_host serializes).
-     * H-2 FIX: GFP_DMA is unnecessary on ARM64 for SDIO (no ISA DMA zone requirement). */
+    
     static unsigned char sdio_word_buf[sizeof(unsigned int)];
     unsigned char *sdio_kmm = sdio_word_buf;
     memcpy(sdio_kmm, &data, sizeof(data));
-    // for bt access always on reg
+    
     if ((addr & 0x00f00000) == 0x00f00000) {
         aml_aon_write_reg(addr, data);
     }
@@ -326,14 +265,13 @@ void aml_sdio_write_word(unsigned int addr, unsigned int data)
                                     (unsigned char*)(SYS_TYPE)(addr),
                                     sizeof(unsigned int));
     }
-    /* H-6 FIX: FREE removed — static buffer, no allocation to free */
+    
 }
 
 unsigned int aml_sdio_read_word(unsigned int addr)
 {
     unsigned int regdata = 0;
 
-// for bt access always on reg
     if ((addr & 0x00f00000) == 0x00f00000) {
         regdata = aml_aon_read_reg(addr);
     }
@@ -362,39 +300,24 @@ void aml_sdio_write_cmd32(unsigned long sram_addr, unsigned long sramdata)
 {
     struct  hw_interface* hif = hif_get_hw_interface();
 
-#if defined (HAL_SIM_VER)
-    aml_sdio_read_write(hif, sram_addr&SDIO_ADDR_MASK,	(unsigned char *)&sramdata, 4,
-        SDIO_FUNC3,SDIO_RW_FLAG_WRITE,SDIO_F_SYNCHRONOUS);
-#elif defined (HAL_FPGA_VER)
-    ASSERT(hif != NULL);
-
-    hif->hif_ops.hi_bottom_write(SDIO_FUNC3, sram_addr&SDIO_ADDR_MASK,
-        (unsigned char *)&sramdata, sizeof(unsigned long), SDIO_OPMODE_INCREMENT);
-
-#endif /* End of HAL_SIM_VER */
 }
 
 int aml_sdio_suspend(unsigned int suspend_enable)
 {
-#if defined (HAL_FPGA_VER)
     mmc_pm_flag_t flags;
     struct sdio_func *func = NULL;
     int ret = 0, i;
 
     if (suspend_enable == 0)
     {
-        /* when enable == 0 that's resume operation
-        and we do nothing for resume now. */
+        
         return ret;
     }
 
-    /* just clear sdio clock value for emmc init when resume
-     * (Amlogic-specific; on Armbian the SDIO clock is managed by kernel) */
 #ifndef NOT_AMLOGIC_PLATFORM
     amlwifi_set_sdio_host_clk(0);
 #endif
 
-    /* we shall suspend all card for sdio. */
     for (i = SDIO_FUNC1; i <= FUNCNUM_SDIO_LAST; i++)
     {
         func = aml_priv_to_func(i);
@@ -408,11 +331,6 @@ int aml_sdio_suspend(unsigned int suspend_enable)
         if (ret != 0)
             return -1;
 
-        /*
-         * if we don't use sdio irq, we can't get functions' capability with
-         * MMC_PM_WAKE_SDIO_IRQ, so we don't need set irq for wake up
-         * sdio for upcoming suspend.
-         */
         if ((flags & MMC_PM_WAKE_SDIO_IRQ) != 0)
             ret = sdio_set_host_pm_flags(func, MMC_PM_WAKE_SDIO_IRQ);
 
@@ -420,9 +338,6 @@ int aml_sdio_suspend(unsigned int suspend_enable)
             return -1;
     }
     return ret;
-#elif defined (HAL_SIM_VER)
-    return 0;
-#endif
 }
 
 unsigned long  aml_sdio_read_reg8(unsigned long sram_addr )
@@ -432,13 +347,6 @@ unsigned long  aml_sdio_read_reg8(unsigned long sram_addr )
 
     ASSERT(hif != NULL);
 
-#if defined (HAL_SIM_VER)
-    aml_sdio_read_write(hif, sram_addr,  regdata, 1,
-                    SDIO_FUNC1,SDIO_RW_FLAG_READ,SDIO_F_SYNCHRONOUS);
-#elif defined (HAL_FPGA_VER)
-    hif->hif_ops.hi_bottom_read(SDIO_FUNC1, sram_addr&SDIO_ADDR_MASK, regdata, 1, SDIO_OPMODE_INCREMENT);
-#endif /* End of HAL_SIM_VER */
-
     return regdata[0];
 }
 
@@ -446,149 +354,45 @@ void aml_sdio_write_reg8(unsigned long sram_addr, unsigned long sramdata)
 {
     struct  hw_interface* hif = hif_get_hw_interface();
 
-#if defined (HAL_SIM_VER)
-    unsigned char regdata[8] = {0};
-    regdata[0] =sramdata;
-    aml_sdio_read_write(hif, sram_addr,  regdata, 1,
-                SDIO_FUNC1,SDIO_RW_FLAG_WRITE, SDIO_F_SYNCHRONOUS);
-#elif defined (HAL_FPGA_VER)
-
-    hif->hif_ops.hi_bottom_write(SDIO_FUNC1, sram_addr&SDIO_ADDR_MASK,
-        (unsigned char *)&sramdata, sizeof(unsigned long), SDIO_OPMODE_INCREMENT);
-#endif /* End of HAL_SIM_VER */
 }
 
 unsigned long aml_sdio_read_reg32(unsigned long sram_addr)
 {
     struct  hw_interface* hif = hif_get_hw_interface();
 
-#if defined (HAL_SIM_VER)
-    unsigned int data =0;
-    unsigned char regdata[8] = {0};
-    aml_sdio_read_write(hif, sram_addr++, regdata, 1,
-                    SDIO_FUNC1, SDIO_RW_FLAG_READ, SDIO_F_SYNCHRONOUS);
-    data = regdata[0];
-
-    aml_sdio_read_write(hif, sram_addr++, regdata, 1,
-                    SDIO_FUNC1, SDIO_RW_FLAG_READ, SDIO_F_SYNCHRONOUS);
-    data |= regdata[0]<<8;
-
-    aml_sdio_read_write(hif, sram_addr++, regdata, 1,
-                    SDIO_FUNC1, SDIO_RW_FLAG_READ, SDIO_F_SYNCHRONOUS);
-    data |= regdata[0]<<16;
-
-    aml_sdio_read_write(hif, sram_addr++, regdata, 1,
-                    SDIO_FUNC1, SDIO_RW_FLAG_READ, SDIO_F_SYNCHRONOUS);
-    data |= regdata[0]<<24;
-    return data;
-#elif defined (HAL_FPGA_VER)
-    unsigned long sramdata;
-
-    ASSERT(hif != NULL);
-
-    hif->hif_ops.hi_bottom_read(SDIO_FUNC1, sram_addr&SDIO_ADDR_MASK, &sramdata, 4, SDIO_OPMODE_INCREMENT);
-
-    return sramdata;
-#endif /* End of HAL_SIM_VER */
 }
 
 int aml_sdio_write_reg32(unsigned long sram_addr, unsigned long sramdata)
 {
     struct  hw_interface* hif = hif_get_hw_interface();
 
-#if defined (HAL_SIM_VER)
-    unsigned char regdata[8] = {0};
-    regdata[0] =sramdata&0xff;
-    aml_sdio_read_write(hif, sram_addr++, regdata, 1,
-                    SDIO_FUNC1, SDIO_RW_FLAG_WRITE, SDIO_F_SYNCHRONOUS);
-
-    regdata[0] =(sramdata>>8)&0xff;
-    aml_sdio_read_write(hif, sram_addr++, regdata, 1,
-                    SDIO_FUNC1, SDIO_RW_FLAG_WRITE, SDIO_F_SYNCHRONOUS);
-
-    regdata[0] =(sramdata>>16)&0xff;
-    aml_sdio_read_write(hif, sram_addr++, regdata, 1,
-                    SDIO_FUNC1, SDIO_RW_FLAG_WRITE, SDIO_F_SYNCHRONOUS);
-
-    regdata[0] =(sramdata>>24)&0xff;
-    aml_sdio_read_write(hif, sram_addr++, regdata, 1,
-                    SDIO_FUNC1, SDIO_RW_FLAG_WRITE, SDIO_F_SYNCHRONOUS);
-#elif defined (HAL_FPGA_VER)
-    int ret = 0;
-    ASSERT(hif != NULL);
-
-    ret=  hif->hif_ops.hi_bottom_write(SDIO_FUNC1, sram_addr&SDIO_ADDR_MASK,
-        (unsigned char *)&sramdata,  sizeof(unsigned long), SDIO_OPMODE_INCREMENT);
-
-    return ret;
-#endif /* End of HAL_SIM_VER */
 }
 
 void aml_sdio_write_sram (unsigned char *buf, unsigned char *addr, SYS_TYPE len)
 {
     struct hw_interface* hif = hif_get_hw_interface();
 
-#if defined (HAL_SIM_VER)
-    aml_sdio_read_write(hif, (SYS_TYPE)addr,buf,len,
-                    SDIO_FUNC2,SDIO_RW_FLAG_WRITE,SDIO_F_SYNCHRONOUS);
-#elif defined (HAL_FPGA_VER)
-    ASSERT(hif != NULL);
-
-    hif->hif_ops.hi_bottom_write(SDIO_FUNC2, (SYS_TYPE)addr&SDIO_ADDR_MASK,
-        buf, len,
-        (len > 8 ? SDIO_OPMODE_INCREMENT : SDIO_OPMODE_FIXED));
-
-#endif /* End of HAL_SIM_VER */
 }
 
 void aml_sdio_read_sram (unsigned char *buf, unsigned char *addr, SYS_TYPE len)
 {
     struct hw_interface* hif = hif_get_hw_interface();
 
-#if defined (HAL_SIM_VER)
-    aml_sdio_read_write(hif, (SYS_TYPE)addr,buf,len,
-                    SDIO_FUNC2,SDIO_RW_FLAG_READ,SDIO_F_SYNCHRONOUS);
-#elif defined (HAL_FPGA_VER)
-    ASSERT(hif != NULL);
-
-    hif->hif_ops.hi_bottom_read(SDIO_FUNC2, (SYS_TYPE)addr&SDIO_ADDR_MASK,
-        buf, len,
-        (len > 8 ? SDIO_OPMODE_INCREMENT : SDIO_OPMODE_FIXED));
-#endif /* End of HAL_SIM_VER */
 }
-
-#if defined (HAL_SIM_VER)
-void aml_sdio_send_frame (unsigned char *buf, unsigned char *addr, SYS_TYPE len)
-{
-    struct hw_interface* hif = hif_get_hw_interface();
-    aml_sdio_read_write(hif, (SYS_TYPE)addr,buf,len,
-                    SDIO_FUNC4,SDIO_RW_FLAG_WRITE,SDIO_F_SYNCHRONOUS);
-}
-#endif
 
 void aml_sdio_recv_frame (unsigned char *buf, unsigned char *addr, SYS_TYPE len)
 {
     struct hw_interface* hif = hif_get_hw_interface();
 
-#if defined (HAL_SIM_VER)
-    aml_sdio_read_write(hif, (SYS_TYPE)addr,buf,len,
-                    SDIO_FUNC6,SDIO_RW_FLAG_READ,SDIO_F_SYNCHRONOUS);
-#elif defined (HAL_FPGA_VER)
-
-    hif->hif_ops.hi_bottom_read(SDIO_FUNC6, ((SYS_TYPE)addr & SDIO_ADDR_MASK),
-        buf, len, SDIO_OPMODE_INCREMENT);
-#endif /* End of HAL_SIM_VER */
 }
 
-#if defined (HAL_FPGA_VER)
 static int amlw_sdio_alloc_prep_scat_req(struct amlw_hwif_sdio *hif_sdio)
 {
     struct amlw_hif_scatter_req * scat_req = NULL;
 
     ASSERT(hif_sdio != NULL);
 
-    /* allocate the scatter request */
-    scat_req = ZMALLOC(sizeof(struct amlw_hif_scatter_req), "sdio_alloc_prep_scat_req", GFP_ATOMIC /* H-2 FIX: GFP_DMA removed - ARM64 SDIO does not need DMA zone */);
+    scat_req = ZMALLOC(sizeof(struct amlw_hif_scatter_req), "sdio_alloc_prep_scat_req", GFP_ATOMIC );
     if (scat_req == NULL)
     {
         ERROR_DEBUG_OUT("[sdio sg alloc_scat_req]: no mem\n");
@@ -608,30 +412,9 @@ static int amlw_sdio_alloc_prep_scat_req(struct amlw_hwif_sdio *hif_sdio)
         return -ENOMEM;
     }
 #else
-    /* Amlogic platform: pre-allocate a page-aligned bounce buffer sized for the
-     * maximum single FUNC6 RX read AND the maximum TX scatter-gather request.
-     *
-     * TX-BOUNCE-FIX (v15h): the TX hot path (aml_sdio_scat_req_rw) used to feed
-     * raw skb->data pointers into sg_set_buf().  skb->data is only NET_IP_ALIGN
-     * aligned (2 bytes) — meson-gx-mmc on Amlogic SoC requires offset_in_page==0
-     * for descriptor DMA and falls back to PIO when it sees "unaligned sg offset
-     * <N>, disabling descriptor DMA for transfer".  Under heavy upload from a
-     * Wi-Fi client this throttles TX (TCP-ACKs, 802.11 ACKs, beacons) into PIO
-     * speed, the phone stops getting ACKs, treats the AP as gone, disassociates.
-     * Symptom: small files upload fine, files >~1 MB hang the page.
-     *
-     * Fix: route the TX scatter path through this same page-aligned bounce buf
-     * (see aml_sdio_scat_req_rw below) so the SDIO host driver always sees an
-     * aligned single-entry SG, keeps descriptor DMA enabled, and TX runs at full
-     * speed.
-     *
-     * Size needs to cover MAX(FUNC6 RX read 96 KB + 1 block, TX scatter 256 KB).
-     * Allocated once at probe with GFP_KERNEL so pages are contiguous and
-     * available even under memory pressure — avoids per-call GFP_ATOMIC order-5
-     * allocations that fail during sustained traffic and degrade SDIO DMA to PIO
-     * mode. */
+    
     {
-        size_t rx_need = READ_LEN_PER_ONCE + PAGE_LEN; /* +1 block for sdio_align_size padding */
+        size_t rx_need = READ_LEN_PER_ONCE + PAGE_LEN; 
         size_t tx_need = AML_SDIO_SCAT_BOUNCE_SIZE;
         hif_sdio->bounce_buf_size = (rx_need > tx_need) ? rx_need : tx_need;
     }
@@ -664,7 +447,7 @@ struct amlw_hif_scatter_req *aml_sdio_scatter_req_get(void)
     {
         scat_req->free = false;
     }
-    else if (scat_req->scat_count != 0) // get scat_req, but not build scatter list
+    else if (scat_req->scat_count != 0) 
     {
         scat_req = NULL;
     }
@@ -687,8 +470,6 @@ int aml_sdio_enable_scatter(void)
     if (hif_sdio->scatter_enabled)
         return 0;
 
-    // TODO : getting hw_config to configure scatter number;
-
     ret = amlw_sdio_alloc_prep_scat_req(hif_sdio);
     if (ret == 0)
         hif_sdio->scatter_enabled = true;
@@ -704,30 +485,7 @@ int aml_sdio_scat_rw(struct scatterlist *sg_list, unsigned int sg_num, unsigned 
     struct mmc_data    mmc_dat;
     struct sdio_func *func = aml_priv_to_func(func_num);
     struct amlw_hwif_sdio *hif_sdio = aml_sdio_priv();
-    /* v15u-fix: TX hot path SG bounce.
-     *
-     * Background: the FUNC4 TX hot path (hi_tx_frame -> hi_sdio_setup_scat_data
-     * -> sg_set_buf(&sg_list[i], pTxDPape[i], sg_data_size)) used to hand the
-     * raw multi-entry SG list straight to the MMC subsystem here. Each entry
-     * points at a hi_tx_desc inside a TX page pool whose offset_in_page is
-     * generally NOT zero. meson-gx-mmc's descriptor DMA requires the first SG
-     * entry to start at offset_in_page == 0, so it logs
-     *
-     *   meson-gx-mmc ffe03000.mmc: unaligned sg offset <N>, disabling
-     *   descriptor DMA for transfer
-     *
-     * and silently downgrades the entire transfer to PIO. Under iperf3 / heavy
-     * uplink this throttles TX so hard that TCP ACKs stop coming back, cwnd
-     * collapses to ~1.2 KB within ~2 s and the data plane goes to 0 bps while
-     * mgmt frames keep flowing on the control plane.
-     *
-     * Fix: when writing FUNC4 (the bulk TX path), memcpy every SG entry into
-     * the page-aligned persistent bounce buffer that was already allocated by
-     * amlw_sdio_alloc_prep_scat_req() and submit a single-entry SG that
-     * references that bounce buf. RX path and non-FUNC4 paths keep the
-     * original SG list intact. The bounce is mandatory on Amlogic meson-gx
-     * but harmless elsewhere; if the bounce buffer is unavailable for any
-     * reason we still fall back to the legacy direct-SG path. */
+    
     bool use_bounce = false;
     unsigned int bounce_total = 0;
     struct scatterlist single_sg;
@@ -744,9 +502,7 @@ int aml_sdio_scat_rw(struct scatterlist *sg_list, unsigned int sg_num, unsigned 
             unsigned char *src;
 
             if (bounce_total + len > hif_sdio->bounce_buf_size) {
-                /* Should never happen: the caller already capped ttl_len at
-                 * SDIO_MAX_BLK_CNT * FUNC4_BLKSIZE which is the bounce size.
-                 * Bail to direct-SG path rather than truncating. */
+                
                 bounce_total = 0;
                 break;
             }
@@ -785,8 +541,8 @@ int aml_sdio_scat_rw(struct scatterlist *sg_list, unsigned int sg_num, unsigned 
     mmc_cmd.opcode = SD_IO_RW_EXTENDED;
     mmc_cmd.arg    = write ? 1 << 31 : 0;
     mmc_cmd.arg   |= (func_num & 0x7) << 28;
-    mmc_cmd.arg   |= 1 << 27;	/* block basic */
-    mmc_cmd.arg   |= 0 << 26;	/* 1 << 26;*/   	/*0 fix address */
+    mmc_cmd.arg   |= 1 << 27;	
+    mmc_cmd.arg   |= 0 << 26;	   	
     mmc_cmd.arg   |= (addr & 0x1ffff)<< 9;
     mmc_cmd.arg   |= blkcnt & 0x1ff;
     mmc_cmd.flags  = MMC_RSP_SPI_R5 | MMC_RSP_R5 | MMC_CMD_ADTC;
@@ -827,7 +583,6 @@ void aml_sdio_cleanup_scatter(void)
 
     hif_sdio->scatter_enabled = false;
 
-    /* empty the free list */
     if (hif_sdio->bounce_buf) {
         aml_sdio_dma_free(hif_sdio->bounce_buf, hif_sdio->bounce_buf_size);
         hif_sdio->bounce_buf = NULL;
@@ -842,34 +597,17 @@ void aml_sdio_cleanup_scatter(void)
 
     return;
 }
-#endif //end of HAL_FPGA_VER
 
-/*For BT use only start */
 void aml_bt_sdio_write_sram (unsigned char *buf, unsigned char *addr, SYS_TYPE len)
 {
     struct hw_interface* hif = hif_get_hw_interface();
 
-#if defined (HAL_SIM_VER)
-    aml_sdio_read_write(hif, (SYS_TYPE)addr, buf,len, SDIO_FUNC5,
-        SDIO_RW_FLAG_WRITE, SDIO_F_SYNCHRONOUS);
-#elif defined (HAL_FPGA_VER)
-    hif->hif_ops.hi_bottom_write(SDIO_FUNC5, ((SYS_TYPE)addr & SDIO_ADDR_MASK),
-        buf, len, (len > 8 ? SDIO_OPMODE_INCREMENT : SDIO_OPMODE_FIXED));
-#endif
 }
 
 void aml_bt_sdio_read_sram (unsigned char *buf, unsigned char *addr, SYS_TYPE len)
 {
     struct hw_interface* hif = hif_get_hw_interface();
 
-#if defined (HAL_SIM_VER)
-    aml_sdio_read_write(hif, (SYS_TYPE)addr, buf,len,
-        SDIO_FUNC5, SDIO_RW_FLAG_READ, SDIO_F_SYNCHRONOUS);
-#elif defined (HAL_FPGA_VER)
-
-    hif->hif_ops.hi_bottom_read(SDIO_FUNC5, ((SYS_TYPE)addr & SDIO_ADDR_MASK),
-        buf, len, (len > 8 ? SDIO_OPMODE_INCREMENT : SDIO_OPMODE_FIXED));
-#endif /* HAL_SIM_VER */
 }
 
 void aml_bt_hi_write_word(unsigned int addr,unsigned int data)
@@ -877,27 +615,22 @@ void aml_bt_hi_write_word(unsigned int addr,unsigned int data)
     unsigned int reg_tmp;
     struct hw_interface* hif = hif_get_hw_interface();
 
-    unsigned char* sdio_kmm = (unsigned char*)ZMALLOC(sizeof(data), "bt_hi_write_word", GFP_ATOMIC /* H-2 FIX: GFP_DMA removed - ARM64 SDIO does not need DMA zone */);
+    unsigned char* sdio_kmm = (unsigned char*)ZMALLOC(sizeof(data), "bt_hi_write_word", GFP_ATOMIC );
     ASSERT(sdio_kmm);
 
     memcpy(sdio_kmm, &data, sizeof(data));
-    /*
-     * make sure function 5 section address-mapping feature is disabled,
-     * when this feature is disabled,
-     * all 128k space in one sdio-function use only
-     * one address-mapping: 32-bit AHB Address = BaseAddr + cmdRegAddr
-     */
+    
     reg_tmp = hif->hif_ops.hi_read_word(RG_SDIO_IF_MISC_CTRL);
 
     if ((reg_tmp & BIT(23)) != 1) {
         reg_tmp |= BIT(23);
         hif->hif_ops.hi_write_word(RG_SDIO_IF_MISC_CTRL , reg_tmp);
     }
-    /*config msb 15 bit address in BaseAddr Register*/
+    
     hif->hif_ops.hi_write_reg32(RG_SCFG_FUNC5_BADDR_A,addr & 0xfffe0000);
 
     hif->hif_ops.bt_hi_write_sram(sdio_kmm,
-        /*sdio cmd 52/53 can only take 17 bit address*/
+        
         (unsigned char*)(SYS_TYPE)(addr & 0x1ffff), sizeof(unsigned int));
 
     FREE(sdio_kmm, "bt_hi_write_word");
@@ -908,13 +641,7 @@ unsigned int aml_bt_hi_read_word(unsigned int addr)
     unsigned int regdata = 0;
     unsigned int reg_tmp;
     struct hw_interface* hif = hif_get_hw_interface();
-    /*
-     * make sure function 5 section address-mapping feature is disabled,
-     * when this feature is disabled,
-     * all 128k space in one sdio-function use only
-     * one address-mapping: 32-bit AHB Address = BaseAddr + cmdRegAddr
-     */
-
+    
     reg_tmp = hif->hif_ops.hi_read_word( RG_SDIO_IF_MISC_CTRL);
 
     if ((reg_tmp & BIT(23)) != 1) {
@@ -922,17 +649,13 @@ unsigned int aml_bt_hi_read_word(unsigned int addr)
         hif->hif_ops.hi_write_word( RG_SDIO_IF_MISC_CTRL, reg_tmp);
     }
 
-    /*config msb 15 bit address in BaseAddr Register*/
     hif->hif_ops.hi_write_reg32(RG_SCFG_FUNC5_BADDR_A,addr & 0xfffe0000);
     hif->hif_ops.bt_hi_read_sram((unsigned char*)(SYS_TYPE)&regdata,
-        /*sdio cmd 52/53 can only take 17 bit address*/
+        
         (unsigned char*)(SYS_TYPE)(addr & 0x1ffff), sizeof(unsigned int));
     return regdata;
 }
-/*For BT use only end */
 
-#if defined (HAL_FPGA_VER)
-//cmd53
 int aml_sdio_bottom_read(unsigned char  func_num, int addr, void *buf, size_t len,int incr_addr)
 {
     void *kmalloc_buf = NULL;
@@ -949,7 +672,6 @@ int aml_sdio_bottom_read(unsigned char  func_num, int addr, void *buf, size_t le
         return -1;
     }
 
-    /* read block mode */
     if (!aml_sdio_is_rx_bounce_func(func_num))
     {
         if (incr_addr == SDIO_OPMODE_INCREMENT)
@@ -961,7 +683,7 @@ int aml_sdio_bottom_read(unsigned char  func_num, int addr, void *buf, size_t le
         else
             align_len = len;
 
-        kmalloc_buf = (unsigned char *)ZMALLOC(align_len, "sdio_bottom_read", GFP_ATOMIC /* H-2 FIX: GFP_DMA removed - ARM64 SDIO does not need DMA zone */);
+        kmalloc_buf = (unsigned char *)ZMALLOC(align_len, "sdio_bottom_read", GFP_ATOMIC );
     }
     else
     {
@@ -994,17 +716,17 @@ int aml_sdio_bottom_read(unsigned char  func_num, int addr, void *buf, size_t le
     }
     else if (use_bounce == 1)
     {
-        memcpy(buf, kmalloc_buf, align_len);
+        
+        memcpy(buf, kmalloc_buf, len);
         free_pages((unsigned long)kmalloc_buf, bounce_order);
     }
     else if (use_bounce == 2)
     {
-        memcpy(buf, kmalloc_buf, align_len);
+        memcpy(buf, kmalloc_buf, len);
     }
     return result;
 }
 
-//cmd53
 int aml_sdio_bottom_write(unsigned char  func_num,int addr, void *buf, size_t len,int incr_addr)
 {
     void *kmalloc_buf;
@@ -1018,35 +740,26 @@ int aml_sdio_bottom_write(unsigned char  func_num,int addr, void *buf, size_t le
         return -1;
     }
 
-    kmalloc_buf =  (unsigned char *)ZMALLOC(len, "sdio_bottom_write", GFP_ATOMIC /* H-2 FIX: GFP_DMA removed - ARM64 SDIO does not need DMA zone */);//virt_to_phys(fwICCM);
+    kmalloc_buf =  (unsigned char *)ZMALLOC(len, "sdio_bottom_write", GFP_ATOMIC );
     if (kmalloc_buf == NULL)
     {
         ERROR_DEBUG_OUT("kmalloc buf fail\n");
         return SDIOH_API_RC_FAIL;
     }
     memcpy(kmalloc_buf, buf, len);
-    //pr_debug("%s, buf:%p\n", __func__, kmalloc_buf);
-
+    
     result = _aml_sdio_request_buffer(func_num, incr_addr, SDIO_WRITE, addr, kmalloc_buf, len);
 
     FREE(kmalloc_buf, "sdio_bottom_write");
     return result;
 }
 
-/* cmd52
-   buff[7:0],     // funcIoNum
-   buff[25:8],    // regAddr
-   buff[39:32]);  // regValue
-*/
 void aml_sdio_bottom_write8_func0(unsigned long sram_addr, unsigned char sramdata)
 {
     struct  hw_interface* hif = hif_get_hw_interface();
-    unsigned char * sdio_kmm = (unsigned char *)ZMALLOC(sizeof(unsigned char), "sdio_bottom_write8_func0", GFP_ATOMIC /* H-2 FIX: GFP_DMA removed */);
+    unsigned char * sdio_kmm = (unsigned char *)ZMALLOC(sizeof(unsigned char), "sdio_bottom_write8_func0", GFP_ATOMIC );
     ASSERT(sdio_kmm);
     ASSERT(hif != NULL);
-
-    //__virt_to_phys((unsigned long)&sramdata);
-    //__phys_addr_symbol((unsigned long)&sramdata);
 
     memcpy(sdio_kmm, &sramdata, sizeof(unsigned char));
     _aml_sdio_request_byte(SDIO_FUNC0, SDIO_WRITE, sram_addr, sdio_kmm);
@@ -1054,12 +767,11 @@ void aml_sdio_bottom_write8_func0(unsigned long sram_addr, unsigned char sramdat
     FREE(sdio_kmm, "sdio_bottom_write8_func0");
 }
 
-//cmd52
 unsigned char aml_sdio_bottom_read8_func0(unsigned long sram_addr)
 {
     struct  hw_interface* hif = hif_get_hw_interface();
     unsigned char sramdata;
-    unsigned char* sdio_kmm = (unsigned char*)ZMALLOC(sizeof(unsigned char), "sdio_bottom_read8_func0", GFP_ATOMIC /* H-2 FIX: GFP_DMA removed */);
+    unsigned char* sdio_kmm = (unsigned char*)ZMALLOC(sizeof(unsigned char), "sdio_bottom_read8_func0", GFP_ATOMIC );
     ASSERT(sdio_kmm);
     ASSERT(hif != NULL);
 
@@ -1071,18 +783,13 @@ unsigned char aml_sdio_bottom_read8_func0(unsigned long sram_addr)
     return sramdata;
 }
 
-
-//cmd52
 int aml_sdio_bottom_write8(unsigned char  func_num,int addr, unsigned char data)
 {
     int ret = 0;
-    unsigned char *sdio_kmm = (unsigned char*)ZMALLOC(sizeof(data), "sdio_bottom_write8", GFP_ATOMIC /* H-2 FIX: GFP_DMA removed */);
+    unsigned char *sdio_kmm = (unsigned char*)ZMALLOC(sizeof(data), "sdio_bottom_write8", GFP_ATOMIC );
 
     ASSERT(sdio_kmm != NULL);
     ASSERT(func_num != SDIO_FUNC0);
-
-    //__virt_to_phys((unsigned long)&data);
-    //__phys_addr_symbol((unsigned long)&data);
 
     memcpy(sdio_kmm, &data, sizeof(char));
     ret =  _aml_sdio_request_byte(func_num, SDIO_WRITE, addr, sdio_kmm);
@@ -1091,11 +798,10 @@ int aml_sdio_bottom_write8(unsigned char  func_num,int addr, unsigned char data)
     return ret;
 }
 
-//cmd52
 unsigned char aml_sdio_bottom_read8(unsigned char  func_num, int addr)
 {
     unsigned char sramdata;
-    unsigned char* sdio_kmm = (unsigned char*)ZMALLOC(sizeof(unsigned char), "sdio_bottom_read8", GFP_ATOMIC /* H-2 FIX: GFP_DMA removed */);
+    unsigned char* sdio_kmm = (unsigned char*)ZMALLOC(sizeof(unsigned char), "sdio_bottom_read8", GFP_ATOMIC );
     ASSERT(sdio_kmm);
 
     _aml_sdio_request_byte(func_num, SDIO_READ, addr, sdio_kmm);
@@ -1105,8 +811,7 @@ unsigned char aml_sdio_bottom_read8(unsigned char  func_num, int addr)
 
     return sramdata;
 }
-#endif//HAL_FPGA_VER
-#endif//SDIO_BUILD_IN
+#endif
 
 static void aml_sdio_scat_complete (struct amlw_hif_scatter_req * scat_req)
 {
@@ -1161,9 +866,7 @@ int aml_sdio_scat_req_rw(struct amlw_hif_scatter_req *scat_req)
     struct mmc_data mmc_dat;
 
     int result = SDIOH_API_RC_FAIL;
-    /* TX-BOUNCE-FIX (v15h): always use the bounce buffer to avoid feeding
-     * unaligned skb->data pointers into sg_set_buf() — see comment in
-     * amlw_sdio_alloc_prep_scat_req(). */
+    
     unsigned char *bounce_buf = NULL;
     unsigned int bounce_pos;
 
@@ -1199,7 +902,6 @@ int aml_sdio_scat_req_rw(struct amlw_hif_scatter_req *scat_req)
     max_blk_count = MIN(host->max_blk_count, SDIO_MAX_BLK_CNT);
     max_req_size = MIN(max_blk_count * blk_size, host->max_req_size);
 
-    /* TX-BOUNCE-FIX (v15h): unconditional bounce path on every platform. */
     if (!hif_sdio->bounce_buf || hif_sdio->bounce_buf_size == 0) {
         result = -ENOMEM;
         goto armbian_scat_complete;
@@ -1328,159 +1030,8 @@ armbian_scat_complete:
 
     return result;
 
-    /* TX-BOUNCE-FIX (v15h): the raw-SG Amlogic path below is no longer reached.
-     * It is kept in source as a reference for the historic behaviour but the
-     * always-bounce path above returns first.  Keep `goto used_below` style code
-     * intact to minimise diff but mark the block unreachable. */
-#if 0
-    /* fill SG entries */
-    sg = scat_req->sgentries;
-    pkt_offset = 0;	    // reminder
-    sgitem_count = 0; // count of scatterlist
-
-    while (sgitem_count < scat_req->scat_count)
-    {
-        ttl_len = 0;
-        sg_count = 0;
-        ttl_page_num = 0;
-
-        sg_init_table(sg, SDIO_MAXSG_SIZE);
-
-        /* assemble SG list */
-        while ((sgitem_count < scat_req->scat_count) && (ttl_len < max_req_size))
-        {
-            int packet_len = 0;
-            int sg_data_size = 0;
-            unsigned char *pdata = NULL;
-
-            if (sg_count >= SDIO_MAXSG_SIZE)
-                break;
-
-            packet_len = scat_req->scat_list[sgitem_count].len;
-            pdata = scat_req->scat_list[sgitem_count].packet;
-
-#if defined(HIF_SDIO_UNIT_MULTIBLKSZ)
-            // sg len must be aligned with block size
-            sg_data_size = ALIGN(packet_len, blk_size);
-            if (sg_data_size > (max_req_size - ttl_len))
-            {
-                pr_debug(" setup scat-data: (%s): %d: sg_data_size %d, remain %d \n",
-                    __func__, __LINE__, sg_data_size, max_req_size - ttl_len);
-                break;
-            }
-#else
-            pdata += pkt_offset;
-            sg_data_size = packet_len - pkt_offset;
-            // last sg
-            if (sg_data_size > max_req_size - ttl_len)
-                sg_data_size = max_req_size - ttl_len;
-
-            pkt_offset += sg_data_size; // actually length
-#endif
-
-            sg_set_buf(&scat_req->sgentries[sg_count], pdata, sg_data_size);
-            sg_count++;
-            ttl_len += sg_data_size;
-
-#if defined(HIF_SDIO_UNIT_MULTIBLKSZ)
-            ttl_page_num += scat_req->scat_list[sgitem_count].page_num;
-            sgitem_count++;
-#else
-            if (pkt_offset == packet_len)
-            {
-                ttl_page_num += scat_req->scat_list[sgitem_count].page_num;
-                //move to next
-                sgitem_count++;
-                pkt_offset = 0;
-
-                if (sgitem_count == scat_req->scat_count)
-                    ttl_len = ALIGN(ttl_len, blk_size);
-            }
-#endif
-            /*
-            pr_debug("setup scat-data: offset: %d: ttl: %d, datalen:%d\n",
-                pkt_offset, ttl_len, sg_data_size);
-            */
-        }
-
-        if ((ttl_len == 0) || (ttl_len % blk_size != 0))
-        {
-            pr_debug(" setup scat-data: (%s): %d: ttl_len %d \n",
-                __func__, __LINE__, ttl_len);
-            return result;
-        }
-
-        memset(&mmc_req, 0, sizeof(struct mmc_request));
-        memset(&mmc_cmd, 0, sizeof(struct mmc_command));
-        memset(&mmc_dat, 0, sizeof(struct mmc_data));
-
-        /* set scatter-gather table for request */
-        blk_num = ttl_len / blk_size;
-        mmc_dat.flags = (scat_req->req & HIF_WRITE) ? MMC_DATA_WRITE : MMC_DATA_READ;
-        mmc_dat.sg = scat_req->sgentries;
-        mmc_dat.sg_len = sg_count;
-        mmc_dat.blksz = blk_size;
-        mmc_dat.blocks = blk_num;
-
-        mmc_cmd.opcode = SD_IO_RW_EXTENDED;
-        mmc_cmd.arg = (scat_req->req & HIF_WRITE) ? 1 << 31 : 0;
-        mmc_cmd.arg |= (func_num & 0x7) << 28;
-        /* block basic */
-        mmc_cmd.arg |= 1 << 27;
-        /* 0, fix address */
-        mmc_cmd.arg |= SDIO_OPMODE_FIXED << 26;
-        mmc_cmd.arg |= (scat_req->addr & 0x1ffff)<< 9;
-        mmc_cmd.arg |= mmc_dat.blocks & 0x1ff;
-        mmc_cmd.flags = MMC_RSP_SPI_R5 | MMC_RSP_R5 | MMC_CMD_ADTC;
-
-        mmc_req.cmd = &mmc_cmd;
-        mmc_req.data = &mmc_dat;
-
-        sdio_claim_host(func);
-        mmc_set_data_timeout(&mmc_dat, func->card);
-        mmc_wait_for_req(func->card->host, &mmc_req);
-        sdio_release_host(func);
-
-        /*
-        pr_debug("setup scat-data: (%s) ====addr: 0x%X, (blksz: %d, blocks: %d) , (ttl:%d,sg:%d,scat_count:%d,ttl_page:%d)====\n",
-            (scat_req->req & HIF_WRITE) ? "wr" : "rd", scat_req->addr,
-            mmc_dat.blksz, mmc_dat.blocks, ttl_len,
-            sg_count, scat_req->scat_count, ttl_page_num);
-        */
-        if (mmc_cmd.error || mmc_dat.error)
-        {
-            ERROR_DEBUG_OUT("ERROR CMD53(historic-SG) %s cmd_error = %d data_error=%d\n",
-                (scat_req->req & HIF_WRITE) ? "write" : "read", mmc_cmd.error, mmc_dat.error);
-        }
-        else
-        {
-#if (SDIO_UPDATE_HOST_WRPTR == 0)
-            // update sdio write ptr by host.
-            struct hal_private * hal_priv = hal_get_priv();
-
-            hal_priv->tx_page_offset = CIRCLE_Addition2(ttl_page_num, hal_priv->tx_page_offset, TX_ADDRESSTABLE_NUM);
-            ttl_page_num = 0;
-
-            hif->hif_ops.hi_write_word(RG_WIFI_IF_MAC_TXTABLE_RD_ID, hal_priv->tx_page_offset);
-#endif
-        }
-    }
-
-    result = mmc_cmd.error ? mmc_cmd.error : mmc_dat.error;
-
-    scat_req->result = result;
-
-    if (scat_req->result)
-        ERROR_DEBUG_OUT("Scatter write request failed:%d\n", scat_req->result);
-
-    if (scat_req->req & HIF_ASYNCHRONOUS)
-        aml_sdio_scat_complete(scat_req);
-
-    return result;
-#endif /* end of historic raw-SG path, disabled by TX-BOUNCE-FIX (v15h) */
 }
 
-#if defined (HAL_FPGA_VER)
 void aml_sdio_wake_up_int(void)
 {
     hal_irq_top(0,0);
@@ -1538,10 +1089,8 @@ void aml_sdio_irq_path(unsigned char b_gpio)
 
         hif->hif_ops.hi_write_word(RG_WIFI_IF_FW2HST_CLR, regdata);
 
-        //set interupt to level
-        //regdata = hw_if->hif_ops.hi_read_word(RG_WIFI_IF_GPIO_IRQ_CNF);
         regdata |= SDIO_GPIO_IRQ_TRIG_MODE_LEVEL;
-        //hw_if->hif_ops.hi_write_word(RG_WIFI_IF_GPIO_IRQ_CNF, regdata);
+        
     }
 }
 
@@ -1556,13 +1105,12 @@ int amlhal_gpio_open(struct hal_private * hal_priv)
 
     if (ret != 0)
     {
-        ERROR_DEBUG_OUT("request_gpio ERR!\n");
+        ERROR_DEBUG_OUT("request_gpio ERR ret=%d!\n", ret);
         return ret;
     }
     else
     {
-        //reg = hw_if->hif_ops.hi_read_word(RG_WIFI_IF_GPIO_IRQ_CNF);
-
+        
         reg5c = hif->hif_ops.hi_read_word(RG_WIFI_IF_FW2HST_CLR);
 
         pr_debug("%s(%d): -----------0x5C register=0x%x\n", __FUNCTION__, __LINE__, reg5c);
@@ -1575,7 +1123,7 @@ int amlhal_gpio_open(struct hal_private * hal_priv)
             case WIFI_GPIO_IRQ_FALLING:
                 reg &= (~SDIO_GPIO_IRQ_TRIG_MODE_LEVEL);
                 reg &= (~SDIO_GPIO_IRQ_EDGE_TIMEUP_MASK);
-                /* change gpiox7 low power level time to resume host*/
+                
                 reg |= 0x3ff;
                 break;
             case WIFI_GPIO_IRQ_LOW:
@@ -1587,13 +1135,9 @@ int amlhal_gpio_open(struct hal_private * hal_priv)
                 goto err;
         }
 
-        //hw_if->hif_ops.hi_write_word(RG_WIFI_IF_GPIO_IRQ_CNF, reg);
-
-        //reg = hw_if->hif_ops.hi_read_word(RG_WIFI_IF_GPIO_IRQ_CNF);
-
         pr_debug("SDIO GPIO IRQ CONFIG REG=0x%x\n",reg);
 
-        aml_sdio_irq_path(1); //  1: GPIO LINE PATH. 0: SDIO DATA LINE PATH
+        aml_sdio_irq_path(1); 
     }
 
     hal_priv->use_irq = 1;
@@ -1615,7 +1159,7 @@ int amlhal_gpio_close(struct hal_private * hal_priv )
     return 0;
 }
 
-#endif //USE_GPIO_IRQ
+#endif 
 static int aml_sdio_func1_irq_claimed;
 static int aml_sdio_func4_irq_claimed;
 static atomic_t aml_sdio_irq_pending = ATOMIC_INIT(0);
@@ -1628,38 +1172,23 @@ static void aml_sdio_interrupt(struct sdio_func * func)
         return;
 
 #if (USE_SDIO_IRQ == 1)
-    if (!atomic_xchg(&aml_sdio_irq_pending, 1)) {
-        unsigned char ien;
-        int err = 0;
-
-        /* deadfix: we run in MMC SDIO IRQ context with the sdio host
-         * already claimed by the MMC core. The hi_read8_func0 /
-         * hi_write8_func0 helpers go through _aml_w1_sdio_request_byte
-         * which takes wifi_bt_sdio_mutex; that mutex may already be held
-         * by work_thread / rx_thread which are themselves waiting on the
-         * sdio host -> A/B deadlock that wedges the whole stack the
-         * instant the first SDIO IRQ fires. Use direct CCCR access via
-         * the sdio_f0_* helpers - they do not claim the host and do not
-         * take any of our mutexes. */
-        ien = sdio_f0_readb(func, SDIO_CCCR_IEN, &err);
-        if (!err) {
-            ien &= ~BIT(SDIO_FUNC1);
-            if (aml_sdio_func4_irq_claimed)
-                ien &= ~BIT(SDIO_FUNC4);
-            sdio_f0_writeb(func, ien, SDIO_CCCR_IEN, &err);
-        }
-        if (err) {
-            /* CCCR write failed - clear our pending bit so the unmask
-             * path does not try to flip something that was never
-             * masked. The level IRQ will keep firing and the kernel
-             * SDIO core will keep dispatching us, no harm. */
-            atomic_set(&aml_sdio_irq_pending, 0);
-        }
-    }
+    
     hal_irq_top(0, hal_priv);
 #else
     hal_irq_top(0, hal_priv);
 #endif
+}
+
+void aml_sdio_set_card_irq(int enable)
+{
+    struct sdio_func *func = aml_priv_to_func(SDIO_FUNC1);
+    struct mmc_host *host;
+
+    if (!func || !func->card || !func->card->host)
+        return;
+    host = func->card->host;
+    if (host->ops && host->ops->enable_sdio_irq)
+        host->ops->enable_sdio_irq(host, enable ? 1 : 0);
 }
 
 void aml_sdio_unmask_irq(void)
@@ -1675,11 +1204,6 @@ void aml_sdio_unmask_irq(void)
     if (!func)
         return;
 
-    /* deadfix: same reasoning as in aml_sdio_interrupt - we want the
-     * lock-free CCCR access. We claim the sdio host directly (no
-     * wifi_bt_sdio_mutex) which prevents a different deadlock: this is
-     * called from hi_irq_thread which is NOT the MMC SDIO IRQ thread,
-     * so we need our own claim. */
     sdio_claim_host(func);
     ien = sdio_f0_readb(func, SDIO_CCCR_IEN, &err);
     if (!err) {
@@ -1735,7 +1259,11 @@ void aml_sdio_enable_irq(int func_n)
         }
         aml_sdio_irq_path(0);
 #elif (USE_GPIO_IRQ==1)
-        amlhal_gpio_open(hal_priv);
+        int ret = amlhal_gpio_open(hal_priv);
+        if (ret != 0) {
+            ERROR_DEBUG_OUT("GPIO IRQ enable skipped/failed: %d\n", ret);
+            return;
+        }
 #endif
         w1_wifi_irq_enable = 1;
         hal_priv->hst_if_irq_en = 1;
@@ -1793,14 +1321,10 @@ static void aml_sdio_calibration(void)
                 for (l = 0; l < 32; l += step) {
                     hif->hif_ops.hi_bottom_write8(SDIO_FUNC1, 0x2c5, l);
 
-                    //msleep(3000);
                     err = hif->hif_ops.hi_write_reg32(RG_SCFG_SRAM_FUNC, l);
 
                     if (err) {
-                        /* v13 NOISE FIX: use the proper FUNC0 entry-point so
-                         * we don't trip ASSERT(func_num != SDIO_FUNC0) inside
-                         * aml_w1_sdio_bottom_write8 (was spamming dmesg with
-                         * "=>=>=>=>=>assert ... 8,518" once per probe). */
+                        
                         hif->hif_ops.hi_write8_func0(SDIO_CCCR_IOABORT, 0x1);
                         pr_debug("%s error: i:%d, j:%d, k:%d, l:%d\n", __func__, i, j, k, l);
 
@@ -1830,13 +1354,12 @@ void set_reg_fragment(unsigned int addr,unsigned int bit_end,
     ASSERT((bitwidth > 0)||(bit_start <= 31)||(bit_end <= 31));
 
     tmp = hif->hif_ops.hi_read_word(addr);
-    tmp &= ~(max_value << bit_start); // clear [bit_end: bit_start]
+    tmp &= ~(max_value << bit_start); 
     tmp |= ((value & max_value) << bit_start);
 
     hif->hif_ops.hi_write_word(addr,tmp);
 }
 
-/* aon module address from 0x00f00000, we need read/write by sdio func5 */
 void aml_aon_write_reg(unsigned int addr,unsigned int data)
 {
     struct hw_interface* hif = hif_get_hw_interface();
@@ -1853,7 +1376,6 @@ unsigned int aml_aon_read_reg(unsigned int addr)
     return regdata;
 }
 
-/* Customer function to control hw specific wlan gpios */
 static void aml_customer_gpio_wlan_ctrl(int onoff)
 {
     switch (onoff)
@@ -1869,16 +1391,12 @@ static void aml_customer_gpio_wlan_ctrl(int onoff)
     }
 }
 
-/* set_usb_wifi_power() is Amlogic USB-power glue.
- * On Armbian the chip is always powered; we just stub it. */
 #ifdef NOT_AMLOGIC_PLATFORM
 static inline void set_usb_wifi_power(int is_on) {}
 #else
 extern void set_usb_wifi_power(int is_on);
 #endif
-/* v16k-refined: w1_wifi_sdio_access is now declared in wifi_sdio.h (pulled in
- * via wifi_hal.h chain).  Keep this no-op line so back-references / patches
- * applied against the v16k baseline still apply cleanly. */
+
 #ifdef SDIO_BUILD_IN
 static void config_pmu_reg(bool is_power_on)
 {
@@ -1925,31 +1443,25 @@ static void config_pmu_reg(bool is_power_on)
         pr_debug("%s power on: before write A12=0x%x, A13=0x%x, A14=0x%x, A15=0x%x, A17=0x%x, A18=0x%x, A20=0x%x, A22=0x%x, A24=0x%x\n",
             __func__, value_pmu_A12, value_pmu_A13, value_pmu_A14, value_pmu_A15,value_pmu_A17,value_pmu_A18,value_pmu_A20,value_pmu_A22,value_pmu_A24);
 
-        // open bg ldo
         reg_bg12_data.data = hif->hif_ops.hi_read_word(RG_BG_A12);
         reg_bg12_data.b.RG_WF_BG_EN = 1;
         hif->hif_ops.hi_write_word(RG_BG_A12, reg_bg12_data.data);
 
-        // switch rf dig to rf ldo
         reg_bg16_data.data = hif->hif_ops.hi_read_word(RG_BG_A16);
         reg_bg16_data.b.RG_WF_DVDD_LDO_EN = 1;
         hif->hif_ops.hi_write_word(RG_BG_A16, reg_bg16_data.data);
 
-        //delay for rfldo work ok. xosc clock here.
         msleep(20);
 
-        // switch off rf dig from dvdd09_ao
         reg_bg16_data.data = hif->hif_ops.hi_read_word(RG_BG_A16);
         reg_bg16_data.b.RG_WF_SLEEP_ENB = 1;
         hif->hif_ops.hi_write_word(RG_BG_A16, reg_bg16_data.data);
 
-        //delay for rfldo work ok. xosc clock here.
         msleep(2);
 
-        /* recovery config */
         if (w1_wifi_sdio_access == 0)
             hif->hif_ops.hi_write_word(RG_PMU_A12, 0x16a2c);
-        /* default */
+        
         else
             hif->hif_ops.hi_write_word(RG_PMU_A12, 0x2a2c);
         hif->hif_ops.hi_write_word(RG_PMU_A14, 0x1);
@@ -1995,19 +1507,16 @@ static void config_pmu_reg(bool is_power_on)
         pr_debug("%s power off: before write A12=0x%x, A15=0x%x, A17=0x%x, A18=0x%x, A20=0x%x, A22=0x%x, A24=0x%x, AON30=0x%x\n",
             __func__, value_pmu_A12,value_pmu_A15,value_pmu_A17,value_pmu_A18,value_pmu_A20,value_pmu_A22,value_pmu_A24, value_aon30);
 
-        // switch rf dig to dvdd09_ao
         reg_bg16_data.data = hif->hif_ops.hi_read_word(RG_BG_A16);
         reg_bg16_data.b.RG_WF_SLEEP_ENB = 0;
          hif->hif_ops.hi_write_word(RG_BG_A16, reg_bg16_data.data);
 
-        // switch rf dig ldo off
         reg_bg16_data.data = hif->hif_ops.hi_read_word(RG_BG_A16);
         reg_bg16_data.b.RG_WF_DVDD_LDO_EN = 0;
         hif->hif_ops.hi_write_word(RG_BG_A16, reg_bg16_data.data);
 
-        // delay for aoldo work ok.
         msleep(2);
-        // close bg ldo
+        
         reg_bg12_data.data = hif->hif_ops.hi_read_word(RG_BG_A12);
         reg_bg12_data.b.RG_WF_BG_EN = 0;
         hif->hif_ops.hi_write_word(RG_BG_A12, reg_bg12_data.data);
@@ -2016,24 +1525,22 @@ static void config_pmu_reg(bool is_power_on)
         reg_aon29_data.b.rg_ana_bpll_cfg |= BIT(1) | BIT(0);
         hif->hif_ops.hi_write_word(RG_AON_A29, reg_aon29_data.data);
 
-        /* recovery config */
         if (w1_wifi_sdio_access == 0)
             hif->hif_ops.hi_write_word(RG_PMU_A12, 0xbea2e);
-        /* default */
+        
         else
-            hif->hif_ops.hi_write_word(RG_PMU_A12, 0x9ea2e); //add set apll_val(bit16) for sdio resp_timeout
+            hif->hif_ops.hi_write_word(RG_PMU_A12, 0x9ea2e); 
         hif->hif_ops.hi_write_word(RG_PMU_A14, 0x1);
         hif->hif_ops.hi_write_word(RG_PMU_A16, 0x0);
         msleep(2);
 
         hif->hif_ops.hi_write_word(RG_PMU_A18, 0x8700);
         hif->hif_ops.hi_write_word(RG_PMU_A20, 0x3ff01ff);
-        //hif->hif_ops.hi_write_word(RG_PMU_A24, 0x3f20000);
+        
         hif->hif_ops.hi_write_word(RG_PMU_A17, 0x703);
-        //hif->hif_ops.hi_write_word(RG_PMU_A17, 0x707);
-
+        
         reg_aon30_data.data = hif->hif_ops.hi_read_word(RG_AON_A30);
-        /* change rf to idle mode */
+        
         reg_aon30_data.b.rg_always_on_cfg4 |= BIT(12);
         hif->hif_ops.hi_write_word(RG_AON_A30, reg_aon30_data.data);
 
@@ -2052,7 +1559,6 @@ static void config_pmu_reg(bool is_power_on)
         hif->hif_ops.hi_write_word(RG_PMU_A22, 0x707);
         hif->hif_ops.hi_write_word(RG_INTF_CPU_CLK, 0x4f070001);
 
-        //force wifi pmu fsm to sleep mode
         host_req_status = (PMU_SLEEP_MODE << 1)| BIT(0);
         hif->hif_ops.hi_bottom_write8(SDIO_FUNC1, RG_SDIO_PMU_HOST_REQ, host_req_status);
     }
@@ -2078,21 +1584,6 @@ int aml_sdio_init(void)
     pr_info("aml_sdio_init: driver_insmoded=%u after_probe=%u\n",
             w1_w1_sdio_driver_insmoded, w1_w1_sdio_after_porbe);
 
-    /* v15u-fix: ALWAYS power-cycle WLAN before re-probing.
-     *
-     * The old code gated the set_usb_wifi_power(0)->(1) cycle on
-     * !w1_w1_sdio_after_porbe, which meant a stale path on rmmod ->
-     * modprobe sequences: the chip was left powered, the SDIO host
-     * state machine was reset by w1_aml_w1_sdio_exit() but the chip's
-     * SDIO function side still believed it was attached, so the next
-     * tuning attempt failed with "mmc0: tuning execution failed: -5"
-     * (dozens of lines) followed by "hal_download_wifi_fw_img: write
-     * ICCM ERROR" and "drv_dev_probe: init hal error".
-     *
-     * The only reliable way to get the chip back into a known state on
-     * reload is a hard power cycle of both the WLAN_REG_ON GPIO and the
-     * downstream regulator, regardless of the stale after_porbe flag.
-     * msleeps are tuned for the worst-case AP6256/W155S1 power-on time. */
     aml_customer_gpio_wlan_ctrl(WLAN_POWER_OFF);
     set_usb_wifi_power(0);
     msleep(200);
@@ -2113,7 +1604,7 @@ int aml_sdio_init(void)
     if (!w1_w1_sdio_after_porbe) {
         ERROR_DEBUG_OUT("can't probe sdio! driver_insmoded=%u after_probe=%u\n",
             w1_w1_sdio_driver_insmoded, w1_w1_sdio_after_porbe);
-        //w1_aml_w1_sdio_exit();
+        
         return -ENODEV;
     }
 
@@ -2139,7 +1630,6 @@ int aml_sdio_init(void)
     if (ret != 0)
         goto create_thread_error;
 
-    /*set parent dev for net dev. */
     vm_cfg80211_set_parent_dev(&func->dev);
     parent_dev_set = 1;
     if (!(hif->hif_ops.hi_bottom_write8)) {
@@ -2154,7 +1644,7 @@ int aml_sdio_init(void)
         &&(hal_priv->hal_call_back->dev_probe != NULL))
     {
         pr_debug("hal_priv->hal_call_back->dev_probe\n");
-        /*call driver probe to create vmac0 and vmac1 eventually*/
+        
         ret = hal_priv->hal_call_back->dev_probe();
         if (ret < 0)
         {
@@ -2189,7 +1679,6 @@ create_thread_error:
     return ret;
 }
 
-
 void aml_disable_wifi(void)
 {
     w1_wifi_sdio_access = 0;
@@ -2199,7 +1688,6 @@ void aml_disable_wifi(void)
     msleep(50);
     aml_sdio_disable_irq(SDIO_FUNC1);
 }
-
 
 void aml_enable_wifi(void)
 {
@@ -2231,28 +1719,9 @@ void aml_enable_wifi(void)
     pr_debug("aml_enable_wifi end\n");
 }
 
-
 void aml_sdio_exit(void) {
     struct hal_private *hal_priv = hal_get_priv();
 
-    /* v15u-fix: hard power-off sequence on exit.
-     *
-     * Old code did config_pmu_reg(POWER_OFF) -> detach -> GPIO_OFF ->
-     * disable_irq -> hal_free -> set_wifi_bt_sdio_driver_bit() ->
-     * set_usb_wifi_power(0). Problems:
-     *  1. set_usb_wifi_power(0) was last and had no msleep, so the
-     *     regulator may not have actually settled to 0V before the
-     *     module finished unloading.
-     *  2. There was no settle window after GPIO_OFF, so the chip's
-     *     internal reset wasn't guaranteed to complete before SDIO
-     *     was torn down on the host side.
-     *
-     * New sequence: tear down host-side state first, then drop the
-     * SDIO function driver (unregisters from mmc core, releases SDIO
-     * funcs), then cut both the regulator and the GPIO and sleep so
-     * the chip's internal logic fully resets before module exit
-     * returns. This makes rmmod -> modprobe safe to repeat without
-     * a reboot in between. */
     config_pmu_reg(AML_W1_WIFI_POWER_OFF);
     hal_ops_detach();
 
@@ -2261,14 +1730,8 @@ void aml_sdio_exit(void) {
     hal_priv->powersave_init_flag = 1;
     hal_free();
 
-    /* Unregister the SDIO function driver — this calls aml_w1_sdio_remove()
-     * on every claimed function and clears w1_w1_sdio_after_porbe inside
-     * w1_aml_w1_sdio_exit() (via the bt_alive refcount in
-     * w1_set_wifi_bt_sdio_driver_bit). */
     w1_set_wifi_bt_sdio_driver_bit(AML_W1_WIFI_POWER_OFF, WIFI_POWER_CHANGE_SHIFT);
 
-    /* Now that the SDIO host has released the card, cut chip power and
-     * give it time to settle so re-modprobe sees a clean reset. */
     aml_customer_gpio_wlan_ctrl(WLAN_POWER_OFF);
     set_usb_wifi_power(0);
     msleep(200);
@@ -2281,7 +1744,6 @@ void aml_sdio_exit(void) {
 
 int aml_sdio_pm_suspend(struct device *device)
 {
-#if defined (HAL_FPGA_VER)
     mmc_pm_flag_t flags;
     struct sdio_func *func = NULL;
     struct hal_private * hal_priv = hal_get_priv();
@@ -2301,10 +1763,7 @@ int aml_sdio_pm_suspend(struct device *device)
     }
 
     atomic_inc(&hal_priv->sdio_suspend_cnt);
-    //pr_debug("%s:%d,wifi suspend %d, suspend cnt 0x%x, func num %d \n", __func__, __LINE__,
-    //    hal_priv->hal_suspend_mode, atomic_read(&hal_priv->suspend_cnt) , func->num);
-
-    /* we shall suspend all card for sdio. */
+    
     {
         flags = sdio_get_host_pm_caps(func);
 
@@ -2317,11 +1776,6 @@ int aml_sdio_pm_suspend(struct device *device)
             return -1;
         }
 
-        /*
-         * if we don't use sdio irq, we can't get functions' capability with
-         * MMC_PM_WAKE_SDIO_IRQ, so we don't need set irq for wake up
-         * sdio for upcoming suspend.
-         */
         if ((flags & MMC_PM_WAKE_SDIO_IRQ) != 0)
             ret = sdio_set_host_pm_flags(func, MMC_PM_WAKE_SDIO_IRQ);
 
@@ -2332,16 +1786,12 @@ int aml_sdio_pm_suspend(struct device *device)
         }
     }
     return ret;
-#elif defined (HAL_SIM_VER)
-    return 0;
-#endif
 
     return 0;
 }
 
 int aml_sdio_pm_resume(struct device *device)
 {
-#if defined (HAL_FPGA_VER)
     struct sdio_func *func = NULL;
     struct hal_private * hal_priv = hal_get_priv();
 
@@ -2349,21 +1799,15 @@ int aml_sdio_pm_resume(struct device *device)
 
     atomic_dec(&hal_priv->sdio_suspend_cnt);
 
-    /* On Armbian: SDIO clock is restored by the MMC subsystem automatically.
-     * Re-enable SDIO IRQ after resume to restore WiFi interrupt path. */
     if (func && func->num == SDIO_FUNC1) {
         pr_debug("%s: re-enabling SDIO IRQ after resume\n", __func__);
-        /* IRQ will be re-claimed by aml_sdio_enable_irq() via wifi stack
-         * resume path - no manual intervention needed here */
+        
     }
 
     return 0;
-#else
-    return 0;
-#endif
 }
 
-#else//SDIO_BUILD_IN
+#else
 
 int aml_sdio_probe(struct sdio_func *func, const struct sdio_device_id *id)
 {
@@ -2373,7 +1817,7 @@ int aml_sdio_probe(struct sdio_func *func, const struct sdio_device_id *id)
     struct hal_private * hal_priv = hal_get_priv();
     int hal_inited = 0;
     int parent_dev_set = 0;
-//add by guanghua.lai
+
     struct amlw_hwif_sdio * hwif_sdio = aml_sdio_priv();
 
     sdio_claim_host(func);
@@ -2381,12 +1825,6 @@ int aml_sdio_probe(struct sdio_func *func, const struct sdio_device_id *id)
     if (ret)
         goto sdio_enable_error;
 
-    /* v16c (B18): pre-v16c silently ignored sdio_set_block_size() failures,
-     * leaving the func at the controller default (often 16 B). That cuts
-     * CMD53 throughput dramatically without any log indicating the cause.
-     * Warn so the failure shows up in dmesg. (Note: this branch is gated
-     * by #ifndef SDIO_BUILD_IN; production builds use the same fix in
-     * w1_sdio.c — kept here for parity in case build flag flips.) */
     {
         int blksz_ret;
         if (func->num == 4)
@@ -2433,7 +1871,6 @@ int aml_sdio_probe(struct sdio_func *func, const struct sdio_device_id *id)
     if (ret != 0)
         goto create_thread_error;
 
-    /*set parent dev for net dev. */
     vm_cfg80211_set_parent_dev(&func->dev);
     parent_dev_set = 1;
 
@@ -2443,7 +1880,7 @@ int aml_sdio_probe(struct sdio_func *func, const struct sdio_device_id *id)
         &&(hal_priv->hal_call_back->dev_probe != NULL))
     {
         pr_debug("hal_priv->hal_call_back->dev_probe\n");
-        /*call driver probe to create vmac0 and vmac1 eventually*/
+        
         ret = hal_priv->hal_call_back->dev_probe();
         if (ret < 0)
         {
@@ -2457,7 +1894,6 @@ int aml_sdio_probe(struct sdio_func *func, const struct sdio_device_id *id)
 
     aml_sdio_enable_irq(SDIO_FUNC1);
     pr_debug("aml_sdio_probe-- ret %d\n", ret);
-
 
     if (aml_wifi_is_enable_rf_test()) {
         mib_init();
@@ -2494,7 +1930,6 @@ static void  aml_sdio_remove(struct sdio_func *func)
         return ;
     }
 
-    /* v15y: surface the path taken in the production log. */
     pr_info("aml_sdio_remove: enter func->num=%d FUNCNUM_SDIO_LAST=%d\n",
             func->num, FUNCNUM_SDIO_LAST);
     if (func->num == FUNCNUM_SDIO_LAST)
@@ -2510,20 +1945,6 @@ static void  aml_sdio_remove(struct sdio_func *func)
     }
     sdio_claim_host(func);
 
-    /* v15y: Problem #1 fix — take 3, mirror of aml_w1_sdio_remove().
-     *
-     * v15w used sdio_f0_writeb(..., SDIO_CCCR_ABORT, ...) and got -22
-     * EINVAL because the kernel guards F0 writes below 0xF0 behind
-     * MMC_QUIRK_LENIENT_FN0. v15x set the quirk first so the write went
-     * through, but the chip (Amlogic W155S1) still came up bad on the
-     * next modprobe (-ENODEV). v15y replaces the CCCR RES sequence with
-     * mmc_hw_reset(card) — the same call brcmfmac / mwifiex / ath10k use.
-     * That triggers host->bus_ops->hw_reset() which power-cycles the SDIO
-     * card, re-tunes the host and re-enumerates the functions, leaving
-     * the chip in a known-good post-power-on state for the next modprobe.
-     * Fall back to the v15x CCCR RES path if the host doesn't implement
-     * bus_ops->hw_reset.
-     */
     if (func->num == FUNCNUM_SDIO_LAST && func->card) {
         ret = mmc_hw_reset(func->card);
         if (ret == 0) {
@@ -2541,7 +1962,7 @@ static void  aml_sdio_remove(struct sdio_func *func)
                 abort = sdio_f0_readb(func, SDIO_CCCR_ABORT, &err);
                 if (err)
                     abort = 0x00;
-                abort |= 0x08; /* RES — software reset of I/O portion */
+                abort |= 0x08; 
                 sdio_f0_writeb(func, abort, SDIO_CCCR_ABORT, &err);
                 if (err)
                     pr_warn("aml_sdio_remove: fallback CCCR RES write failed: %d\n", err);
@@ -2594,7 +2015,7 @@ int  aml_sdio_init(void)
     int err = 0;
 
     if (sdioclk > AML_SDIO_CLK_SAFE_MAX) {
-        pr_warn("aml_sdio: requested sdioclk=%d exceeds safe max %d, clamping to 100MHz\n",
+        pr_warn("aml_sdio: requested sdioclk=%d exceeds safe max %d, clamping to 200MHz\n",
                 sdioclk, AML_SDIO_CLK_SAFE_MAX);
         sdioclk = AML_SDIO_CLK_SAFE_MAX;
     }
@@ -2631,219 +2052,4 @@ void  aml_sdio_exit(void)
     set_usb_wifi_power(0);
     aml_customer_gpio_wlan_ctrl(WLAN_POWER_OFF);
 }
-#endif//SDIO_BUILD_IN
-
-#elif defined (HAL_SIM_VER)
-/* queue a read/write request */
-unsigned short aml_sdio_read_write(struct  hw_interface * hif, SYS_TYPE addr,
-    unsigned char *buf, SYS_TYPE len, unsigned char  func, unsigned char rw_flag,unsigned char  flag)
-{
-        int ret = CO_FAIL;
-        struct sdio_rw_desc * pDesc;
-        struct sdio_syn_desc syn_rw_desc;
-        unsigned long flags;
-
-        COMMON_LOCK();
-        pDesc = &syn_rw_desc.desc;
-        pDesc->addr = addr;
-        pDesc->buf = buf;
-
-        pDesc->len =len;
-        pDesc->func = func;
-        pDesc->flag = flag;
-        pDesc->rw_flag = rw_flag;
-        syn_rw_desc.b_inused = 1;
-        COMMON_LOCK();
-        pDesc->status = _sdio_read_write(hif,pDesc);
-        ret = pDesc->status;
-    return ret;
-}
-
-int aml_sdio_read_reg(struct hw_interface * hif, unsigned char func_num,
-    int addr, unsigned char *buf, size_t len)
-{
-        int ret;
-        ret = sdio_read_reg(func_num,addr,(unsigned char *)buf);///////////////////////
-        if (ret)
-            PRINT("sdio read reg failed (%d)\n",ret);
-        return ret;
-}
-
-int aml_sdio_write_reg(struct hw_interface * hif, unsigned char func_num,
-    int addr, unsigned char *buf, size_t len)
-{
-        int ret;
-        ret = sdio_write_reg(func_num,addr,(unsigned char *)buf,0);////////////////////////////
-        if (ret)
-                PRINT("sdio write reg failed (%d)\n",ret);
-        return ret;
-}
-
-int aml_sdio_read(struct hw_interface * hif, unsigned char func_num, int addr,
-    void *buf, size_t len, int incr_addr)
-{
-        int ret;
-        ret = sdio_read_data(func_num,incr_addr,addr,len,(unsigned char *)buf);
-        if (ret)
-                PRINT("sdio read failed (%d)\n",ret);
-        return ret;
-}
-
-int aml_sdio_write(struct hw_interface * hif, unsigned char func_num, int addr,
-    void *buf, size_t len, int incr_addr)
-{
-        int ret;
-        ret = sdio_write_data(func_num,incr_addr,addr,len,(unsigned char *)buf);
-        if (ret)
-                PRINT("sdio write failed (%d)\n",ret);
-        return ret;
-}
-
-int _sdio_read_write(struct hw_interface * hif, struct sdio_rw_desc * pDesc)
-{
-        int ret = -1;
-        unsigned char *tbuffer;
-        int data;
-        int i,j = 0;
-        int srambuf;
-
-        ASSERT(hif != NULL);
-_restartsdio:
-        if (pDesc->rw_flag == SDIO_RW_FLAG_READ)
-        {
-           switch (pDesc->func)
-           {
-               case SDIO_FUNC1:
-                    tbuffer = (unsigned char *)pDesc->buf;
-                    ret = aml_sdio_read_reg(hif, SDIO_FUNC1,pDesc->addr&SDIO_ADDR_MASK,
-                                    tbuffer,pDesc->len);
-                    break;
-                case SDIO_FUNC2:
-                case SDIO_FUNC6:
-                         tbuffer = (unsigned char *)j;
-                         ret = aml_sdio_read(hif, pDesc->func, pDesc->addr&SDIO_ADDR_MASK,
-                                tbuffer, ALIGN(pDesc->len,4), 1);
-                         for (i = 0; i < pDesc->len/4; i++)
-                         {
-                                 hostSram_access(FW_ID,0,j,0,(int*)(pDesc->buf+j));
-                                 j+=4;
-                         }
-                    break;
-                case SDIO_FUNC4:
-                    tbuffer = (unsigned char *)j;//pDesc->buf;
-                    ret = aml_sdio_read(hif,SDIO_FUNC4,pDesc->addr&SDIO_ADDR_MASK,tbuffer,
-                                    ALIGN(pDesc->len,PAGE_LEN),0);
-                    for ( i = 0;i < ALIGN(pDesc->len,PAGE_LEN)/4;i++)
-                    {
-                        hostSram_access(FW_ID,0,j,0,(int*)(pDesc->buf+j));
-                        j+=4;
-                    }
-                    break;
-                case SDIO_FUNC5:
-                    tbuffer = (unsigned char *)j;
-                    pDesc->len = ALIGN(pDesc->len,4);
-                    ret = aml_sdio_read(hif,SDIO_FUNC5,pDesc->addr&SDIO_ADDR_MASK,tbuffer,
-                                ALIGN(pDesc->len,4),1);
-                    for ( i = 0;i < pDesc->len/4;i++)
-                    {
-                        hostSram_access(FW_ID,0,j,0,(int*)(pDesc->buf+j));
-                        j+=4;
-                    }
-                    break;
-                case SDIO_FUNCNUM_MAX:
-                    tbuffer = (unsigned char *)pDesc->buf;
-                    ret = aml_sdio_write_reg(hif,1,pDesc->addr&SDIO_ADDR_MASK,tbuffer,pDesc->len);
-                    break;
-                default:
-                    break;
-           }
-        }
-        else if (pDesc->rw_flag == SDIO_RW_FLAG_WRITE)
-        {
-            switch (pDesc->func)
-            {
-                case SDIO_FUNC1:
-                    tbuffer = (unsigned char *)pDesc->buf;
-                    ret = aml_sdio_write_reg(hif,SDIO_FUNC1,pDesc->addr&SDIO_ADDR_MASK,
-                                tbuffer,pDesc->len);
-                    break;
-                case SDIO_FUNC2:
-                    tbuffer = (unsigned char *)j;
-                    pDesc->len = ALIGN(pDesc->len,4);
-                    for ( i = 0;i < pDesc->len/4;i++) {
-                        hostSram_access(FW_ID,1,j,*(unsigned int*)(pDesc->buf+j),(int*)&data);
-                        j+=4;
-                    }
-                    j=0;
-                    for (i = 0;i < pDesc->len/4;i++) {
-                        hostSram_access(FW_ID,0,j,0,(int*)&srambuf);
-                        j+=4;
-                    }
-                    ret = aml_sdio_write(hif,SDIO_FUNC2,pDesc->addr&SDIO_ADDR_MASK,tbuffer,
-                                ALIGN(pDesc->len,4),1);
-                    break;
-                 case SDIO_FUNC3:
-                    tbuffer = (unsigned char *)j;
-                    for (i = 0;i < pDesc->len/4;i++) {
-                        hostSram_access(FW_ID,1,j,*(unsigned int*)(pDesc->buf+j),(int*)&data);
-                        j+=4;
-                    }
-                    hostSram_access(FW_ID,0,j,0,(int*)&srambuf);
-                    ret = aml_sdio_write(hif,SDIO_FUNC3,pDesc->addr&SDIO_ADDR_MASK,tbuffer,
-                                ALIGN(pDesc->len,4),1);
-                    break;
-
-                case SDIO_FUNC4:
-                    tbuffer = (unsigned char *)j;
-                    for ( i = 0;i < ALIGN(pDesc->len,PAGE_LEN)/4;i++)
-                    {
-                        hostSram_access(FW_ID,1,j,*(unsigned int*)(pDesc->buf+j),(int*)&data);
-                        j+=4;
-                    }
-                    ret = aml_sdio_write(hif,SDIO_FUNC4,pDesc->addr&SDIO_ADDR_MASK,tbuffer,
-                                ALIGN(pDesc->len,PAGE_LEN),0);
-                    break;
-                case SDIO_FUNC5:
-                    tbuffer = (unsigned char *)j;
-                    pDesc->len = ALIGN(pDesc->len,4);
-                    for ( i = 0;i < pDesc->len/4;i++)
-                    {
-                        hostSram_access(FW_ID,1,j,*(unsigned int*)(pDesc->buf+j),(int*)&data);
-                        j+=4;
-                    }
-                    j=0;
-                    for ( i = 0;i < pDesc->len/4;i++)
-                    {
-                        hostSram_access(FW_ID,0,j,0,(int*)&srambuf);
-                        j+=4;
-                    }
-                    ret = aml_sdio_write(hif,SDIO_FUNC5,pDesc->addr&SDIO_ADDR_MASK,tbuffer,
-                                    ALIGN(pDesc->len,4),1);
-                    break;
-                case SDIO_FUNCNUM_MAX:
-                    tbuffer = (unsigned char *)pDesc->buf;
-                    ret = aml_sdio_write_reg(hif,1,pDesc->addr&SDIO_ADDR_MASK,tbuffer,pDesc->len);
-                    break;
-                default:
-                    break;
-            }
-        }
-        else{
-           PRINT("%s(%d) Error: sdio function read/write flag:%d\n",__func__,__LINE__,pDesc->rw_flag);
-        }
-
-        if (ret) {
-                PRINT("_sdio_read_write error!!! function = %x, addr = %x, len = %x\n",pDesc->func, pDesc->addr,pDesc->len);
-                sv_delay(FW_ID,100);//msleep(100);
-        }
-        return ret;
-}
-
-
-#ifdef HAL_SIM_VER
-#ifdef FW_NAME
-}
 #endif
-#endif
-
-#endif /*end HAL_FPGA_VER */

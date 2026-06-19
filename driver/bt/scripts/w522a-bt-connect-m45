@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+set -u
+
+MAC="${1:-41:42:C6:B3:06:9B}"
+LOG=/var/log/w522a-bt-m45.log
+exec >>"$LOG" 2>&1
+
+echo "$(date '+%F %T') connect start $MAC"
+pkill -9 aplay 2>/dev/null || true
+pkill -9 ffmpeg 2>/dev/null || true
+
+systemctl stop hostapd dnsmasq w522a-ap.service 2>/dev/null || true
+ip link set w522a down 2>/dev/null || true
+rmmod vlsicomm 2>/dev/null || true
+
+systemctl restart bluetooth bluealsa
+sleep 2
+rfkill unblock bluetooth || true
+hciconfig hci0 up || true
+bluetoothctl power on || true
+bluetoothctl trust "$MAC" || true
+bluetoothctl disconnect "$MAC" || true
+sleep 2
+
+for _try in 1 2 3; do
+  bluetoothctl connect "$MAC" && break || sleep 3
+done
+sleep 3
+
+PCM="$(bluealsa-cli list-pcms 2>/dev/null | grep "$MAC" | head -1 || true)"
+if [ -n "$PCM" ]; then
+  bluealsa-cli soft-volume "$PCM" true || true
+  bluealsa-cli volume "$PCM" 40 40 || bluealsa-cli volume "$PCM" 40 || true
+  bluealsa-cli mute "$PCM" false || true
+  bluealsa-cli info "$PCM" || true
+else
+  echo "$(date '+%F %T') no bluealsa pcm yet"
+fi
+
+bluetoothctl info "$MAC" || true
+echo "$(date '+%F %T') connect done"

@@ -53,8 +53,6 @@ static int match_ssid(const unsigned char *ie, int nssid, const struct wifi_mac_
     return 0;
 }
 
-
-
 static int match_bss(struct wlan_net_vif *wnet_vif,
     const struct wifi_mac_scan_state *ss, const struct scaninfo_entry *se)
 {
@@ -65,64 +63,63 @@ static int match_bss(struct wlan_net_vif *wnet_vif,
     fail = 0;
     if (wifi_mac_chan_num_avail(wifimac, wifi_mac_chan2ieee(wifimac, scaninfo->SI_chan)) == false) {
         fail |= STA_MATCH_ERR_CHAN;
-        //pr_err("%s(%d) fail 0x%x\n", __func__, __LINE__, fail);
+        
     }
 
     if (wnet_vif->vm_opmode == WIFINET_M_IBSS) {
         if ((scaninfo->SI_capinfo & WIFINET_CAPINFO_IBSS) == 0) {
              fail |= STA_MATCH_ERR_BSS;
-              //pr_err("%s(%d) fail 0x%x\n", __func__, __LINE__, fail);
+              
         }
 
     } else {
         if ((scaninfo->SI_capinfo & WIFINET_CAPINFO_ESS) == 0) {
             fail |= STA_MATCH_ERR_BSS;
-            //pr_err("%s(%d) fail 0x%x\n", __func__, __LINE__, fail);
+            
         }
     }
 
     if (wnet_vif->vm_flags & WIFINET_F_PRIVACY) {
         if ((scaninfo->SI_capinfo & WIFINET_CAPINFO_PRIVACY) == 0) {
             fail |= STA_MATCH_ERR_PRIVACY;
-             //pr_err("%s(%d) fail 0x%x\n", __func__, __LINE__, fail);
+             
         }
 
     } else {
         if (scaninfo->SI_capinfo & WIFINET_CAPINFO_PRIVACY) {
             fail |= STA_MATCH_ERR_PRIVACY;
-             //pr_err("%s(%d) fail 0x%x\n", __func__, __LINE__, fail);
+             
         }
     }
 
     if (!check_rate(wnet_vif, scaninfo)) {
         fail |= STA_MATCH_ERR_RATE;
-        //pr_err("%s(%d) fail 0x%x\n", __func__, __LINE__, fail);
+        
     }
 
     if ((wnet_vif->vm_fixed_rate.mode == WIFINET_FIXED_RATE_NONE)
         || (wnet_vif->vm_fixed_rate.rateinfo & WIFINET_RATE_MCS)) {
         if (!check_ht_rate(wnet_vif, scaninfo)) {
             fail |= STA_MATCH_ERR_HTRATE;
-            //pr_err("%s(%d) fail 0x%x\n", __func__, __LINE__, fail);
+            
         }
     }
 
-    /*get ssid, which we want to connect */
     if (!(wnet_vif->vm_flags & WIFINET_F_IGNORE_SSID)
         && ((ss->ss_nssid == 0) || (match_ssid(scaninfo->SI_ssid, ss->ss_nssid, ss->ss_ssid) == 0))) {
         fail |= STA_MATCH_ERR_SSID;
-        //pr_err("%s(%d) fail 0x%x, ss->ss_nssid:%d\n", __func__, __LINE__, fail, ss->ss_nssid);
+        
     }
 
     if ((wnet_vif->vm_flags & WIFINET_F_DESBSSID)
         && !WIFINET_ADDR_EQ(wnet_vif->vm_des_bssid, scaninfo->SI_bssid)) {
         fail |= STA_MATCH_ERR_BSSID;
-         //pr_err("%s(%d) fail 0x%x\n", __func__, __LINE__, fail);
+         
     }
 
     if (se->connectcnt >= WIFINET_CONNECT_FAILS) {
         fail |= STA_MATCH_ERR_STA_FAILS_MAX;
-         //pr_err("%s(%d) fail 0x%x\n", __func__, __LINE__, fail);
+         
     }
 
     if (!(fail & STA_MATCH_ERR_SSID)) {
@@ -144,7 +141,6 @@ static void wifi_mac_save_ssid(struct wlan_net_vif *wnet_vif, struct wifi_mac_sc
     ss->ss_nssid = nssid;
 }
 
-
 int wifi_mac_scan_chk_11g_bss(struct wifi_mac_scan_state *ss, struct wlan_net_vif *wnet_vif)
 {
         struct scaninfo_table *st = ss->ScanTablePriv;
@@ -155,7 +151,7 @@ int wifi_mac_scan_chk_11g_bss(struct wifi_mac_scan_state *ss, struct wlan_net_vi
         WIFI_SCAN_SE_LIST_LOCK(st);
         list_for_each_entry(se,&st->st_entry,se_list) {
         macmode = wifi_mac_get_sta_mode(&se->scaninfo);
-        /*a 5G 11g only found, ignore it*/
+        
         if((macmode == WIFINET_MODE_11G) && WIFINET_IS_CHAN_2GHZ((&se->scaninfo)->SI_chan)) {
 
             ret = 1;
@@ -172,7 +168,6 @@ int wifi_mac_scan_chk_11g_bss(struct wifi_mac_scan_state *ss, struct wlan_net_vi
     return ret;
 }
 
-
 static int
 wifi_mac_scan_get_best_node(struct wifi_mac_scan_state *ss, struct wlan_net_vif *wnet_vif, struct scaninfo_entry *bestNode)
 {
@@ -181,12 +176,6 @@ wifi_mac_scan_get_best_node(struct wifi_mac_scan_state *ss, struct wlan_net_vif 
     struct wifi_mac *wifimac = wnet_vif->vm_wmac;
     int roaming_threshold = wifimac->roaming_threshold_5g;
 
-    /* N-M3 note: WIFI_SCAN_SE_LIST_LOCK is held across match_bss().
-     * Lock ordering audit: match_bss -> wifi_mac_get_wnet_vif_by_vid
-     * does NOT take wm_wnet_vifs lock (it's a read-only search under
-     * caller's responsibility). No WIFINET_LOCK is acquired inside
-     * match_bss, so no inversion with st_lock here. Keep this comment
-     * updated if match_bss grows additional lock acquisitions. */
     WIFI_SCAN_SE_LIST_LOCK(st);
     list_for_each_entry(se,&st->st_entry,se_list) {
         if (match_bss(wnet_vif, ss, se) == 0) {
@@ -232,6 +221,14 @@ wifi_mac_scan_get_match_node(struct wifi_mac_scan_state *ss, struct wlan_net_vif
              wnet_vif->vm_connchan.conn_chan[wnet_vif->vm_connchan.num++] = se->scaninfo.SI_chan;
              WIFINET_ADDR_COPY(wnet_vif->vm_connchan.da, se->scaninfo.SI_macaddr);
              WIFINET_ADDR_COPY(wnet_vif->vm_connchan.bssid, se->scaninfo.SI_bssid);
+             if (wnet_vif->vm_flags & WIFINET_F_DESBSSID) {
+                 
+                 memcpy(&wnet_vif->vm_connect_scan_entry, se,
+                     sizeof(struct scaninfo_entry));
+                 wnet_vif->vm_connect_scan_entry.se_valid = 1;
+                 ret = 1;
+                 break;
+             }
              list_del_init(&se->se_list);
              list_del_init(&se->se_hash);
              FREE(se,"sta_add.se");
@@ -273,7 +270,6 @@ wifi_mac_scan_connect(struct wifi_mac_scan_state *ss, struct wlan_net_vif *wnet_
     struct vm_wdev_priv *pwdev_priv = wdev_to_priv(wnet_vif->vm_wdev);
     const unsigned char zero_bssid[WIFINET_ADDR_LEN] = {0};
 
-    /*AP doesn't get ssid and connect, so just return. */
     if (ss->scan_CfgFlags & WIFINET_SCANCFG_NOPICK) {
         return 0;
     }
@@ -296,7 +292,7 @@ wifi_mac_scan_connect(struct wifi_mac_scan_state *ss, struct wlan_net_vif *wnet_
     }
 
     memset(best_node, 0, sizeof(struct scaninfo_entry));
-    /*get a best ap from scan list, by comparing rssi, connect times... */
+    
     if (!wifi_mac_scan_get_best_node(ss, wnet_vif, best_node)) {
         ERROR_DEBUG_OUT("no bss match, goto notfound\n");
         goto notfound;
@@ -305,7 +301,7 @@ wifi_mac_scan_connect(struct wifi_mac_scan_state *ss, struct wlan_net_vif *wnet_
     if ((wnet_vif->vm_opmode == WIFINET_M_IBSS)
         && (WIFINET_ADDR_EQ(best_node->scaninfo.SI_bssid, &zero_bssid[0])))
     {
-        /* get ap work mode. */
+        
         if( WIFINET_IS_CHAN_2GHZ( best_node->scaninfo.SI_chan)  )
         {
             wnet_vif->vm_mac_mode = WIFINET_MODE_11BGN;
@@ -331,7 +327,7 @@ wifi_mac_scan_connect(struct wifi_mac_scan_state *ss, struct wlan_net_vif *wnet_
     return 1;
 
 notfound:
-    //if adhoc mode, not find we must create a new
+    
     if (wnet_vif->vm_opmode == WIFINET_M_IBSS)
     {
          if (wnet_vif->vm_curchan != WIFINET_CHAN_ERR)
@@ -350,7 +346,6 @@ static int wifi_mac_chk_ap_chan(struct wifi_mac_scan_state *ss, struct wlan_net_
     int channum;
     struct wifi_channel *c = NULL;
 
-     //AP default work in 5G channel 149,wait hostapd configure after init
     channum = DEFAULT_CHANNEL;
     DPRINTF(AML_DEBUG_SCAN|AML_DEBUG_CONNECT,
         "<%s> :  %s %d ++ vm_opmode %d\n",wnet_vif->vm_ndev->name,__func__,__LINE__,wnet_vif->vm_opmode);
@@ -490,15 +485,9 @@ static void wifi_mac_update_chan_overlapping_map(struct wlan_net_vif *wnet_vif) 
             wifimac->chan_overlapping_map[i].overlapping++;
         }
 
-        //AML_OUTPUT("ssid:%s, center_chan:%d, bw:%d, low_chan:%d, up_chan:%d\n",
-        //    lse->SI_ssid + 2, center_chan, bw, low_chan, up_chan);
     }
     WIFI_SCAN_SE_LIST_UNLOCK(st);
 
-    //for (i = 0; i < WIFINET_MAX_SCAN_CHAN; ++i) {
-    //    AML_OUTPUT("chan_index:%d, overlapping:%d\n",
-    //        wifimac->chan_overlapping_map[i].chan_index, wifimac->chan_overlapping_map[i].overlapping);
-    //}
 }
 
 void is_connect_need_set_gain(struct wlan_net_vif *wnet_vif) {
@@ -536,7 +525,6 @@ void is_connect_need_set_gain(struct wlan_net_vif *wnet_vif) {
         overlapping_max, wifimac->is_connect_set_gain, low_chan, up_chan, bw, center_chan);
 }
 
-
 int wifi_mac_scan_parse(struct wlan_net_vif *wnet_vif, wifi_mac_ScanIterFunc *f, void *arg)
 {
     struct wifi_mac *wifimac = wnet_vif->vm_wmac;
@@ -554,7 +542,6 @@ int wifi_mac_scan_parse(struct wlan_net_vif *wnet_vif, wifi_mac_ScanIterFunc *f,
     }
     WIFI_SCAN_SE_LIST_UNLOCK(st);
 
-    /* if scan all channels */
     if (!wnet_vif->vm_chan_switch_scan_flag && !wnet_vif->vm_scan_before_connect_flag
         && !wnet_vif->vm_chan_roaming_scan_flag && ss->scan_next_chan_index > 20) {
         wifi_mac_update_chan_overlapping_map(wnet_vif);
@@ -564,7 +551,7 @@ int wifi_mac_scan_parse(struct wlan_net_vif *wnet_vif, wifi_mac_ScanIterFunc *f,
             wifimac->scan_noisy_status = WIFINET_S_SCAN_ENV_NOISE;
 
         } else if (wifi_mac_is_in_clear_environment(wifimac)) {
-            //clear environment, set to max gain
+            
             wifimac->drv_priv->drv_ops.set_channel_rssi(wifimac->drv_priv, 174);
             wifimac->scan_noisy_status = WIFINET_S_SCAN_ENV_CLEAR;
 
@@ -605,14 +592,13 @@ static void update_roaming_candidate_chan(struct wifi_mac_scan_state *ss, struct
     WIFI_ROAMING_CHANNLE_LOCK(ss);
     for (i = 0; i < ROAMING_CANDIDATE_CHAN_MAX; i++) {
         if (ss->roaming_candidate_chans[i].channel) {
-            /*update rssi */
+            
             if (ss->roaming_candidate_chans[i].channel->chan_pri_num == apchan->chan_pri_num) {
                 ss->roaming_candidate_chans[i].avg_rssi = (ss->roaming_candidate_chans[i].avg_rssi + (rssi * 3)) >> 2;
                 WIFI_ROAMING_CHANNLE_UNLOCK(ss);
                 return ;
            }
 
-            /*get worst channel*/
             if (!worst_chan) {
                 worst_chan = &ss->roaming_candidate_chans[i];
             }
@@ -653,7 +639,7 @@ void wifi_mac_update_roaming_candidate_chan(struct wlan_net_vif *wnet_vif,const 
     if ((sp->ssid[2] != 0) && ss->ss_ssid->len && nssid
         && !(memcmp(sp->ssid+2, ss->roaming_ssid.ssid, nssid))) {
         update_roaming_candidate_chan(ss, apchan, rssi);
-//        pr_debug("\n\n[Roaming ssid:%s] len:%d chan:%d\n\n", ssidie_sprintf(sp->ssid), nssid, apchan->chan_pri_num);
+
     }
 
 }
@@ -766,23 +752,6 @@ void wifi_mac_scan_rx(struct wlan_net_vif *wnet_vif, const struct wifi_mac_scan_
         ise->SI_dtimperiod =  ((const struct wifi_mac_tim_ie *) sp->tim)->tim_period;
     }
 
-#ifdef CONFIG_WAPI
-    saveie(&ise->SI_wai_ie[0], sp->wai);
-#endif //#ifdef CONFIG_WAPI
-
-#ifdef CONFIG_P2P
-    for (index = 0; index < MAX_P2PIE_NUM; index++)
-    {
-        if (sp->p2p[index] != NULL) {
-            saveie(&ise->SI_p2p_ie[index][0], sp->p2p[index]);
-        }
-    }
-#endif //#ifdef CONFIG_P2P
-
-#ifdef CONFIG_WFD
-    saveie(&ise->SI_wfd_ie[0], sp->wfd);
-#endif //#ifdef CONFIG_WFD
-
     saveie(&ise->SI_wme_ie[0], sp->wme);
     saveie(&ise->SI_htcap_ie[0], sp->htcap);
     saveie(&ise->SI_htinfo_ie[0], sp->htinfo);
@@ -813,9 +782,7 @@ void wifi_mac_scan_rx(struct wlan_net_vif *wnet_vif, const struct wifi_mac_scan_
     hash = STA_HASH(macaddr);
 
     if (oldse == NULL) {
-        /* Need lock here, because when 'olsde' is NULL, this
-         * function was called with unlocked list.
-         */
+        
         WIFI_SCAN_SE_LIST_LOCK(st);
         list_add(&se->se_hash, &st->st_hash[hash]);
         list_add_tail(&se->se_list, &st->st_entry);
@@ -841,10 +808,7 @@ void wifi_mac_scan_rx(struct wlan_net_vif *wnet_vif, const struct wifi_mac_scan_
 
 fail:
     if (oldse) {
-        /* We failed to update some existing entry. Remove it from
-         * list before freeing memory. We don't need lock here,
-         * because list is locked by caller!
-         */
+        
         list_del_init(&se->se_list);
         list_del_init(&se->se_hash);
     }
@@ -923,7 +887,7 @@ void wifi_mac_set_scan_time(struct wlan_net_vif *wnet_vif) {
     if (wnet_vif->vm_chan_switch_scan_flag) {
         ss->scan_chan_wait = wnet_vif->vm_scan_time_chan_switch;
     }
-    //pr_debug("%s change scan time to:%d\n", __func__, ss->scan_chan_wait);
+    
     return;
 }
 
@@ -933,11 +897,6 @@ static int vm_scan_setup_chan(struct wifi_mac_scan_state *ss, struct wlan_net_vi
     struct wifi_channel *c;
     static unsigned char chan_aware_cnt = 0;
     int i = 0;
-
-#ifdef CONFIG_P2P
-    struct wlan_net_vif *tmpwnet_vif;
-    tmpwnet_vif = wifi_mac_get_wnet_vif_by_vid(wifimac, NET80211_P2P_VMAC);
-#endif
 
     ss->scan_last_chan_index = 0;
     DPRINTF(AML_DEBUG_SCAN, "%s %d wifimac->wm_nchans=%d \n",
@@ -954,7 +913,6 @@ static int vm_scan_setup_chan(struct wifi_mac_scan_state *ss, struct wlan_net_vi
                 chan_aware_cnt = 0;
             }
 
-            /* both 2.4G and 5G set WIFINET_BW_20 flag.*/
             if ((c->chan_bw == WIFINET_BWC_WIDTH20) && (wifimac->wm_curchan != c)) {
                 if ((aml_iwpriv_get_band() == CFG_BAND_B) && (!WIFINET_IS_CHAN_2GHZ(c))) {
                     continue;
@@ -997,7 +955,6 @@ static int vm_scan_setup_chan(struct wifi_mac_scan_state *ss, struct wlan_net_vi
     } else {
         pr_debug("scan all chans \n");
 
-        /*clean roamin candidate channel*/
         WIFI_ROAMING_CHANNLE_LOCK(wnet_vif->vm_wmac->wm_scan);
         wnet_vif->vm_wmac->wm_scan->roaming_candidate_chans_cnt = 0;
         memset(wnet_vif->vm_wmac->wm_scan->roaming_candidate_chans, 0, sizeof(wnet_vif->vm_wmac->wm_scan->roaming_candidate_chans));
@@ -1012,30 +969,8 @@ static int vm_scan_setup_chan(struct wifi_mac_scan_state *ss, struct wlan_net_vi
                 chan_aware_cnt = 0;
             }
 
-            /* both 2.4G and 5G set WIFINET_BW_20 flag.*/
             if (c->chan_bw == WIFINET_BWC_WIDTH20)
             {
-    #ifdef CONFIG_P2P
-                if ((wnet_vif->vm_p2p != NULL) && (wnet_vif->vm_p2p->p2p_enable)
-                    && (wnet_vif->vm_p2p->social_channel))
-                {
-                    if ((c->chan_cfreq1 != SOCIAL_CHAN_1)
-                       && (c->chan_cfreq1 != SOCIAL_CHAN_2)
-                       && (c->chan_cfreq1 != SOCIAL_CHAN_3))
-                    {
-                        continue;
-                    }
-
-                    if ((aml_iwpriv_get_band() == CFG_BAND_B) && (!WIFINET_IS_CHAN_2GHZ(c))) {
-                        continue;
-                    } else if ((aml_iwpriv_get_band() == CFG_BAND_A) && (!WIFINET_IS_CHAN_5GHZ(c))) {
-                        continue;
-                    }
-
-                    ss->ss_chans[ss->scan_last_chan_index++] = c;
-                }
-                else
-    #endif//CONFIG_P2P
                 {
                     if ((aml_iwpriv_get_band() == CFG_BAND_B) && (!WIFINET_IS_CHAN_2GHZ(c))) {
                         continue;
@@ -1073,8 +1008,7 @@ wifi_mac_scan_send_probe_timeout(SYS_TYPE param1,SYS_TYPE param2,
     unsigned char j;
 
     os_timer_ex_cancel(&ss->ss_probe_timer, CANCEL_SLEEP);
-    //pr_debug("%s, ss->scan_StateFlags:%08x, ss->ss_nssid:%d\n", __func__, ss->scan_StateFlags, ss->ss_nssid);
-
+    
     if (ss->scan_CfgFlags & WIFINET_SCANCFG_ACTIVE)
     {
         struct net_device *dev = wnet_vif->vm_ndev;
@@ -1084,9 +1018,6 @@ wifi_mac_scan_send_probe_timeout(SYS_TYPE param1,SYS_TYPE param2,
                 wifi_mac_send_probereq(wnet_vif->vm_mainsta, wnet_vif->vm_myaddr, dev->broadcast,
                     dev->broadcast, ss->ss_ssid[i].ssid, ss->ss_ssid[i].len, wnet_vif->vm_opt_ie, wnet_vif->vm_opt_ie_len);
 
-#ifdef CONFIG_P2P
-        if (!wnet_vif->vm_p2p->p2p_enable)
-#endif
         {
             wifi_mac_send_probereq(wnet_vif->vm_mainsta, wnet_vif->vm_myaddr, dev->broadcast,
                 dev->broadcast, "", 0, wnet_vif->vm_opt_ie, wnet_vif->vm_opt_ie_len);
@@ -1099,8 +1030,6 @@ static int wifi_mac_scan_send_probe_timeout_ex(void *arg)
     struct wifi_mac_scan_state *ss = (struct wifi_mac_scan_state *) arg;
     struct wlan_net_vif *wnet_vif = ss->VMacPriv;
     struct wifi_mac *wifimac = wnet_vif->vm_wmac;
-
-    //pr_debug("%s, ss->scan_StateFlags:%08x\n", __func__, ss->scan_StateFlags);
 
     WIFI_SCAN_LOCK(ss);
     if (ss->scan_StateFlags & SCANSTATE_F_SEND_PROBEREQ_AGAIN) {
@@ -1115,7 +1044,6 @@ static int wifi_mac_scan_send_probe_timeout_ex(void *arg)
 
     return OS_TIMER_NOT_REARMED;
 }
-
 
 static enum hrtimer_restart
 wifi_mac_scan_chk_leakap_done_process(struct hrtimer *timer)
@@ -1153,13 +1081,11 @@ wifi_mac_scan_chk_leakap_done_process(struct hrtimer *timer)
     return HRTIMER_NORESTART;
 }
 
-
 static void wifi_mac_scan_chk_leakap_hrtimer_attach(struct wifi_mac *wifimac)
 {
     hrtimer_init(&wifimac->wm_scan->scan_hr_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
     wifimac->wm_scan->scan_hr_timer.function = wifi_mac_scan_chk_leakap_done_process;
 }
-
 
 static void wifi_mac_scan_chk_leakap_hrtimer_start(struct wifi_mac *wifimac)
 {
@@ -1188,7 +1114,6 @@ void wifi_mac_scan_chking_leakap(void * station, struct wifi_frame *wh)
         WIFI_SCAN_UNLOCK(ss);
 }
 
-
 static void wifi_mac_scan_channel(struct wifi_mac *wifimac)
 {
     struct wifi_mac_scan_state *ss = wifimac->wm_scan;
@@ -1197,7 +1122,6 @@ static void wifi_mac_scan_channel(struct wifi_mac *wifimac)
     struct wifi_channel *chan;
     enum wifi_mac_macmode last_mac_mode;
 
-    //pr_debug("%s, ss->scan_StateFlags:%08x\n", __func__, ss->scan_StateFlags);
     WIFI_SCAN_LOCK(ss);
     if (!(ss->scan_StateFlags & SCANSTATE_F_CHANNEL_SWITCH_COMPLETE)) {
         WIFI_SCAN_UNLOCK(ss);
@@ -1228,14 +1152,8 @@ static void wifi_mac_scan_channel(struct wifi_mac *wifimac)
         WIFI_SCAN_UNLOCK(ss);
     }
 
-    /* vm_mac_mode default is 11GNAC */
     last_mac_mode = wnet_vif->vm_mac_mode;
     if (chan->chan_pri_num >= 1 && chan->chan_pri_num <= 14) {
-#ifdef CONFIG_P2P
-        if (wnet_vif->vm_p2p->p2p_enable) {
-            wnet_vif->vm_mac_mode = WIFINET_MODE_11GN;
-        } else
-#endif
         {
             wnet_vif->vm_mac_mode = WIFINET_MODE_11BGN;
         }
@@ -1251,18 +1169,10 @@ static void wifi_mac_scan_channel(struct wifi_mac *wifimac)
         ||((ss->scan_CfgFlags & WIFINET_SCANCFG_ACTIVE) && (chan->chan_flags & WIFINET_CHAN_AWARE))) {
         struct net_device *dev = wnet_vif->vm_ndev;
 
-#ifdef CONFIG_P2P
-        DPRINTF(AML_DEBUG_SCAN, "%s vid:%d, next_chan_index = %d, chan=%d freq=%d, p2p_enable:%d\n", __func__,
-            wnet_vif->wnet_vif_id, ss->scan_next_chan_index, chan->chan_pri_num, chan->chan_cfreq1, wnet_vif->vm_p2p->p2p_enable);
-#else
         DPRINTF(AML_DEBUG_SCAN, "%s vid:%d, next_chan_index = %d, chan=%d freq=%d, p2p_enable:0\n", __func__,
             wnet_vif->wnet_vif_id, ss->scan_next_chan_index, chan->chan_pri_num, chan->chan_cfreq1);
-#endif
 
         if (
-#ifdef CONFIG_P2P
-            !wnet_vif->vm_p2p->p2p_enable &&
-#endif
             !wnet_vif->vm_chan_switch_scan_flag) {
              wifi_mac_send_probereq(wnet_vif->vm_mainsta, wnet_vif->vm_myaddr, dev->broadcast,
                  dev->broadcast, "", 0, wnet_vif->vm_opt_ie, wnet_vif->vm_opt_ie_len);
@@ -1303,7 +1213,6 @@ static void wifi_mac_switch_scan_channel(struct wifi_mac *wifimac)
     struct wifi_channel *chan;
     struct wlan_net_vif *wnet_vif = ss->VMacPriv;
 
-    //pr_debug("%s, ss->scan_StateFlags:%08x\n", __func__, ss->scan_StateFlags);
     if (ss->scan_next_chan_index >= ss->scan_last_chan_index) {
         DPRINTF(AML_DEBUG_ERROR, " %s (scan_next_chan_index >= scan_last_chan_index) drop!!!\n", __func__);
         return;
@@ -1343,7 +1252,7 @@ void scan_next_chan(struct wifi_mac *wifimac)
     }
 
     if (!((atomic_read(&wifimac->wm_nrunning) == 2) && (!concurrent_check_is_vmac_same_pri_channel(wifimac)))) {
-        //pr_debug("%s\n", __func__);
+        
         os_timer_ex_start_period(&ss->ss_scan_timer, ss->scan_chan_wait);
     }
 
@@ -1361,14 +1270,9 @@ void scan_next_chan(struct wifi_mac *wifimac)
     WIFI_SCAN_LOCK(ss);
     ss->scan_StateFlags &= ~SCANSTATE_F_DISCARD;
     WIFI_SCAN_UNLOCK(ss);
-    /* vm_mac_mode default is 11GNAC */
+    
     last_mac_mode = wnet_vif->vm_mac_mode;
     if (chan->chan_pri_num >= 1 && chan->chan_pri_num <= 14) {
-#ifdef CONFIG_P2P
-        if (wnet_vif->vm_p2p->p2p_enable) {
-            wnet_vif->vm_mac_mode = WIFINET_MODE_11GN;
-        } else
-#endif
         {
             wnet_vif->vm_mac_mode = WIFINET_MODE_11BGN;
         }
@@ -1384,17 +1288,9 @@ void scan_next_chan(struct wifi_mac *wifimac)
     {
         struct net_device *dev = wnet_vif->vm_ndev;
 
-#ifdef CONFIG_P2P
-        DPRINTF(AML_DEBUG_SCAN, "%s vid:%d, next_chan_index = %d, chan=%d freq=%d, p2p_enable:%d\n", __func__,
-            wnet_vif->wnet_vif_id, ss->scan_next_chan_index, chan->chan_pri_num, chan->chan_cfreq1, wnet_vif->vm_p2p->p2p_enable);
-#else
         DPRINTF(AML_DEBUG_SCAN, "%s vid:%d, next_chan_index = %d, chan=%d freq=%d, p2p_enable:0\n", __func__,
             wnet_vif->wnet_vif_id, ss->scan_next_chan_index, chan->chan_pri_num, chan->chan_cfreq1);
-#endif
 
-#ifdef CONFIG_P2P
-        if (!wnet_vif->vm_p2p->p2p_enable)
-#endif
         {
             for (i = 0; i < send_packet_num; i++)
                 wifi_mac_send_probereq(wnet_vif->vm_mainsta, wnet_vif->vm_myaddr, dev->broadcast,
@@ -1410,7 +1306,6 @@ void scan_next_chan(struct wifi_mac *wifimac)
 
     DPRINTF(AML_DEBUG_SCAN, "%s OS_SET_TIMER = %d next_chn\n", __func__, ss->scan_chan_wait);
 }
-
 
 static int wifi_mac_scan_buff_and_chk_tx(struct wifi_mac *wifimac)
 {
@@ -1440,7 +1335,6 @@ static int wifi_mac_scan_buff_and_chk_tx(struct wifi_mac *wifimac)
     }
 }
 
-
 static void wifi_mac_scan_notify_ap(struct wifi_mac *wifimac)
 {
     struct wlan_net_vif *tmpwnet_vif = NULL, *tmpwnet_vif_next = NULL;
@@ -1456,7 +1350,6 @@ static void wifi_mac_scan_notify_ap(struct wifi_mac *wifimac)
     }
 }
 
-
 static void wifi_mac_scan_timeout(SYS_TYPE param1,SYS_TYPE param2,
     SYS_TYPE param3,SYS_TYPE param4,SYS_TYPE param5)
 {
@@ -1469,7 +1362,6 @@ static void wifi_mac_scan_timeout(SYS_TYPE param1,SYS_TYPE param2,
 
     os_timer_ex_cancel(&ss->ss_scan_timer, CANCEL_SLEEP);
 
-    //check replayer count
     if (wifimac->wm_scanplayercnt != (unsigned long)param5) {
         DPRINTF(AML_DEBUG_WARNING, "%s wm_scanplayercnt %ld, ignore... \n", __func__, wifimac->wm_scanplayercnt);
         return;
@@ -1480,9 +1372,7 @@ static void wifi_mac_scan_timeout(SYS_TYPE param1,SYS_TYPE param2,
         WIFI_SCAN_LOCK(ss);
         ss->scan_StateFlags |= SCANSTATE_F_CANCEL;
         WIFI_SCAN_UNLOCK(ss);
-        /* vm_mainsta is NULL: station state is invalid, abort immediately to
-         * prevent use-after-free when wifi_mac_end_scan -> wifi_mac_connect
-         * tries to allocate a new sta node against a torn-down interface. */
+        
         goto end;
     }
 
@@ -1520,7 +1410,6 @@ static void wifi_mac_scan_timeout(SYS_TYPE param1,SYS_TYPE param2,
         }
     }
 
-    //pr_debug("%s, ss->scan_StateFlags:%08x, scandone:%d, need_notify_ap:%d\n", __func__, ss->scan_StateFlags, scandone, need_notify_ap);
     if (atomic_read(&wifimac->wm_nrunning) != 0) {
         if (ss->scan_StateFlags & SCANSTATE_F_RESTORE) {
             wifi_mac_restore_wnet_vif_channel(wnet_vif);
@@ -1560,7 +1449,7 @@ static void wifi_mac_scan_timeout(SYS_TYPE param1,SYS_TYPE param2,
                     }
                 }
             } else {
-                //add NOA in the near future
+                
             }
         }
     }
@@ -1601,14 +1490,11 @@ static void scan_timeout_work(struct work_struct *work)
                           (SYS_TYPE)wifimac->wm_scanplayercnt);
 }
 
-
 int wifi_mac_scan_timeout_ex(void *arg)
 {
     struct wifi_mac_scan_state *ss = (struct wifi_mac_scan_state *) arg;
     struct wlan_net_vif *wnet_vif = ss->VMacPriv;
     struct wifi_mac *wifimac = wnet_vif->vm_wmac;
-
-    //pr_debug("%s, ss->scan_StateFlags:%08x\n", __func__, ss->scan_StateFlags);
 
     WIFI_SCAN_LOCK(ss);
     if (ss->scan_StateFlags & SCANSTATE_F_WAIT_TBTT) {
@@ -1631,17 +1517,7 @@ int wifi_mac_scan_timeout_ex(void *arg)
         wifi_mac_add_work_task(wifimac, wifi_mac_scan_timeout, NULL,
            (SYS_TYPE)arg, (SYS_TYPE)wnet_vif, 0, 0, (SYS_TYPE)wifimac->wm_scanplayercnt);
     } else {
-       /* If 'work_thread' is NULL, this means that we are
-        * during module unloading process. Threads are killed,
-        * but we need to execute callback 'wifi_mac_scan_timeout',
-        * so use system workqueue to do that.
-        * May be we can avoid using workqueue approach, but just
-        * call 'wifi_mac_scan_timeout' here in current context,
-        * but it requires more synchronization with scan timer,
-        * scheduling because current function is also timer callback
-        * thus called in softirq context, while 'wifi_mac_scan_timeout'
-        * may sleep.
-        */
+       
         schedule_work(&ss->timeout_work);
     }
 
@@ -1658,7 +1534,6 @@ int wifi_mac_scan_abort_ex(void *arg)
     struct wifi_mac_scan_state *ss = (struct wifi_mac_scan_state *) arg;
     struct wlan_net_vif *wnet_vif = ss->VMacPriv;
     struct wifi_mac *wifimac = wnet_vif->vm_wmac;
-
 
     if (wifimac->wm_flags & WIFINET_F_SCAN)
     {
@@ -1707,7 +1582,6 @@ scan_start_task(SYS_TYPE param1,SYS_TYPE param2,
     wifimac->drv_priv->stop_noa_flag = 0;
     wifi_mac_scan_start(wifimac);
 
-    //set up scan channel index to 0
     ss->scan_next_chan_index = 0;
     pr_debug("%s wm_nrunning:%d\n", __func__, atomic_read(&wifimac->wm_nrunning));
     os_timer_ex_start_period(&ss->ss_scan_abort_timer, WIFINET_SCAN_ABORT_TIME);
@@ -1771,24 +1645,6 @@ void wifi_mac_end_scan( struct wifi_mac_scan_state *ss)
     DPRINTF(AML_DEBUG_SCAN, "%s chan_index = %d ,scan_CfgFlags 0x%x, atomic_read(&wifimac->wm_nrunning) is:%d\n",
         __func__, ss->scan_next_chan_index, ss->scan_CfgFlags, atomic_read(&wifimac->wm_nrunning));
 
-#ifdef CONFIG_P2P
-    if (atomic_read(&wifimac->wm_nrunning) == 1) {
-        struct wlan_net_vif *connect_wnet = wifi_mac_running_wnet_vif(wifimac);
-        if (connect_wnet->vm_opmode == WIFINET_M_HOSTAP &&
-            connect_wnet->vm_p2p->noa_app_ie[WIFINET_APPIE_FRAME_BEACON].length &&
-            connect_wnet->vm_p2p->p2p_enable == 1) {
-            pr_debug("%s,%d, clear noa ie\n", __func__, __LINE__);
-            connect_wnet->vm_p2p->ap_mode_set_noa_enable = 0;
-            wifi_mac_rm_app_ie(&connect_wnet->vm_p2p->noa_app_ie[WIFINET_APPIE_FRAME_BEACON]);
-            vm_p2p_update_beacon_app_ie(connect_wnet);
-            wifimac->drv_priv->stop_noa_flag = 1;
-            if (P2P_NoA_START_FLAG(connect_wnet->vm_p2p->HiP2pNoaCountNow)) {
-                p2p_noa_start_irq(connect_wnet->vm_p2p, wifimac->drv_priv);
-            }
-            connect_wnet->vm_p2p->HiP2pNoaCountNow = 0;
-        }
-    } else
-#endif
     {
         wifimac->drv_priv->stop_noa_flag = 0;
     }
@@ -1797,13 +1653,11 @@ void wifi_mac_end_scan( struct wifi_mac_scan_state *ss)
     wifimac->wm_lastscan = jiffies;
     ss->scan_StateFlags = 0;
 
-    /* restore mac mode after scanning */
     if (wnet_vif->vm_mainsta) {
         wnet_vif->vm_mac_mode = wnet_vif->vm_mainsta->sta_bssmode;
         wifi_mac_set_legacy_rates(&wnet_vif->vm_legacy_rates, wnet_vif);
     }
 
-    /*if in roaming mode ,check if can roaming*/
     if (wnet_vif->vm_mainsta != NULL && wnet_vif->vm_chan_roaming_scan_flag) {
         struct scaninfo_entry *best_node = &wnet_vif->vm_connect_scan_entry;
 
@@ -1823,9 +1677,7 @@ void wifi_mac_end_scan( struct wifi_mac_scan_state *ss)
        && (wnet_vif->vm_opmode != WIFINET_M_P2P_GO)
        && (wnet_vif->vm_opmode != WIFINET_M_WDS)
        && (wnet_vif->vm_opmode != WIFINET_M_MONITOR)) {
-        /* Do not attempt to connect if scan was cancelled due to invalid
-         * interface state (e.g. vm_mainsta freed). Proceeding would cause
-         * a use-after-free in wifi_mac_connect -> wifi_mac_get_new_sta_node. */
+        
         if (ss->scan_StateFlags & SCANSTATE_F_CANCEL) {
             DPRINTF(AML_DEBUG_WARNING, "%s scan was cancelled, skip connect\n", __func__);
         } else if (wifi_mac_scan_connect(ss, wnet_vif)) {
@@ -1847,8 +1699,6 @@ void wifi_mac_end_scan( struct wifi_mac_scan_state *ss)
         }
     }
 
-    /*upload scanning result and notify scanning done to upper
-    after processing scan result. */
     if (ss->scan_CfgFlags & WIFINET_SCANCFG_USERREQ && !find_roaming_node) {
         wifi_mac_notify_scan_done(wnet_vif);
         ss->scan_CfgFlags &= (~WIFINET_SCANCFG_USERREQ);
@@ -1870,7 +1720,7 @@ void wifi_mac_end_scan( struct wifi_mac_scan_state *ss)
     wifimac->wm_p2p_connection_protect = 0;
     wnet_vif->vm_pstxqueue_flags &= ~WIFINET_PSQUEUE_PS4QUIET;
     wnet_vif->vm_scan_before_connect_flag = 0;
-    //clear saved_ssids
+    
     ss->ss_nssid = 0;
     memset(ss->ss_ssid,0,sizeof(ss->ss_ssid));
     if (wnet_vif->vm_chan_switch_scan_flag) {
@@ -1882,7 +1732,6 @@ void wifi_mac_end_scan( struct wifi_mac_scan_state *ss)
         }
     }
 
-    /*scan in roaming candidate channels 2 times,and full scan 2 times*/
     if (wnet_vif->vm_chan_roaming_scan_flag && !find_roaming_node) {
         wnet_vif->vm_chan_roaming_scan_count++;
         if (wnet_vif->vm_wmac->wm_scan->roaming_full_scan == 0) {
@@ -1929,7 +1778,6 @@ void wifi_mac_notify_ap_success(struct wlan_net_vif *wnet_vif) {
 
     DPRINTF(AML_DEBUG_SCAN, "%s vid:%d\n", __func__, wnet_vif->wnet_vif_id);
 
-    //scan branch
     if ((atomic_read(&wifimac->wm_nrunning) > 0) && (wifimac->wm_flags & WIFINET_F_SCAN)
         && (wifimac->wm_scan->scan_StateFlags & SCANSTATE_F_NOTIFY_AP)) {
         if (drv_priv->hal_priv->hal_ops.hal_tx_empty()) {
@@ -1942,48 +1790,19 @@ void wifi_mac_notify_ap_success(struct wlan_net_vif *wnet_vif) {
         }
     }
 
-#ifdef CONFIG_P2P
-    //p2p branch
-    if ((atomic_read(&wifimac->wm_nrunning) == 1)
-        && p2p_vmac != NULL
-        && p2p_vmac->vm_p2p != NULL
-        && (p2p_vmac->vm_p2p->p2p_flag & P2P_WAIT_SWITCH_CHANNEL)) {
-        if (drv_priv->hal_priv->hal_ops.hal_tx_empty()) {
-            wifi_mac_ChangeChannel(wifimac, p2p_vmac->vm_p2p->work_channel, 0, p2p_vmac->wnet_vif_id, p2p_vmac->vm_opmode);
-            p2p_vmac->vm_p2p->p2p_flag &= ~P2P_WAIT_SWITCH_CHANNEL;
-        } else {
-            //pr_debug("still have pkt in hal, wait\n");
-            p2p_vmac->vm_p2p->p2p_flag &= ~P2P_WAIT_SWITCH_CHANNEL;
-            p2p_vmac->vm_p2p->p2p_flag |= P2P_ALLOW_SWITCH_CHANNEL;
-        }
-    }
-#endif
-
     if ((atomic_read(&wifimac->wm_nrunning) > 0)
         && (sta_vmac->vm_flags_ext2 & WIFINET_FEXT2_SWITCH_CHANNEL)) {
         if (drv_priv->hal_priv->hal_ops.hal_tx_empty()) {
             wifi_mac_ChangeChannel(wifimac, sta_vmac->vm_remainonchan, 0, sta_vmac->wnet_vif_id, sta_vmac->vm_opmode);
             sta_vmac->vm_flags_ext2 &= ~WIFINET_FEXT2_SWITCH_CHANNEL;
         } else {
-            //pr_debug("still have pkt in hal, wait\n");
+            
             sta_vmac->vm_flags_ext2 &= ~WIFINET_FEXT2_SWITCH_CHANNEL;
             sta_vmac->vm_flags_ext2 |= WIFINET_FEXT2_ALLOW_SWITCH_CHANNEL;
         }
     }
 
-    //vsdb channel switch branch
     if (atomic_read(&wifimac->wm_nrunning) == 2) {
-        #ifdef  CONFIG_CONCURRENT_MODE
-            if (wifimac->wm_vsdb_flags & CONCURRENT_NOTIFY_AP) {
-                wifimac->wm_vsdb_flags &= ~CONCURRENT_NOTIFY_AP;
-                if (drv_priv->hal_priv->hal_ops.hal_tx_empty()) {
-                    concurrent_vsdb_do_channel_change(wifimac);
-                } else {
-                    //pr_debug("still have pkt in hal, wait\n");
-                    wifimac->wm_vsdb_flags |= CONCURRENT_NOTIFY_AP_SUCCESS;
-                }
-            }
-        #endif
     }
 }
 
@@ -2006,19 +1825,6 @@ void wifi_mac_notify_pkt_clear(struct wifi_mac *wifimac) {
         }
     }
 
-#ifdef CONFIG_P2P
-    //p2p branch
-    if ((atomic_read(&wifimac->wm_nrunning) == 1)
-        && p2p_vmac != NULL
-        && p2p_vmac->vm_p2p != NULL
-        && (p2p_vmac->vm_p2p->p2p_flag & P2P_ALLOW_SWITCH_CHANNEL)) {
-        if (drv_priv->hal_priv->hal_ops.hal_tx_empty()) {
-            wifi_mac_ChangeChannel(wifimac, p2p_vmac->vm_p2p->work_channel, 0, p2p_vmac->wnet_vif_id, p2p_vmac->vm_opmode);
-            p2p_vmac->vm_p2p->p2p_flag &= ~P2P_ALLOW_SWITCH_CHANNEL;
-        }
-    }
-#endif
-
     if ((atomic_read(&wifimac->wm_nrunning) > 0)
         && (sta_vmac->vm_flags_ext2 & WIFINET_FEXT2_ALLOW_SWITCH_CHANNEL)) {
         if (drv_priv->hal_priv->hal_ops.hal_tx_empty()) {
@@ -2028,29 +1834,19 @@ void wifi_mac_notify_pkt_clear(struct wifi_mac *wifimac) {
     }
 
     if (atomic_read(&wifimac->wm_nrunning) == 2) {
-        #ifdef  CONFIG_CONCURRENT_MODE
-            if ((wifimac->wm_vsdb_flags & CONCURRENT_NOTIFY_AP_SUCCESS)
-                 || (wifimac->wm_vsdb_flags & CONCURRENT_AP_SWITCH_CHANNEL)) {
-                if (drv_priv->hal_priv->hal_ops.hal_tx_empty()) {
-                    concurrent_vsdb_do_channel_change(wifimac);
-                }
-            }
-        #endif
     }
 }
 
 void wifi_mac_cancel_scan(struct wifi_mac *wifimac)
 {
     struct wifi_mac_scan_state *ss = wifimac->wm_scan;
-//    DPRINTF(AML_DEBUG_SCAN, "<%s> :  %s %d ++ vm_opmode %d\n",
-//        wnet_vif->vm_ndev->name,__func__,__LINE__,wnet_vif->vm_opmode);
 
     if (wifimac->wm_flags & WIFINET_F_SCAN)
     {
         WIFI_SCAN_LOCK(ss);
         ss->scan_StateFlags |= SCANSTATE_F_CANCEL;
         WIFI_SCAN_UNLOCK(ss);
-//        pr_debug("<running> %s %d wnet_vif_id = %d\n",__func__,__LINE__,wnet_vif->wnet_vif_id);
+
         if (ss->scan_StateFlags & SCANSTATE_F_START)
         {
             os_timer_ex_cancel(&wifimac->wm_scan->ss_scan_timer, 1);
@@ -2061,11 +1857,7 @@ void wifi_mac_cancel_scan(struct wifi_mac *wifimac)
 
 int vm_is_p2p_connect_scan(struct wlan_net_vif *wnet_vif, struct cfg80211_scan_request *request)
 {
-#ifdef CONFIG_P2P
-    return (request->n_channels == 1 && !wnet_vif->vm_scan_before_connect_flag && wnet_vif->vm_p2p_support);
-#else
     return 0;
-#endif
 }
 
 int vm_scan_user_set_chan(struct wlan_net_vif *wnet_vif,
@@ -2092,13 +1884,6 @@ int vm_scan_user_set_chan(struct wlan_net_vif *wnet_vif,
             }
 
             if (c->chan_bw == WIFINET_BWC_WIDTH20) {
-#ifdef CONFIG_P2P
-                if (wnet_vif->vm_p2p_support && wnet_vif->vm_p2p->social_channel) {
-                    if ((c->chan_cfreq1 != SOCIAL_CHAN_1) && (c->chan_cfreq1 != SOCIAL_CHAN_2) && (c->chan_cfreq1 != SOCIAL_CHAN_3)) {
-                        continue;
-                    }
-                }
-#endif
 
                 if (c->chan_cfreq1 != request->channels[j]->center_freq) {
                     continue;
@@ -2128,7 +1913,7 @@ int vm_scan_user_set_chan(struct wlan_net_vif *wnet_vif,
 
 static int wifi_mac_scan_before_connect(struct wifi_mac_scan_state *ss, struct wlan_net_vif *wnet_vif, int flags)
 {
-    /* if roaming find node to connect ,don't scan*/
+    
     if (wnet_vif->vm_connect_scan_entry.se_valid) {
         wifi_mac_connect(wnet_vif, &wnet_vif->vm_connect_scan_entry.scaninfo);
         wnet_vif->vm_connect_scan_entry.se_valid = 0;
@@ -2139,6 +1924,15 @@ static int wifi_mac_scan_before_connect(struct wifi_mac_scan_state *ss, struct w
          pr_err("%s not found bss in former scan results\n", __func__);
 
     } else {
+        if ((wnet_vif->vm_flags & WIFINET_F_DESBSSID) &&
+            wnet_vif->vm_connect_scan_entry.se_valid) {
+            pr_info("W522A: scan-before-connect: direct attach to pinned BSSID %s\n",
+                ether_sprintf(wnet_vif->vm_connect_scan_entry.scaninfo.SI_bssid));
+            wifi_mac_connect(wnet_vif,
+                &wnet_vif->vm_connect_scan_entry.scaninfo);
+            wnet_vif->vm_connect_scan_entry.se_valid = 0;
+            return 1;
+        }
         wnet_vif->vm_scan_before_connect_flag = 1;
     }
 
@@ -2168,16 +1962,18 @@ int wifi_mac_start_scan(struct wlan_net_vif *wnet_vif, int flags,
         return 0;
     } else if ((wnet_vif->vm_opmode == WIFINET_M_HOSTAP) &&
                (READ_ONCE(wnet_vif->vm_state) == WIFINET_S_CONNECTED)) {
-        pr_info_ratelimited("v15f scan: drop in HOSTAP CONNECTED vid=%d\n", wnet_vif->wnet_vif_id);
+        pr_info_ratelimited("W522A: scan: drop in HOSTAP CONNECTED vid=%d\n", wnet_vif->wnet_vif_id);
+        return 0;
+    } else if ((wnet_vif->vm_opmode == WIFINET_M_STA) &&
+               (READ_ONCE(wnet_vif->vm_state) == WIFINET_S_CONNECTED) &&
+               ((flags & (WIFINET_SCANCFG_USERREQ | WIFINET_SCANCFG_NOPICK)) ==
+                (WIFINET_SCANCFG_USERREQ | WIFINET_SCANCFG_NOPICK)) &&
+               !(flags & (WIFINET_SCANCFG_CONNECT | WIFINET_SCANCFG_FORCE))) {
+        
+        pr_info_ratelimited("W522A: scan: drop connected STA user scan vid=%d flags=0x%x\n",
+            wnet_vif->wnet_vif_id, flags);
         return 0;
     }
-
-#ifdef CONFIG_P2P
-    if ((wifimac->wm_flags & WIFINET_F_NOSCAN) && (wnet_vif->vm_p2p->p2p_enable == 0)) {
-        DPRINTF(AML_DEBUG_WARNING, "%s %d  not allow start scan beacon p2p_enable!!!!! \n", __func__,__LINE__);
-        return 0;
-    }
-#endif//CONFIG_P2P
 
     wifi_mac_save_ssid(wnet_vif, ss, nssid, ssids);
     if (ss->scan_CfgFlags & WIFINET_SCANCFG_CONNECT) {
@@ -2208,7 +2004,6 @@ int wifi_mac_start_scan(struct wlan_net_vif *wnet_vif, int flags,
     ss->scan_CfgFlags |= (flags & WIFINET_SCANCFG_MASK);
     wifi_mac_pwrsave_wakeup_for_tx(wnet_vif);
 
-    //if opmode is AP or monitor ,we not need connect bss at scan end
     if ((wnet_vif->vm_opmode != WIFINET_M_IBSS) && (wnet_vif->vm_opmode != WIFINET_M_STA)) {
         ss->scan_CfgFlags |= WIFINET_SCANCFG_NOPICK;
     }
@@ -2368,7 +2163,7 @@ void wifi_mac_process_tx_error(struct wlan_net_vif *wnet_vif)
     int cnt = 0;
 
     AML_OUTPUT("process tx error\n");
-    // make sure scan cmd download to fw and reset phy/mac
+    
     if (wifimac->wm_flags & WIFINET_F_SCAN) {
         OS_SPIN_LOCK(&pwdev_priv->scan_req_lock);
         if (pwdev_priv->scan_request != NULL) {
@@ -2378,7 +2173,7 @@ void wifi_mac_process_tx_error(struct wlan_net_vif *wnet_vif)
         OS_SPIN_UNLOCK(&pwdev_priv->scan_req_lock);
 
         wifi_mac_cancel_scan(wifimac);
-        /* waiting for completing scan process */
+        
         while (wifimac->wm_flags & WIFINET_F_SCAN) {
             msleep(20);
             if (cnt++ > 20) {
@@ -2440,4 +2235,3 @@ wifi_mac_connect_get_target_chan(struct wifi_mac_scan_state *ss, struct wlan_net
 
     return target_chan;
 }
-

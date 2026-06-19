@@ -1,16 +1,4 @@
-/*
- ****************************************************************************************
- *
- * Copyright (C) Amlogic 2010-2018
- *
- * Project: 11BGNAC 80211 mac  layer Software
- *
- * Description:
- *     wifi_mac layer power save  interface module
- *
- *
- ****************************************************************************************
- */
+
 #include "wifi_mac_com.h"
 #include "wifi_drv_main.h"
 
@@ -22,7 +10,6 @@ static char *ips_wakeup_reason[WAKEUP_REASON_MAX];
 
 char *ips_state[WIFINET_PWRSAVE_STATE_MAX];
 
-//sleep timer handler, to check if need to enter sleep
 static void wifi_mac_pwrsave_presleep(struct work_struct *work)
 {
     struct wifi_mac_pwrsave_t *ps = NULL;
@@ -49,13 +36,7 @@ static void wifi_mac_pwrsave_presleep(struct work_struct *work)
         os_timer_ex_start(&wnet_vif->vm_pwrsave.ips_timer_presleep);
         return;
     }
-    //if conditions are stratified, will enter presleep. conditions must include:
-    //a, ips_inactivitytime enough
-    //b, not in WIFINET_PSQUEUE_PS4QUIET (mean fake powersave)
-    //c, not in scan
-    //d, not in listen (for p2p)
-    //e, prestate is WIFINET_PWRSAVE_AWAKE
-    //f, all queues have been sent completed
+    
     WIFINET_PWRSAVE_LOCK(wnet_vif);
     if (((wnet_vif->vm_pstxqueue_flags & WIFINET_PSQUEUE_PS4QUIET) == 0)
          && ((wifimac->wm_flags & WIFINET_F_SCAN) == 0)
@@ -70,8 +51,7 @@ static void wifi_mac_pwrsave_presleep(struct work_struct *work)
         WIFINET_PWRSAVE_UNLOCK(wnet_vif);
         if ((wnet_vif->vm_opmode == WIFINET_M_STA) && (READ_ONCE(wnet_vif->vm_state) == WIFINET_S_CONNECTED))
         {
-            //if sta is connected, then send nulldata with ps=1, and set flag for tx_completed
-            //when tx_completed, will enter sleep
+            
             DPRINTF(AML_DEBUG_PWR_SAVE, "%s %d send nulldata to sleep\n",__func__,__LINE__);
             wifi_mac_pwrsave_send_nulldata(wnet_vif->vm_mainsta, NULLDATA_PS, 1);
         }
@@ -79,7 +59,7 @@ static void wifi_mac_pwrsave_presleep(struct work_struct *work)
         {
             if (wnet_vif->vm_opmode != WIFINET_M_HOSTAP)
             {
-                //if sta is disconnected, just sleep
+                
                 DPRINTF(AML_DEBUG_PWR_SAVE, "%s %d disconnect, full sleep \n",__func__,__LINE__);
                 wifi_mac_pwrsave_fullsleep(wnet_vif, SLEEP_AFTER_INACTIVITY_ENOUGH);
             }
@@ -117,20 +97,13 @@ static void  wifi_mac_pwrsave_wakeup_ex(SYS_TYPE param1,
 
     if ((wnet_vif->vm_opmode == WIFINET_M_STA) && (READ_ONCE(wnet_vif->vm_state) == WIFINET_S_CONNECTED))
     {
-#ifdef CONFIG_P2P
-        if (wnet_vif->vm_p2p->p2p_flag & P2P_OPPPS_START_FLAG_HI)
-        {
-            vm_p2p_client_cancel_opps(wnet_vif->vm_p2p);
-        }
-#endif
     }
 }
 
 void wifi_mac_pwrsave_wakeup_for_tx (struct wlan_net_vif *wnet_vif)
 {
     struct wifi_mac *wifimac = wnet_vif->vm_wmac;
-    /* OPT: if already in STA connected context, call directly to avoid
-     * extra workqueue dispatch latency (~1-2ms on SDIO). */
+    
     if ((wnet_vif->vm_opmode == WIFINET_M_STA) &&
         (READ_ONCE(wnet_vif->vm_state) == WIFINET_S_CONNECTED)) {
         wifi_mac_pwrsave_sleep_wait_cancel(wnet_vif);
@@ -158,14 +131,6 @@ void wifi_mac_pwrsave_restore_sleep(struct wlan_net_vif *wnet_vif)
         WIFINET_PWRSAVE_UNLOCK(wnet_vif);
         DPRINTF(AML_DEBUG_PWR_SAVE,"%s %d <%s> reason=%s\n",__func__,__LINE__,
                 VMAC_DEV_NAME(wnet_vif),ips_sleep_reason[wnet_vif->vm_pwrsave.ips_sleep_wait_reason]);
-#ifdef CONFIG_P2P
-        if ((wnet_vif->vm_pwrsave.ips_sleep_wait_reason == SLEEP_AFTER_PS_TRIGGER_TIMEOUT)
-            && (wnet_vif->vm_p2p->p2p_flag & P2P_OPPPS_CWEND_FLAG_HI))
-        {
-            wifimac->drv_priv->drv_ops.drv_p2p_client_opps_cwend_may_sleep(wnet_vif);
-        }
-        else
-#endif
         {
             if (wifi_mac_all_txq_all_qcnt(wifimac) == 0)
             {
@@ -303,7 +268,6 @@ int wifi_mac_pwrsave_networksleep (struct wlan_net_vif *wnet_vif,
     return status;
 }
 
-
 int wifi_mac_pwrsave_fullsleep(struct wlan_net_vif *wnet_vif, 
     enum wifinet_ps_sleep_reason reason)
 {
@@ -311,6 +275,7 @@ int wifi_mac_pwrsave_fullsleep(struct wlan_net_vif *wnet_vif,
     struct drv_private *drv_priv = drv_get_drv_priv();
     DPRINTF(AML_DEBUG_PWR_SAVE, "<%s>%s %d reason=%s\n",
         VMAC_DEV_NAME(wnet_vif), __func__,__LINE__, ips_sleep_reason[reason]);
+    
     if (drv_priv != NULL &&
         drv_priv->drv_config.cfg_disable_fw_sleep &&
         wnet_vif->vm_opmode == WIFINET_M_STA)
@@ -320,7 +285,6 @@ int wifi_mac_pwrsave_fullsleep(struct wlan_net_vif *wnet_vif,
     status = wifi_mac_pwrsave_set_state(wnet_vif, WIFINET_PWRSAVE_FULL_SLEEP);
     return status;
 }
-
 
 int wifi_mac_pwrsave_wakeup(struct wlan_net_vif *wnet_vif,
     enum wifinet_ps_wk_reason reason)
@@ -339,18 +303,11 @@ int wifi_mac_pwrsave_wkup_and_NtfyAp (struct wlan_net_vif *wnet_vif,
         VMAC_DEV_NAME(wnet_vif), __func__,__LINE__, ips_wakeup_reason[reason]);
     wifi_mac_pwrsave_wakeup(wnet_vif, reason);
 
-    //fix exception:send null data exit ps, in case no pkt back, restart timer here.
     os_timer_ex_start(&wnet_vif->vm_pwrsave.ips_timer_presleep);
 
     if ((wnet_vif->vm_opmode == WIFINET_M_STA) && (READ_ONCE(wnet_vif->vm_state) == WIFINET_S_CONNECTED))
     {
         wifi_mac_pwrsave_send_nulldata(wnet_vif->vm_mainsta, NULLDATA_NONPS, 1);
-#ifdef CONFIG_P2P
-        if (wnet_vif->vm_p2p->p2p_flag & P2P_OPPPS_START_FLAG_HI)
-        {
-            vm_p2p_client_cancel_opps(wnet_vif->vm_p2p);
-        }
-#endif
     }
     return 0;
 }
@@ -368,9 +325,6 @@ void wifi_mac_pwrsave_set_mode(struct wlan_net_vif *wnet_vif, unsigned int mode)
     {
         DPRINTF(AML_DEBUG_PWR_SAVE, "%s %d stop ips_timer_presleep\n",__func__,__LINE__);
         os_timer_ex_cancel(&wnet_vif->vm_pwrsave.ips_timer_presleep, CANCEL_SLEEP);
-#ifdef USER_UAPSD_TRIGGER
-        os_timer_ex_cancel(&(wnet_vif->vm_pwrsave.ips_timer_uapsd_trigger), CANCEL_NO_SLEEP);
-#endif
         wifi_mac_pwrsave_wkup_and_NtfyAp(wnet_vif, WKUP_FROM_PSMODE_EXIT);
     }
     else
@@ -396,7 +350,6 @@ void wifi_mac_pwrsave_set_mode(struct wlan_net_vif *wnet_vif, unsigned int mode)
             wifi_mac_beacon_sync(wifimac->drv_priv->wmac, wnet_vif->wnet_vif_id);
         }
 
-        /*previous state is WIFINET_PWRSAVE_NONE, we will start timer now. */
         if (wnet_vif->vm_pwrsave.ips_sta_psmode == WIFINET_PWRSAVE_NONE)
         {
             DPRINTF(AML_DEBUG_PWR_SAVE, "%s %d start ips_timer_presleep, ips_inactivitytime=%d\n",
@@ -411,7 +364,6 @@ void wifi_mac_pwrsave_wnet_vif_connect(struct wlan_net_vif *wnet_vif)
 {
     struct wifi_mac_pwrsave_t        *ps = &wnet_vif->vm_pwrsave;
 
-    //wifi_mac_pwrsave_wakeup(wnet_vif, WKUP_FROM_VMAC_CONNECT);
     WIFINET_PWRSAVE_LOCK(wnet_vif);
     ps->ips_ps_waitbeacon_timeout = WIFINET_PWRSAVE_WAITBEACON_TIMER_INTERVAL;
     ps->ips_ps_trigger_timeout = WIFINET_PWRSAVE_PSTRIGGER_TIMER_INTERVAL;
@@ -425,35 +377,11 @@ void wifi_mac_pwrsave_wnet_vif_disconnect(struct wlan_net_vif *wnet_vif)
 {
     struct wifi_mac_pwrsave_t  *ps = &wnet_vif->vm_pwrsave;
     
-#ifdef CONFIG_P2P
-    union type_ctw_opps_u ctw_opps_u;
-    struct p2p_noa noa;
-#endif
-
-    //wifi_mac_pwrsave_wakeup(wnet_vif, WKUP_FROM_VMAC_DISCONNECT);
-
-#ifdef CONFIG_P2P
-    if (wnet_vif->vm_opmode==WIFINET_M_STA)
-    {
-        struct wifi_mac_p2p *p2p = wnet_vif->vm_p2p;
-        if (p2p->p2p_flag & P2P_OPPPS_START_FLAG_HI)
-        {
-            memset(&ctw_opps_u, 0 , sizeof(union type_ctw_opps_u));
-            vm_p2p_opps_start(p2p, &ctw_opps_u);
-        }
-        if (p2p->p2p_flag & P2P_NOA_START_FLAG_HI)
-        {
-            memset(&noa, 0 , sizeof(struct p2p_noa));
-            vm_p2p_noa_start(p2p, &noa);
-        }
-    }
-#endif
-
     WIFINET_PWRSAVE_LOCK(wnet_vif);
     ps->ips_ps_trigger_timeout = 0;
     ps->ips_ps_waitbeacon_timeout   = 0;
     WIFINET_PWRSAVE_UNLOCK(wnet_vif);
-    //os_timer_ex_start_period(&wnet_vif->vm_pwrsave.ips_timer_presleep, wnet_vif->vm_pwrsave.ips_inactivitytime);
+    
 }
 
 void wifi_mac_pwrsave_attach(void)
@@ -471,7 +399,7 @@ void wifi_mac_pwrsave_vattach(struct wlan_net_vif *wnet_vif)
 
     DPRINTF(AML_DEBUG_PWR_SAVE, "%s %d <%s>\n", __func__,__LINE__, VMAC_DEV_NAME(wnet_vif));
 
-    wnet_vif->vif_ops.vm_set_tim = NULL;    //lg
+    wnet_vif->vif_ops.vm_set_tim = NULL;    
     if (wnet_vif->vm_opmode == WIFINET_M_HOSTAP ||
         wnet_vif->vm_opmode == WIFINET_M_IBSS)
     {
@@ -480,7 +408,7 @@ void wifi_mac_pwrsave_vattach(struct wlan_net_vif *wnet_vif)
 
     ps->ips_inactivitytime = WIFINET_PWRSAVE_TIMER_INTERVAL;
     ps->ips_sta_psmode = WIFINET_PWRSAVE_NONE;
-    /*default value,  vo,vi support delivery-trigger enable, Max SP bit5bi6 = 0, receive all BUs from AP */
+    
     wnet_vif->vm_uapsdinfo = WME_CAPINFO_UAPSD_VO | WME_CAPINFO_UAPSD_VI;
     ps->ips_state = WIFINET_PWRSAVE_AWAKE;
 
@@ -488,10 +416,6 @@ void wifi_mac_pwrsave_vattach(struct wlan_net_vif *wnet_vif)
                            wifi_mac_pwrsave_sleep_timer, wnet_vif);
     os_timer_ex_initialize(&ps->ips_timer_sleep_wait, 0,
                            wifi_mac_pwrsave_sleep_wait, wnet_vif);
-#ifdef USER_UAPSD_TRIGGER
-    os_timer_ex_initialize(&ps->ips_timer_uapsd_trigger, 30 /*30 ms */,
-                           wifi_mac_pwrsave_sta_uapsd_trigger, wnet_vif);
-#endif
     ps->ips_sleep_wait_reason = SLEEP_NONE;
     ps->ips_ps_trigger_timeout = 0;
     ps->ips_ps_waitbeacon_timeout  = 0;
@@ -510,7 +434,6 @@ void wifi_mac_pwrsave_vattach(struct wlan_net_vif *wnet_vif)
             __func__,__LINE__, WIFINET_PWRSAVE_TIMER_INTERVAL);
 }
 
-//cb for vmac created end
 void wifi_mac_pwrsave_latevattach(struct wlan_net_vif *wnet_vif)
 {
     DPRINTF(AML_DEBUG_PWR_SAVE, "%s %d <%s>\n", __func__,__LINE__, VMAC_DEV_NAME(wnet_vif));
@@ -527,10 +450,14 @@ void wifi_mac_pwrsave_latevattach(struct wlan_net_vif *wnet_vif)
         }
         wnet_vif->vm_ps_pending = 0;
 
-        /* wlan0 change STA mode to HOSTAP, need wake up */
         if (wnet_vif->vm_opmode == WIFINET_M_HOSTAP)
         {
-            wnet_vif->vm_pwrsave.ips_sta_psmode = WIFINET_PWRSAVE_LOW;
+            /* AP interface must stay fully awake (NONE) — any power-save
+             * mode here delays beacon delivery and increases client latency.
+             * WIFINET_PWRSAVE_LOW was set here historically but it is wrong
+             * for a HOSTAP vif: the power-save state machine ignores most
+             * transitions when ips_sta_psmode == NONE, so this is safe. */
+            wnet_vif->vm_pwrsave.ips_sta_psmode = WIFINET_PWRSAVE_NONE;
             wifi_mac_pwrsave_wakeup(wnet_vif, WKUP_FROM_VMAC_UP);
         }
         return;
@@ -552,7 +479,7 @@ void wifi_mac_pwrsave_detach(void)
 void wifi_mac_pwrsave_vdetach(struct wlan_net_vif *wnet_vif)
 {
     DPRINTF(AML_DEBUG_PWR_SAVE, "%s %d <%s>\n", __func__,__LINE__, VMAC_DEV_NAME(wnet_vif));
-    //wifi_mac_pwrsave_fullsleep(wnet_vif, SLEEP_AFTER_VMAC_DEL);
+    
     if (wnet_vif->vm_tim_bitmap != NULL)
     {
         FREE(wnet_vif->vm_tim_bitmap,"wnet_vif->vm_tim_bitmap");
@@ -567,16 +494,12 @@ void wifi_mac_pwrsave_vdetach(struct wlan_net_vif *wnet_vif)
     os_timer_ex_cancel(&wnet_vif->vm_pwrsave.ips_timer_sleep_wait, CANCEL_NO_SLEEP);
     os_timer_ex_del(&wnet_vif->vm_pwrsave.ips_timer_presleep, CANCEL_SLEEP);
     os_timer_ex_del(&wnet_vif->vm_pwrsave.ips_timer_sleep_wait, CANCEL_SLEEP);
-#ifdef USER_UAPSD_TRIGGER
-    os_timer_ex_del(&(wnet_vif->vm_pwrsave.ips_timer_uapsd_trigger), CANCEL_SLEEP);
-#endif
     wnet_vif->vm_pwrsave.ips_sleep_wait_reason = SLEEP_NONE;
     WIFINET_PWRSAVE_UNLOCK(wnet_vif);
     WIFINET_NODE_LOCK_DESTROY(&wnet_vif->vm_pwrsave);
     WIFINET_SAVEQ_DESTROY(&wnet_vif->vm_tx_buffer_queue);
 }
 
-//cb for mac created
 void wifi_mac_pwrsave_reason_init(void)
 {
     DPRINTF(AML_DEBUG_PWR_SAVE, "%s %d \n", __func__,__LINE__);
@@ -626,7 +549,6 @@ void wifi_mac_pwrsave_reason_init(void)
     ips_state[WIFINET_PWRSAVE_NETWORK_SLEEP] = "NETSLEEP";
 }
 
-/* sta operation functions  start */
 int wifi_mac_pwrsave_is_sta_sleeping (struct wlan_net_vif *wnet_vif)
 {
     WIFINET_PWRSAVE_LOCK(wnet_vif);
@@ -743,7 +665,6 @@ void wifi_mac_buffer_txq_flush(struct sk_buff_head *pstxqueue)
     return;
 }
 
-
 int wifi_mac_buffer_txq_enqueue (struct sk_buff_head *pstxqueue, struct sk_buff *skb)
 {
     WIFINET_SAVEQ_LOCK(pstxqueue);
@@ -759,7 +680,6 @@ int wifi_mac_forward_txq_enqueue (struct sk_buff_head *fwdtxqueue, struct sk_buf
     WIFINET_SAVEQ_UNLOCK(fwdtxqueue);
     return 0;
 }
-
 
 int wifi_mac_buffer_txq_send(struct sk_buff_head *txqueue)
 {
@@ -787,17 +707,6 @@ int wifi_mac_buffer_txq_send(struct sk_buff_head *txqueue)
     if (qlen_real == 0) {
         return qlen_real;
     }
-#ifdef  CONFIG_CONCURRENT_MODE
-    skb = WIFINET_SAVEQ_GET_TAIL(txqueue);
-    if (skb) {
-        sta = os_skb_get_nsta(skb);
-        wifimac = sta->sta_wmac;
-        if (wifimac->wm_vsdb_flags & CONCURRENT_CHANNEL_SWITCH) {
-            DPRINTF(AML_DEBUG_CONNECT, "%s, break due to channel switch,vif:%d\n", __func__,sta->wnet_vif_id);
-            return qlen_real;
-        }
-    }
-#endif
     while (qlen_real) {
         WIFINET_SAVEQ_LOCK(txqueue);
         WIFINET_SAVEQ_DEQUEUE(txqueue, skb, qlen_real);
@@ -828,7 +737,6 @@ int wifi_mac_buffer_txq_send_pre(struct wlan_net_vif *wnet_vif)
     return -1;
 }
 
-
 void wifi_mac_pwrsave_notify_txq_empty(struct wifi_mac *wifimac)
 {
 
@@ -841,7 +749,7 @@ int wifi_mac_pwrsave_send_nulldata(struct wifi_station *sta,
         return -1;
     }
 
-    wifi_mac_send_nulldata(sta, pwr_save, pwr_flag, 0/*qos*/, 0/*ac*/);
+    wifi_mac_send_nulldata(sta, pwr_save, pwr_flag, 0, 0);
     return 0;
 }
 
@@ -964,7 +872,6 @@ void wifi_mac_pwrsave_sta_trigger (struct wlan_net_vif *wnet_vif)
     }
 }
 
-
 void
 wifi_mac_pwrsave_proc_tim(struct wlan_net_vif *wnet_vif)
 {
@@ -974,7 +881,7 @@ wifi_mac_pwrsave_proc_tim(struct wlan_net_vif *wnet_vif)
     if (wnet_vif->vm_pwrsave.ips_state == WIFINET_PWRSAVE_AWAKE)
     {
         WIFINET_PWRSAVE_UNLOCK(wnet_vif);
-        //DPRINTF(AML_DEBUG_PWR_SAVE, "%s %d recv tim in awake, recover\n", __func__, __LINE__);
+        
         wifi_mac_pwrsave_wkup_and_NtfyAp(wnet_vif, WKUP_FROM_RECEIVE);
         return;
     }
@@ -1128,22 +1035,9 @@ void wifi_mac_pwrsave_check_ps_end(void * ieee,
     }
 
     if ((ps_over_flag == PS_OVER_FLAG_ALL)
-#ifdef CONFIG_P2P
-        || P2P_NoA_START_FLAG(wnet_vif->vm_p2p->HiP2pNoaCountNow)
-#endif
        )
     {
         ps->ips_flag_send_ps_trigger = 0;
-#ifdef CONFIG_P2P
-        if (wnet_vif->vm_p2p->p2p_flag & P2P_OPPPS_CWEND_FLAG_HI)
-        { 
-             wifimac->drv_priv->drv_ops.drv_p2p_client_opps_cwend_may_sleep(wnet_vif);
-        }
-        if (ps_over_flag != PS_OVER_FLAG_ALL)
-        {
-            sta->sta_flags_ext |= WIFINET_NODE_TRIGGER_WAIT_NOA_END;
-        }
-#endif
     }
     else
     {
@@ -1156,10 +1050,6 @@ void wifi_mac_pwrsave_check_ps_end(void * ieee,
     return;
 }
 
-/* sta operation functions  end */
-
-
-/* ap operation functions  start */
 int wifi_mac_pwrsave_txpre (struct sk_buff *skb)
 {
     struct wifi_skb_callback *cb = (struct wifi_skb_callback *) skb->cb;
@@ -1180,7 +1070,7 @@ int wifi_mac_pwrsave_txpre (struct sk_buff *skb)
             DPRINTF(AML_DEBUG_PWR_SAVE, "%s %d uapsd\n", __func__,__LINE__);
             if ((wnet_vif->vif_ops.vm_set_tim != NULL) && WME_UAPSD_NODE_ALL_AC_CAN_TRIGGER(sta))
             {
-                wifi_mac_SetTim(sta, 1);  /* v13g: validated indirect call */
+                wifi_mac_SetTim(sta, 1);  
             }
             ret = 1;
         }
@@ -1212,7 +1102,6 @@ int wifi_mac_pwrsave_psqueue_clean(struct wifi_station *sta)
     return qlen;
 }
 
-
 int
 wifi_mac_pwrsave_psqueue_age(struct wifi_station *sta,
                             struct sk_buff_head *skb_freeqp)
@@ -1235,7 +1124,7 @@ wifi_mac_pwrsave_psqueue_age(struct wifi_station *sta,
                 discard++;
 
             } else {
-                //go through the left sk_buff and decrease the age
+                
                 len -= discard;
 
                 while (len--) {
@@ -1291,7 +1180,6 @@ void wifi_mac_pwrsave_set_tim(struct wifi_station *sta, int set)
     DPRINTF(AML_DEBUG_PWR_SAVE, "%s %d set=%d\n", __func__,__LINE__, set);
 }
 
-/*ap set tim for power save station */
 void wifi_mac_pwrsave_psqueue_enqueue(struct wifi_station *sta, struct sk_buff *skb)
 {
     struct wlan_net_vif *wnet_vif = sta->sta_wnet_vif;
@@ -1308,7 +1196,7 @@ void wifi_mac_pwrsave_psqueue_enqueue(struct wifi_station *sta, struct sk_buff *
     }
 
     WIFINET_SAVEQ_LOCK(&sta->sta_pstxqueue);
-    age = (sta->sta_listen_intval * wnet_vif->vm_bcn_intval) / 1000;//wm_inact_timer is 1 seconds
+    age = (sta->sta_listen_intval * wnet_vif->vm_bcn_intval) / 1000;
     age = (age ? age : 1);
 
     WIFINET_SAVEQ_ENQUEUE_AGE(&sta->sta_pstxqueue, skb, age);
@@ -1318,7 +1206,7 @@ void wifi_mac_pwrsave_psqueue_enqueue(struct wifi_station *sta, struct sk_buff *
     WIFINET_DPRINTF_STA( AML_DEBUG_PWR_SAVE, sta, "save frame, %u now queued", qlen);
 
     if (qlen == 1 && wnet_vif->vif_ops.vm_set_tim != NULL)
-        wifi_mac_SetTim(sta, 1);  /* v13g: validated indirect call */
+        wifi_mac_SetTim(sta, 1);  
 }
 
 static int wifi_mac_pwrsave_psqueue_send (struct wifi_station *sta, int force)
@@ -1328,25 +1216,9 @@ static int wifi_mac_pwrsave_psqueue_send (struct wifi_station *sta, int force)
     int qlen = 0;
     struct wifi_mac * wifimac = wnet_vif->vm_wmac;
 
-#ifdef DRV_SUPPORT_TX_WITHDRAW
-    struct driver_ops* ops = wifimac->drv_ops;
-#endif
-
     struct wifi_mac_tx_info *txinfo = NULL;
     do
     {
-#ifdef DRV_SUPPORT_TX_WITHDRAW
-        {
-            struct aml_driver_nsta *drv_sta = DRIVER_NODE(sta->drv_sta);
-
-            if (drv_sta->sta_txwd_legacyps_qqcnt)
-            {
-                ops->drv_tx_withdraw_legacyps_send(wifimac->drv_priv, drv_sta);
-                qlen = WIFINET_SAVEQ_QLEN(&(sta->sta_pstxqueue)) + drv_sta->sta_txwd_legacyps_qqcnt;
-                break;
-            }
-        }
-#endif
         WIFINET_SAVEQ_LOCK(&sta->sta_pstxqueue);
         WIFINET_SAVEQ_DEQUEUE(&sta->sta_pstxqueue, skb, qlen);
         WIFINET_SAVEQ_UNLOCK(&sta->sta_pstxqueue);
@@ -1378,7 +1250,7 @@ static int wifi_mac_pwrsave_psqueue_send (struct wifi_station *sta, int force)
         txinfo = (struct wifi_mac_tx_info *)os_skb_cb(skb);
         if (txinfo->b_buffered == 0)
         {
-            /* for p2p noa and opps coexist*/
+            
             txinfo->b_buffered = 1;
             wnet_vif->vm_legacyps_txframes++;
         }
@@ -1393,9 +1265,6 @@ static int wifi_mac_pwrsave_psqueue_send (struct wifi_station *sta, int force)
 int wifi_mac_pwrsave_psqueue_flush (struct wifi_station *sta)
 {
     int qlen = 0;
-#ifdef CONFIG_P2P
-    struct wlan_net_vif *wnet_vif = sta->sta_wnet_vif;
-#endif
 
     for (;;)
     {
@@ -1404,20 +1273,9 @@ int wifi_mac_pwrsave_psqueue_flush (struct wifi_station *sta)
         {
             break;
         }
-#ifdef CONFIG_P2P
-        if (P2P_NoA_START_FLAG(wnet_vif->vm_p2p->HiP2pNoaCountNow))
-        {
-            if (qlen > 0)
-            {
-                sta->sta_flags_ext |= WIFINET_NODE_PS_FLUSH_WAIT_NOA_END;
-            }
-            break;
-        }
-#endif
     }
     return qlen;
 }
-
 
 void wifi_mac_pwrsave_state_change(struct wifi_station *sta, int enable)
 {
@@ -1433,81 +1291,6 @@ void wifi_mac_pwrsave_state_change(struct wifi_station *sta, int enable)
         wnet_vif->vm_opmode != WIFINET_M_IBSS)
         return;
 
-    /* v16e DISABLED -- this fix made throughput worse (5 KB/s vs 124 KB/s
-     * baseline) and post-burst lockup still occurred, so the PS-bypass
-     * hypothesis was not the root cause of Bug #2. Original behaviour
-     * restored. The big comment block stays here for reference because
-     * it correctly describes WHY the original code path is problematic
-     * in isolation, but the cure was worse than the disease in our test
-     * environment.
-     *
-     * Original problem analysis preserved verbatim:
-     *
-     * Symptom (curl 5 MB / iperf3 burst from AP -> client):
-     *   - Sustained TX OK for the first ~3-5 MB.
-     *   - Then ALL unicast to client suddenly disappears off the air
-     *     (ping AP->client 100% loss, TCP stalls). Beacon/probe still
-     *     OK. iw link shows link healthy at MCS 7 SGI.
-     *   - AP TX counter keeps growing (driver thinks frames are sent).
-     *
-     * Root cause traced through the RX path:
-     *   1. Client (rtl88x2bu in our test, but happens with phones too)
-     *      emits a data frame with FC1_PWR_MGT=1 during normal traffic
-     *      (rtl/phone briefly toggles PM during high-throughput RX as
-     *      a power-saving heuristic between AMPDU bursts).
-     *   2. wifi_mac_recv.c:530-534 detects the FC1_PWR_MGT XOR and
-     *      calls us with enable=1 -> sta_flags |= WIFINET_NODE_PWR_MGT.
-     *   3. From this point wifi_drv_xmit.c:1000-1006 redirects every
-     *      packet to wifi_mac_pwrsave_psqueue_enqueue() instead of
-     *      sending. The vendor TX path believes it's "deferring for
-     *      sleeping STA".
-     *   4. The client never sends a follow-up frame with FC1_PWR_MGT=0
-     *      because:
-     *        a) it didn't actually sleep -- the PM=1 was a transient,
-     *        b) the next frame queued in client side is itself a TCP
-     *           ACK that the AP would have sent first, so client TX
-     *           is now starved waiting for AP RX,
-     *        c) AP psqueue is bounded; once it fills, frames are
-     *           DROPPED silently (WIFINET_PS_MAX_QUEUE, ~50 frames),
-     *           but sta_flags PWR_MGT bit stays set forever.
-     *   5. Symptom locks until manual deauth or driver reload.
-     *
-     * Why not seen in STA mode: vendor TX path in STA mode does NOT
-     * use psqueue for buffering -- that's purely an AP/IBSS feature.
-     *
-     * Why not seen by mac80211: stock mac80211 has its own PS handling
-     * in net/mac80211/sta_info.c with a 5-second sanity timeout (see
-     * IEEE80211_STA_DISABLE_PS_BY_AP). The vendor driver bypasses
-     * mac80211's PS path because vif_ops.vm_set_tim is provided.
-     *
-     * Fix options considered:
-     *   - Add timeout watchdog on sta->sta_pstxqueue (requires new
-     *     timer + tracking last-activity field).
-     *   - Reduce WIFINET_PS_MAX_QUEUE to 1 so any stall is visible.
-     *   - Hook into wifi_drv_xmit.c:1000 to bypass psqueue.
-     *
-     * Chosen fix: ignore client-asserted PM bit entirely in AP mode.
-     * This is what the legacy 11n APs do on Linux when running with
-     * /sys/module/cfg80211/parameters/ap_buffer_aware=0 (default).
-     * Genuine sleeping IoT clients are not a target for w522a (no
-     * battery devices in the typical use case), and modern phones
-     * never rely on legacy PS for unicast -- they use U-APSD which
-     * is a separate code path (WIFINET_NODE_UAPSD_TRIG, untouched).
-     *
-     * Side-effect: vm_ps_sta counter stays 0 for AP mode, TIM bitmap
-     * never gets set for unicast, psqueue stays empty, and frames go
-     * directly through the normal AP TX path. Clients that genuinely
-     * want PS will see frames dropped at their MAC layer (no ACK),
-     * but that is the client's own problem -- they should send a
-     * trigger frame or null+PM=0 before going active again, which
-     * any compliant 802.11 client does.
-     *
-     * To re-enable legacy AP PS later (e.g. for IoT-heavy networks),
-     * gate the early-return on a module param or vendor cfg option.
-     *
-     * (end of preserved v16e analysis comment)
-     */
-
     if (enable)
     {
         if ((sta->sta_flags & WIFINET_NODE_PWR_MGT) == 0)
@@ -1521,7 +1304,7 @@ void wifi_mac_pwrsave_state_change(struct wifi_station *sta, int enable)
 
     if ((sta->sta_flags & WIFINET_NODE_PWR_MGT))
     {
-        /*FIXME: if receive a frame with ps=0 when go opps end, return */
+        
         if ((wnet_vif->vm_pstxqueue_flags & (WIFINET_PSQUEUE_OPPS | WIFINET_PSQUEUE_NOA)) != 0)
         {
             return;
@@ -1538,9 +1321,8 @@ void wifi_mac_pwrsave_state_change(struct wifi_station *sta, int enable)
                          "power save mode off, %u sta's in ps mode", wnet_vif->vm_ps_sta);
     wifi_mac_pwrsave_psqueue_flush(sta);
 
-    wifi_mac_SetTim(sta, 0);  /* v13g: validated indirect call */
+    wifi_mac_SetTim(sta, 0);  
 }
-
 
 void wifi_mac_pwrsave_recv_pspoll(struct wifi_station *sta, struct sk_buff *skb0)
 {
@@ -1581,7 +1363,7 @@ void wifi_mac_pwrsave_recv_pspoll(struct wifi_station *sta, struct sk_buff *skb0
         WIFINET_DPRINTF_STA( AML_DEBUG_PWR_SAVE, sta,
                              "%s", "recv ps-poll, send packet, queue empty");
         if (wnet_vif->vif_ops.vm_set_tim != NULL)
-            wifi_mac_SetTim(sta, 0);  /* v13g: validated indirect call */
+            wifi_mac_SetTim(sta, 0);  
     }
     else
     {
@@ -1623,7 +1405,6 @@ void wifi_mac_pwrsave_chk_uapsd_trig(void * ieee,
         DPRINTF(AML_DEBUG_PWR_SAVE, "%s %d rx nsta ps change, ps=%d\n",
                 __func__,__LINE__, !!(qwh->i_fc[1] & WIFINET_FC1_PWR_MGT));
 
-        //if the first trigger, flag it
         if (qwh->i_fc[1] & WIFINET_FC1_PWR_MGT)
         {
             WME_UAPSD_NODE_TRIGSEQINIT(sta);
@@ -1631,7 +1412,7 @@ void wifi_mac_pwrsave_chk_uapsd_trig(void * ieee,
         }
         else
         {
-            //if exit powersave,
+            
             sta->sta_flags &= ~WIFINET_NODE_UAPSD_TRIG;
             wifimac->drv_priv->drv_ops.process_uapsd_trigger(wifimac->drv_priv,
                                                     sta->drv_sta,
@@ -1656,10 +1437,7 @@ void wifi_mac_pwrsave_chk_uapsd_trig(void * ieee,
         {
             unsigned short frame_seq;
             int queue_qcnt;
-            /*
-            DPRINTF(AML_DEBUG_PWR_SAVE, "%s %d rx nsta trigger tid=%d ac=%d\n",
-                __func__,__LINE__, tid, ac);
-            */
+            
             pr_debug("rx uapsd trigger\n");
 
             frame_seq = le16toh(*(unsigned short *)qwh->i_seq);
@@ -1668,7 +1446,6 @@ void wifi_mac_pwrsave_chk_uapsd_trig(void * ieee,
             {
                 goto end;
             }
-
 
             if (sta->sta_flags & WIFINET_NODE_UAPSD_SP)
             {
@@ -1685,7 +1462,7 @@ void wifi_mac_pwrsave_chk_uapsd_trig(void * ieee,
                 (sta->sta_wnet_vif->vif_ops.vm_set_tim != NULL) &&
                 WME_UAPSD_NODE_ALL_AC_CAN_TRIGGER(sta))
             {
-                wifi_mac_SetTim(sta, 0);  /* v13g: validated indirect call */
+                wifi_mac_SetTim(sta, 0);  
             }
         }
     }
@@ -1714,18 +1491,13 @@ void wifi_mac_pwrsave_eosp_indicate(void* nsta,  struct sk_buff * skbbuf, int tx
     }
     return;
 }
-/* ap operation functions  end */
 
 int wifi_mac_pwrsave_wow_sta(struct wlan_net_vif *wnet_vif)
 {
-    /*
-    * bitmask where to match pattern and where to ignore
-    * bytes, one bit per byte
-    */
+    
     unsigned char mask = 0x3f;
     struct wifi_mac* wifimac = wnet_vif->vm_wmac;
 
-    /* setup unicast pkt pattern */
     wifimac->drv_priv->drv_ops.drv_set_pattern(wifimac->drv_priv,
         wnet_vif->wnet_vif_id, 0, WIFINET_ADDR_LEN, 0, &mask, wnet_vif->vm_myaddr);
 
@@ -1738,24 +1510,14 @@ int wifi_mac_pwrsave_wow_usr(struct wlan_net_vif *wnet_vif,
     int i;
     struct wifi_mac* wifimac = wnet_vif->vm_wmac;
 
-    /*
-    * Configure the patterns that we received from the user.
-    * And we save WOW_MAX_FILTERS patterns at most.
-    */
     for (i = 0; i < wow->n_patterns; i++)
     {
-        /*
-        * Note: Pattern's offset is not passed as part of wowlan
-        * parameter from CFG layer. So it's always passed as ZERO
-        * to the firmware. It means, given WOW patterns are always
-        * matched from the first byte of received pkt in the firmware.
-        */
+        
         wifimac->drv_priv->drv_ops.drv_set_pattern(wifimac->drv_priv,
             wnet_vif->wnet_vif_id, 0, wow->patterns[i].pattern_len, i,
             ( unsigned char *)wow->patterns[i].mask, (unsigned char *)wow->patterns[i].pattern);
     }
 
-    /*get wakeup filter */
     if (wow->disconnect)
         *filter |= WOW_FILTER_OPTION_DISCONNECT;
 
@@ -1804,7 +1566,7 @@ int wifi_mac_pwrsave_wow_suspend(SYS_TYPE param1,
         wnet_vif->vm_ndev->name,__func__, __LINE__);
     wnet_vif->vm_scan_hang = 1;
     wifi_mac_cancel_scan(wifimac);
-    /* waiting for completing scan process */
+    
     while (wifimac->wm_flags & WIFINET_F_SCAN)
     {
         msleep(20);
@@ -1818,19 +1580,15 @@ int wifi_mac_pwrsave_wow_suspend(SYS_TYPE param1,
         }
     }
 
-    /*stop kernel transmitting data to net dev */
     netif_stop_queue(wnet_vif->vm_ndev);
 
-    /*check if tx buffer is clean. */
     if (wifi_mac_all_txq_all_qcnt(wifimac) != 0)
     {
         #if 1
-        /* need flush all txdata(wlan0+p2p0) before suspend */
-        wifimac->drv_priv->drv_ops.drv_flush_txdata(wifimac->drv_priv, 3/* wlan0+p2p0 */);
+        
+        wifimac->drv_priv->drv_ops.drv_flush_txdata(wifimac->drv_priv, 3);
         #else
-        /* need to wait for transmitting data out. waitting suspend
-         * command again and try to suspend wifi.
-         */
+        
         wnet_vif->vm_scan_hang = 0;
         WIFINET_PWRSAVE_MUTEX_UNLOCK(wnet_vif);
         return -EINVAL;
@@ -1839,35 +1597,28 @@ int wifi_mac_pwrsave_wow_suspend(SYS_TYPE param1,
 
     VLSI_FOR_EACH_ENTRY_SAFE(wnet_vif_tmp, wnet_vif_next, &wifimac->wm_wnet_vifs, vm_next)
     {
-        /* now, not support suspend ap. */
+        
         if ((wnet_vif_tmp->vm_opmode == WIFINET_M_HOSTAP)
             || (wnet_vif_tmp->vm_state != WIFINET_S_CONNECTED)) {
             continue;
         }
         connect++;
-        /*
-        * Skip the default WOW pattern configuration if the driver receives any
-        * WOW patterns from the user.
-        */
+        
         if (wow != NULL)
             wifi_mac_pwrsave_wow_usr(wnet_vif_tmp, wow, &filter);
         else
             wifi_mac_pwrsave_wow_sta(wnet_vif_tmp);
 
-        /*set arp agent */
         wifi_mac_set_arp_agent(wnet_vif_tmp, ENABLE);
 
-        /* change beacon listen interval to dtim period. */
         if (wnet_vif_tmp->vm_dtim_period > 0)
             listen_interval = wnet_vif_tmp->vm_bcn_intval * wnet_vif_tmp->vm_dtim_period;
         else
             listen_interval = wnet_vif_tmp->vm_bcn_intval;
         wifimac->drv_priv->drv_ops.Phy_beaconinit(wifimac->drv_priv,wnet_vif_tmp->wnet_vif_id, (1<<16) | listen_interval);
 
-        /* change beacon miss timer period */
-        wifi_mac_set_beacon_miss_ex(wnet_vif_tmp, ENABLE, WIFINET_BCNMISS_TIME/* period, ms*/);
+        wifi_mac_set_beacon_miss_ex(wnet_vif_tmp, ENABLE, WIFINET_BCNMISS_TIME);
 
-        /*enable wow and set filters */
         wifimac->drv_priv->drv_ops.drv_set_suspend(wifimac->drv_priv, wnet_vif_tmp->wnet_vif_id, ENABLE,
             WIFI_SUSPEND_STATE_WOW, filter);
 
@@ -1878,7 +1629,7 @@ int wifi_mac_pwrsave_wow_suspend(SYS_TYPE param1,
 
     if (connect == 0)
     {
-        /* if both wlan0 and p2p0 don't connect ap, just follow wlan0 operations. */
+        
         if (wnet_vif->wnet_vif_id == 1)
         {
             wnet_vif->vm_scan_hang = 0;
@@ -1893,7 +1644,6 @@ int wifi_mac_pwrsave_wow_suspend(SYS_TYPE param1,
         WIFINET_PWRSAVE_UNLOCK(wnet_vif);
     }
 
-    /*set suspend state */
     wifimac->wm_suspend_mode = WIFI_SUSPEND_STATE_WOW;
 
     WIFINET_PWRSAVE_MUTEX_UNLOCK(wnet_vif);
@@ -1920,27 +1670,22 @@ int wifi_mac_pwrsave_wow_resume(SYS_TYPE param1,
 
     VLSI_FOR_EACH_ENTRY_SAFE(wnet_vif_tmp, wnet_vif_next, &wifimac->wm_wnet_vifs, vm_next)
     {
-        /* now, not support suspend ap. */
+        
         if ((wnet_vif_tmp->vm_opmode == WIFINET_M_HOSTAP)
             || (wnet_vif_tmp->vm_state != WIFINET_S_CONNECTED)) {
             continue;
         }
         connect++;
-        /*
-        * disable vmac wow and clear filters. patterns are cleaned in firmware
-        * when firmware get wow disable command.
-        */
+        
         ret = wifimac->drv_priv->drv_ops.drv_set_suspend(wifimac->drv_priv, wnet_vif_tmp->wnet_vif_id, DISABLE,
             WIFI_SUSPEND_STATE_NONE, 0);
 
         wifi_mac_set_arp_agent(wnet_vif_tmp, DISABLE);
 
-        /* change beacon listen interval to beacon interval. */
         wifimac->drv_priv->drv_ops.Phy_beaconinit(wifimac->drv_priv,wnet_vif_tmp->wnet_vif_id,
-            wnet_vif_tmp->vm_bcn_intval/*listen_interval*/);
+            wnet_vif_tmp->vm_bcn_intval);
 
-        /* change beacon miss timer period */
-        wifi_mac_set_beacon_miss_ex(wnet_vif_tmp, ENABLE, WIFINET_BCNMISS_TIME/* period, ms*/);
+        wifi_mac_set_beacon_miss_ex(wnet_vif_tmp, ENABLE, WIFINET_BCNMISS_TIME);
 
         WIFINET_PWRSAVE_LOCK(wnet_vif);
         if (ret == 0)
@@ -1952,7 +1697,7 @@ int wifi_mac_pwrsave_wow_resume(SYS_TYPE param1,
 
     if (connect == 0)
     {
-        /* if both wlan0 and p2p0 don't connect ap, just follow wlan0 operations. */
+        
         if (wnet_vif->wnet_vif_id == 1)
         {
             WIFINET_PWRSAVE_MUTEX_UNLOCK(wnet_vif);
@@ -1968,7 +1713,6 @@ int wifi_mac_pwrsave_wow_resume(SYS_TYPE param1,
         WIFINET_PWRSAVE_UNLOCK(wnet_vif);
     }
 
-    /*set suspend state */
     wifimac->wm_suspend_mode = WIFI_SUSPEND_STATE_NONE;
 
     WIFINET_PWRSAVE_MUTEX_UNLOCK(wnet_vif);

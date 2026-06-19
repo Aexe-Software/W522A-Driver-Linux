@@ -40,10 +40,7 @@ int aml_cfg80211_set_pmksa(struct wiphy *wiphy, struct net_device *dev, struct c
 
             memcpy(wnet_vif->pmk_list->pmkid_cache[i].pmkid, pmksa->pmkid, WLAN_PMKID_LEN);
             wnet_vif->pmk_list->pmkid_cache[i].in_use = 1;
-            /* v15t: wrap pmkid_count to keep it < WL_NUM_PMKIDS_MAX.
-             * Without the mod, when find_entry hit slot 15 we left
-             * pmkid_count == 16; the next set_pmksa() with a new
-             * BSSID then wrote pmkid_cache[16] (OOB by one) below. */
+            
             wnet_vif->pmk_list->pmkid_count = (i + 1) % WL_NUM_PMKIDS_MAX;
             find_entry = 1;
             break;
@@ -53,9 +50,6 @@ int aml_cfg80211_set_pmksa(struct wiphy *wiphy, struct net_device *dev, struct c
     if (!find_entry) {
         DPRINTF(AML_DEBUG_CFG80211, "use new entry index:%d\n", wnet_vif->pmk_list->pmkid_count);
 
-        /* v15t: belt-and-braces bound. pmkid_count is touched from
-         * a few places, so clamp here so the indexed writes cannot
-         * run off the array. */
         if (wnet_vif->pmk_list->pmkid_count >= WL_NUM_PMKIDS_MAX)
             wnet_vif->pmk_list->pmkid_count = 0;
 
@@ -77,7 +71,6 @@ int aml_pmkid_cache_index(struct wlan_net_vif *wnet_vif, const unsigned char *bs
     unsigned char *pmkid;
     unsigned char zero_mac[6] = { 0x00 };
 
-    /* check the bssid is null or not */
     if (!bssid) {
         goto not_found;
     }
@@ -118,7 +111,7 @@ int aml_cfg80211_del_pmksa(struct wiphy *wiphy, struct net_device *dev, struct c
     }
 
     if (!npmkids) {
-        /* nmpkids = 0, nothing to delete */
+        
         ERROR_DEBUG_OUT("npmkids=0. skip del\n");
         return 0;
     }
@@ -164,12 +157,7 @@ void aml_del_pmksa_by_index(struct wlan_net_vif *wnet_vif, const unsigned char *
 
     } else {
         memset(wnet_vif->pmk_list->pmkid_cache[pmkid_index].pmkid, 0, sizeof(char)*16);
-        /* v15t: pmkid_count is unsigned char; guard underflow. The
-         * ring buffer can wrap (after 16 unique BSSIDs count resets
-         * to 0 while all slots stay in_use), so this branch can
-         * legitimately be reached with count==0. Underflow would
-         * have produced count=255 and the next set_pmksa() would
-         * have walked off the array. */
+        
         if (wnet_vif->pmk_list->pmkid_count)
             wnet_vif->pmk_list->pmkid_count--;
     }
@@ -187,12 +175,7 @@ int aml_cfg80211_flush_pmksa(struct wiphy *wiphy, struct net_device *dev)
 }
 
 #if (KERNEL_VERSION(4, 17, 0) <= LINUX_VERSION_CODE) || (defined WPA3_PATCH)
-/**
- * wifi_mac_trigger_sae() - Sends SAE info to supplicant
- * This API is used to send required SAE info to trigger SAE in supplicant.
- *
- * Return: None
- */
+
 void wifi_mac_trigger_sae(struct wifi_station *sta)
 {
     struct cfg80211_external_auth_params params = {0};
@@ -212,4 +195,4 @@ void wifi_mac_trigger_sae(struct wifi_station *sta)
 }
 #endif
 
-#endif//AML_WPA3
+#endif

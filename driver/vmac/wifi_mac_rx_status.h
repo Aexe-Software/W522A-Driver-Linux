@@ -19,4 +19,4 @@ struct wifi_mac_rx_status
     } rs_tstamp;
 };
 
-#endif//__WIFI_MAC_RX_STATUS_H__
+#endif

@@ -13,13 +13,12 @@ static unsigned int clk_msr_time_set( unsigned int msr_freq)
    if (msr_freq / 1000000 >= 160) {
       us_gate_time = 1;
    } else {
-       // if < 10Mhz, measure num is set about 320
+       
       us_gate_time = 160 * 1000000 / msr_freq + 1;
    }
    return us_gate_time;
 }
 
-// test the clock measurement
 static unsigned int clk_msr_calc(unsigned int clk_mux, unsigned int exp_freq)
 {
     struct hw_interface* hif = hif_get_hw_interface();
@@ -36,14 +35,12 @@ static unsigned int clk_msr_calc(unsigned int clk_mux, unsigned int exp_freq)
     hif->hif_ops.hi_write_word(DF_REG_A18, (hif->hif_ops.hi_read_word(DF_REG_A18) & ~(0xFFFF << 0)) | ((us_gate_time-1) << 0));
     hif->hif_ops.hi_write_word(DF_REG_A18, (hif->hif_ops.hi_read_word(DF_REG_A18) & ~((1 << 18) | (1 << 17))));
     hif->hif_ops.hi_write_word(DF_REG_A18, (hif->hif_ops.hi_read_word(DF_REG_A18) & ~(0xff << 20))
-                                                        | ((clk_mux << 20) // Select MUX
-                                                        | (1 << 19)        //clk_to_msr_en
+                                                        | ((clk_mux << 20) 
+                                                        | (1 << 19)        
                                                         ));
 
-    // enable measuring
     hif->hif_ops.hi_write_word(DF_REG_A18, (hif->hif_ops.hi_read_word(DF_REG_A18)  | (1 << 16)) );
 
-    // Wait for the measurement to be done
     while ((hif->hif_ops.hi_read_word(DF_REG_A18) & (1 << 31))) {
         if (wait_cnt++ > 10000) {
             pr_err("clock measure timeout, clock id: %d\n", clk_mux);
@@ -52,10 +49,8 @@ static unsigned int clk_msr_calc(unsigned int clk_mux, unsigned int exp_freq)
         udelay(10);
     }
 
-    // disable measuring
     hif->hif_ops.hi_write_word(DF_REG_A18, (hif->hif_ops.hi_read_word(DF_REG_A18) & ~(1 << 16)) | (0 << 16));
 
-    // only 20 bits //the count of measured clk at us_gate_time
     measured_val = (hif->hif_ops.hi_read_word(DF_REG_A20) & 0x000FFFFF);
     measured_feq = (measured_val * 1000000) / (us_gate_time);
     delt = exp_freq * 4 /100;
@@ -214,23 +209,6 @@ static unsigned char * clk_mux_name(CLOCK_MUX clk_mux)
     return clk_name;
 }
 
-//wire  [127:0]   clk_to_msr_in   = {  109'h0,
-//                                     WF_DIG_OUT,
-//                                     sys_oscin_i,
-//                                     cts_clk_fec,
-//                                     xjtag_tck_i,
-//                                     cts_clk_adda_640m,
-//                                     cts_clk_cpu,
-//                                     cts_clk_apb,
-//                                     cts_clk_mac,
-//                                     cts_clk_xdac_640m,
-//                                     cts_clk_adda_160m,
-//                                     cts_clk_radc_320m,
-//                                     cts_clk_adda_80m,
-//                                     1'b0,
-//                                     cts_clk_adda_320m,
-//                                     cts_clk_11brx
-//                                  };
 static void clk_msr(CLOCK_MUX clk_mux)
 {
     if (clk_mux != CTS_CLK_VIT_POS) {
@@ -239,7 +217,7 @@ static void clk_msr(CLOCK_MUX clk_mux)
 
     switch (clk_mux) {
         case CTS_CLK_11BRX_POS      :
-        //case CTS_CLK_VIT_POS        :
+        
         case CTS_CLK_RADC_320M_POS  :  clk_msr_other(clk_mux);    break;
 
         case CTS_CLK_ADDA_320M_POS  :

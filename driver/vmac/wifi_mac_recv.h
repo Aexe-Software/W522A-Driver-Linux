@@ -24,7 +24,6 @@
                 }                               \
         } while (0)
 
-
 #define WIFINET_VERIFY_SSID(_ni, _ssid) do {              \
                 if ((_ssid) && (_ssid)[1] != 0 &&                      \
                                 ((_ssid)[1] != (_ni)->sta_esslen ||              \
@@ -33,7 +32,6 @@
                         return;                         \
                 }                               \
         } while (0)
-
 
 #define WAI_OUI_BE 0x0050f201
 #define WPA_SEL(x)  (((x)<<24)|WPA_OUI)

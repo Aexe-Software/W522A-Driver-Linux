@@ -44,16 +44,6 @@ static unsigned short sts_reg_chk_pool[] = {
             HOST_SW_VADDR,
         };
 
-
-
-/*
----description---
-it is used to do all kinds of statistics information initialization
-for log showing, the information content is mapped by the array index which defined
-by the hardware
-@(void)
-*/
-
 static char* sts_mac_irq_prt_tag[5]={NULL,NULL,"mac irq  ","mac irq  ",NULL};
 static char* sts_mac_11frm_prt_tag[5]={NULL,NULL,"mac frame", "mac frame",NULL};
 static char* sts_mac_tx_prt_tag[5]={NULL,NULL,"hw mac tx", "hw mac tx",NULL};
@@ -72,10 +62,10 @@ static void sts_chk_idx_val(unsigned int  *idx_val)
 
     for (i = 0; i < sts_hst_sw_max_idx; i++)
         {
-           //pr_debug("idx[%d] -->val 0x%x \n", i, sts_sys_idx_val[i]);
+           
             for (j = i+1; j < sts_hst_sw_max_idx; j++)
                 {
-                    //pr_debug("val1 0x%x, val2 0x%x \n", sts_sys_idx_val[i], sts_sys_idx_val[j]);
+                    
                     if(idx_val[i] == idx_val[j])
                         {
                            rpt = 1;
@@ -94,14 +84,11 @@ static void sts_chk_idx_val(unsigned int  *idx_val)
                 }
         }
 
-
 }
 
 void sts_prt_info_map(void)
 {
-    /*
-    mapping all of the idx_val
-    */
+    
     sts_sys_idx_val[sts_mac_irq_txstart_idx] =  (RG_MAC_CNT_CTRL_FIQ)<<16 | IDX_TXSTART_IT;
     sts_sys_idx_val[sts_mac_irq_txend_idx] =  (RG_MAC_CNT_CTRL_FIQ)<<16 |IDX_TXEND_IT ;
     sts_sys_idx_val[sts_mac_irq_txenderr_idx] =  (RG_MAC_CNT_CTRL_FIQ)<<16 |IDX_TXENDERR;
@@ -251,12 +238,7 @@ void sts_prt_info_map(void)
     sts_sys_idx_val[sts_vif_in_amsdu_idx] = (HOST_SW_VADDR) << 16 | sts_vif_in_amsdu_idx;
     sts_sys_idx_val[sts_vif_out_amsdu_idx] = (HOST_SW_VADDR) << 16 | sts_vif_out_amsdu_idx;
 
-    //sts_sys_idx_val[sts_hst_sw_max_idx] = (HOST_SW_VADDR) << 16 | sts_hst_sw_max_idx;
     sts_chk_idx_val(sts_sys_idx_val);
-
-    /*
-    mapping all of the prt info
-    */
 
     sts_sys_prt_info[sts_mac_irq_txstart_idx  ] = "txstart";
     sts_sys_prt_info[sts_mac_irq_txend_idx   ] = "txend";
@@ -402,16 +384,8 @@ void sts_prt_info_map(void)
     sts_sys_prt_info[sts_vif_in_amsdu_idx] = "vif_in_amsdu";
     sts_sys_prt_info[sts_vif_out_amsdu_idx] = "vif_out_amsdu";
 
-
-    //sts_sys_prt_info[sts_hst_sw_max_idx] = "sts_hst_sw_max";
-
 }
 
-/*
----description---
-it is used to get the tag information for log showing, indexed by the address
-@addr, the statistic address
-*/
  char** get_tag_info(unsigned short addr, unsigned int tag_info)
 {
 
@@ -471,7 +445,7 @@ unsigned int val_to_idx(unsigned int idx_val[], unsigned int val)
             if(idx_val[i] == val)
             {
                 ret =  i;
-                //pr_debug("idx_val[%d] is 0x%x, val is 0x%x\n", i, idx_val[i], val);
+                
                 break;
             }
             else
@@ -497,12 +471,6 @@ void sts_sw_probe(unsigned int sts_idx, unsigned int unit)
     }
 }
 
-
-/*
----description---
-it is used to set the default configuration for the statistic register.
-@(void)
-*/
 void sts_default_cfg(struct sts_cfg_data* cfg_data, unsigned char sts_sys_type)
 {
      int i = 0;
@@ -522,7 +490,6 @@ void sts_default_cfg(struct sts_cfg_data* cfg_data, unsigned char sts_sys_type)
      cfg_data->addr[9] = HOST_SW_VADDR;
      apd_idx =  cfg_data->cfg_num = 10;
 
-    /*idx val*/
      cfg_data->cfg_ie[0].op_idx.idx0 = IDX_TXEND_IT;
      cfg_data->cfg_ie[0].op_idx.idx1 = IDX_RXEND_IT;
      cfg_data->cfg_ie[0].op_idx.idx2 = IDX_ACKTO_IT;
@@ -553,14 +520,6 @@ void sts_default_cfg(struct sts_cfg_data* cfg_data, unsigned char sts_sys_type)
     sts_opt_by_cfg(cfg_data, SYS_STS_START);
 }
 
-/*
----description---
-it is used to update the default configuration for the statistic register.
-@data: update information,
-@len: update information length
-1)check the registers statistic pool
-2)look up the registers to update, update the exist one  or append the new one
-*/
 void sts_update_cfg(struct sts_cfg_data* cfg_data, const char* data,unsigned int len)
 {
     int i = 0;
@@ -585,7 +544,6 @@ void sts_update_cfg(struct sts_cfg_data* cfg_data, const char* data,unsigned int
 
     pr_debug("addr: 0x%4x val: 0x%x \n",  iw_cfg_if->addr, iw_cfg_if->val);
 
-    /*avoid the error address to result in system crash*/
     for(i = 0; i < sizeof(sts_reg_chk_pool)/sizeof(sts_reg_chk_pool[0]); i++)
         {
             if ( iw_cfg_if->addr != sts_reg_chk_pool[i])
@@ -615,7 +573,6 @@ void sts_update_cfg(struct sts_cfg_data* cfg_data, const char* data,unsigned int
 
         sts_opt_by_cfg(cfg_data, SYS_STS_READ);
 
-     /*update  the add/val*/
     for(i =0; i <  apd_idx; i++)
     {
         if(iw_cfg_if->addr ==cfg_data->addr[i])
@@ -625,7 +582,6 @@ void sts_update_cfg(struct sts_cfg_data* cfg_data, const char* data,unsigned int
         }
     }
 
-      /*append the add/val*/
     if(i == apd_idx)
     {
         cfg_data->addr[apd_idx] = iw_cfg_if->addr;
@@ -648,12 +604,6 @@ void sts_update_cfg(struct sts_cfg_data* cfg_data, const char* data,unsigned int
     sts_opt_by_cfg(cfg_data, SYS_STS_START);
 }
 
-
-/*
----description---
-it is used to clear statistic register by address
-@addr: the statistic register address
-*/
 void sts_clr_cnt(unsigned short addr)
 {
     int i = 0;
@@ -686,7 +636,6 @@ void sts_clr_cnt(unsigned short addr)
 
             hif->hif_ops.hi_write_word(addr , chg_data);
 
-            /*recover the previous setting */
             chg_data = bk_data;
 
             cnt_ctrl->clr0 = 0;
@@ -737,7 +686,6 @@ void sts_clr_cnt(unsigned short addr)
             break;
    }
 
-
    hif->hif_ops.hi_write_word(addr , chg_data);
 
    if(IS_HOST_SW_STS(addr)) {
@@ -747,16 +695,6 @@ void sts_clr_cnt(unsigned short addr)
    }
 }
 
-
-/*
----description---
-it is used to start a statistic by the index code
-@unsigned short addr: which register to do statistic
-@char obj_0, index 0
-@char obj_1, index 1
-@char obj_2, index 2
-@char obj_3  index 3
-*/
 void sts_start_cnt(unsigned short addr,
                              char obj_0,char obj_1,char obj_2,char obj_3)
 {
@@ -770,14 +708,14 @@ void sts_start_cnt(unsigned short addr,
     struct hw_interface* hif = hif_get_hw_interface();
     struct data_rx_local_cnt_bits* data_rx_local_cnt = NULL;
     struct data_rx_cnt_bits* data_rx_cnt = NULL;
-    /**for irq status cnt**/
+    
     chg_data = hif->hif_ops.hi_read_word(addr);
 
     switch (addr)
     {
         case RG_MAC_CNT_CTRL_FIQ:
         case RG_MAC_FRM_TYPE_CNT_CTRL:
-            //set the frame type index
+            
             cnt_irq_ctrl = (struct cnt_ctrl_bits*)&chg_data;
 
             cnt_irq_ctrl->type_idx0 =  obj_0;
@@ -824,7 +762,6 @@ void sts_start_cnt(unsigned short addr,
             break;
     }
 
-    // start to the counter
     hif->hif_ops.hi_write_word(addr , chg_data);
 
     if(IS_HOST_SW_STS(addr))
@@ -836,7 +773,6 @@ void sts_start_cnt(unsigned short addr,
     }
 
 }
-
 
 void sts_prt_agc_field(unsigned short addr,
                          char* sts_tag[], char* sts_info[], char func_code)
@@ -937,8 +873,6 @@ void sts_prt_agc_field(unsigned short addr,
 
 }
 
-
-
 void sts_gen_prt_info(unsigned short addr,
                          unsigned int idx_start, unsigned idx_end,
                          char* sts_tag[], char* sts_info[], unsigned int *idx_val, char func_code)
@@ -974,17 +908,6 @@ void sts_read_reg_array(unsigned int* rd0,unsigned int* rd1, unsigned int* rd2, 
         *rd3 = hif->hif_ops.hi_read_word(reg3);
 }
 
-/*
----description---
-it is used to finish a statistic by the index code
-@addr: which register to read statistic result
-@sts_info[], statistic to show
-@char func_code,   funtion code, 0: stop and read; 1, only read
-@char obj_0, index 0
-@char obj_1, index 1
-@char obj_2, index 2
-@char obj_3  index 3
-*/
 void sts_read_cnt(unsigned short addr,
                          unsigned char obj_0,unsigned char obj_1,unsigned char obj_2, unsigned char obj_3,
                          char* sts_tag[], char* sts_info[], unsigned int* idx_val, char func_code)
@@ -1031,7 +954,6 @@ void sts_read_cnt(unsigned short addr,
             prt_idx1 = val_to_idx(idx_val, (unsigned int)addr << 16 | (unsigned int)obj_1);
             prt_idx2 = val_to_idx(idx_val, (unsigned int)addr << 16 | (unsigned int)obj_2);
             prt_idx3 = val_to_idx(idx_val, (unsigned int)addr << 16 | (unsigned int)obj_3);
-
 
              sts_read_reg_array(&rd_data0,&rd_data1,&rd_data2,&rd_data3,
                 RG_MAC_FRM_TYPE_CNT0,RG_MAC_FRM_TYPE_CNT1,RG_MAC_FRM_TYPE_CNT2,RG_MAC_FRM_TYPE_CNT3);
@@ -1101,11 +1023,6 @@ void sts_read_cnt(unsigned short addr,
         }
 }
 
-/*
----description---
-it is used to stop statistic register by address
-@addr: the statistic register address
-*/
 void sts_stop_cnt(unsigned short addr)
 {
     int i = 0;
@@ -1120,7 +1037,6 @@ void sts_stop_cnt(unsigned short addr)
 
     chg_data = hif->hif_ops.hi_read_word(addr);
 
-    //to set clear bit
     switch (addr )
     {
         case RG_MAC_CNT_CTRL_FIQ:
@@ -1176,7 +1092,6 @@ void sts_stop_cnt(unsigned short addr)
     }
 }
 
-
 void sts_show_cfg(  struct sts_cfg_data* cfg_data)
 {
     int i = 0;
@@ -1189,12 +1104,6 @@ void sts_show_cfg(  struct sts_cfg_data* cfg_data)
             );
     }
 }
-
-/*
----description---
-it is used to operate the statistic register by the address
-@func_code: the statistic register operation code=>clear:0/start:1/read:2/stop:3
-*/
 
 void sts_opt_by_cfg(struct sts_cfg_data* cfg_data, unsigned  char func_code)
 {
@@ -1249,11 +1158,3 @@ void sts_opt_by_cfg(struct sts_cfg_data* cfg_data, unsigned  char func_code)
             }
     }
 }
-
-#if 0
-static unsigned int _get_tv_us (const struct timeval  *tvnew, const struct timeval  *tvold)
-{
-    return ((tvnew->tv_sec-tvold->tv_sec)*1000000+(tvnew->tv_usec - tvold->tv_usec));
-}
-#endif
-

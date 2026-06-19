@@ -1,16 +1,3 @@
-/*****************************************************************************************
- *
- * Copyright (C) Amlogic 2010-2014
- *
- * Project: 11N 80211 driver  layer Software
- *
- * Description:
- *     Initialization network related APIs for driver hal layer throughput test
- * Author : Boatman Yang(xuexing.yang@amlogic.com)
- *
- * Date:    20160901
- ****************************************************************************************
- */
 
 #include "wifi_pt_network.h"
 #include "wifi_hal_com.h"
@@ -45,13 +32,10 @@ typedef struct _Access {
     void  *manage_queue_buffer[ACCESS_TX_QUEUE_SIZE];
 } Access;
 
-
 static Access  g_NetworkTx;
 static Access  *pNetworkTx = &g_NetworkTx;
-static unsigned int the_src_ip_address = IP_ADDRESS( 10, 68,7, 124 );//IP_ADDRESS( 192, 168, 0, 121 );
-static unsigned int the_dst_ip_address = IP_ADDRESS( 10, 68,7, 121 );//IP_ADDRESS( 192, 168, 0, 112 );
-
-
+static unsigned int the_src_ip_address = IP_ADDRESS( 10, 68,7, 124 );
+static unsigned int the_dst_ip_address = IP_ADDRESS( 10, 68,7, 121 );
 
 enum {
     NET_ETHER_TYPE_ARP         = 0x0806,
@@ -100,21 +84,21 @@ static void B2B_Net_RequestTransmit(struct sk_buff *skb,
 unsigned short
 MacFrame_GetHeaderSize(unsigned int frame_control)
 {
-    unsigned short header_size = 24; // FrameControl + 3 Addresses + SequenceControl
+    unsigned short header_size = 24; 
 
     if (frame_control & FRAME_CONTROL_FROM_DS
         && frame_control & FRAME_CONTROL_TO_DS ) {
-        header_size += 6;// Size of Address4
+        header_size += 6;
     }
 
     if (MacFrame_IsType(frame_control, FRAME_TYPE_DATA | FRAME_SUBTYPE_QOS)) {
-        header_size += 2;// QosControl
+        header_size += 2;
         if (frame_control&FRAME_CONTROL_ORDERED)
             header_size += 4;
     }
 
     if (MacFrame_IsType(frame_control, FRAME_TYPE_CONTROL | FRAME_SUBTYPE_PS_POLL) ) {
-        header_size = 16;//PS-poll
+        header_size = 16;
     }
 
     return header_size;
@@ -194,13 +178,12 @@ B2b_Net_WriteSimcheck(unsigned char* start,
 {
 
         int i;
-        static unsigned char sendPacketseq[MAX_TID] = {0};//256 is one test peri.
+        static unsigned char sendPacketseq[MAX_TID] = {0};
         for (i = 0; i<length; i ++)
                 start[i] = sendPacketseq[tid];
         sendPacketseq[tid] ++;
         return length;
 }
-
 
 static void RcvFrameTestSeq(unsigned char *packet,unsigned char tid)
 {
@@ -210,11 +193,11 @@ static void RcvFrameTestSeq(unsigned char *packet,unsigned char tid)
 static void RcvFrame(unsigned char *packet,int length,unsigned char tid)
 {
     int i;
-    static unsigned char sendPacketseq[MAX_TID]= {0};//256 is one test peri.
+    static unsigned char sendPacketseq[MAX_TID]= {0};
 
     for (i = 0; i<length; i ++){
         if (packet[i] != sendPacketseq[tid]) {
-            //PRINT("receiver packet is  check err!!!\n");
+            
             break;
         }
     }
@@ -236,72 +219,62 @@ static void Net_Send( unsigned char type, unsigned char* input)
         if( TrcConfMib.dot11RDSupport){
             frame_control |= FRAME_CONTROL_ORDERED;
         }
-        if( TrcConfMib.dot11EncryptType != 0 ){//WIFI_NO_WEP=0
+        if( TrcConfMib.dot11EncryptType != 0 ){
             frame_control |= FRAME_CONTROL_PROTECTED;
         }
-        if ( TrcConfMib.tid != 8 ) {//QUEUE_NO_QOS =8
+        if ( TrcConfMib.tid != 8 ) {
             frame_control |= FRAME_SUBTYPE_QOS;
         }
 
         b2b_write_32l( cursor, frame_control | duration << DURATION_ID_SHIFT );
         cursor += 4;
-        B2b_Address_Write( cursor, TrcConfMib.the_bssid );                // BSSID
+        B2b_Address_Write( cursor, TrcConfMib.the_bssid );                
         cursor += 6;
 
-        B2b_Address_Write( cursor, my_network.src_mac_address );       // SA
+        B2b_Address_Write( cursor, my_network.src_mac_address );       
         cursor += 6;
 
-        B2b_Address_Write( cursor, my_network.dst_mac_address );   // DA
+        B2b_Address_Write( cursor, my_network.dst_mac_address );   
         cursor += 6;
-        //
-        // Sequence control will be written later by Access class
-        //
+        
         b2b_write_16l( cursor, htole16((TrcConfMib.SN[TrcConfMib.tid]++) << SEQUENCE_CONTROL_SEQUENCE_SHIFT));
         cursor += 2;
 
-        /*Qos control field**/
         if ( frame_control & FRAME_SUBTYPE_QOS )
         {
             if ((TrcConfMib.testflag & WIFI_IS_NOACK) == WIFI_IS_NOACK)
             {
                 if (TrcConfMib.testtype == TYPE_AMPDU){
-                    /*send sequence:   ampdu  ampdu bar ba*/
-                    b2b_write_16l( cursor, TrcConfMib.tid|(3<<5/*block ack*/) );
+                    
+                    b2b_write_16l( cursor, TrcConfMib.tid|(3<<5) );
                 }else{
-                    /*send sequence:  mpdu mpdu mpdu */
-                    WRITE_16L( cursor, TrcConfMib.tid|(1<<5/*comon no ack*/) );
+                    
+                    WRITE_16L( cursor, TrcConfMib.tid|(1<<5) );
                 }
             }else {
-                /*send sequence:  mpdu ack mpdu ack   or    ampdu ba ampdu ba*/
+                
                 b2b_write_16l( cursor, TrcConfMib.tid );
             }
 
             cursor += 2;
         }
-        header_length = cursor - buffer;          // End of MAC header
+        header_length = cursor - buffer;          
 
-        *cursor++ = 0xAA;                                  // DSAP
-        *cursor++ = 0xAA;                                  // SSAP
-        *cursor++ = 0x03;                                  // U-frame
-        *cursor++ = 0x00;                                  // OUI for Ethernet
+        *cursor++ = 0xAA;                                  
+        *cursor++ = 0xAA;                                  
+        *cursor++ = 0x03;                                  
+        *cursor++ = 0x00;                                  
         *cursor++ = 0x00;
         *cursor++ = 0x00;
 
-        //Write sim_check type.
         b2b_write_16b( cursor, NET_ETHER_TYPE_SIM_TEST );
         cursor += 2;
-
-        //B2b_Net_WriteSimcheck( cursor,STA1_VMAC0_SEND_LEN,TrcConfMib.tid);
-        //cursor = buffer+STA1_VMAC0_SEND_LEN;
 
         B2b_Net_WriteSimcheck( cursor,gB2BTestCasePacket.pkt_length,TrcConfMib.tid );
         cursor = buffer + gB2BTestCasePacket.pkt_length;
 
-        //pr_debug( "---aml debug--: pkt len: %d.\n",pkt_len);
-        //dump_memory_internal(buffer,48);
         B2B_Net_RequestTransmit(skb,cursor-buffer,TrcConfMib.tid);
-        //Net_RequestTransmit(buffer,pkt_len,TrcConfMib.tid);
-
+        
     }
     else {
         my_network.tx_pool_error_count++;
@@ -319,39 +292,29 @@ void Net_Receive(unsigned char *packet,unsigned short len,unsigned char rssi)
         unsigned char tid = 9;
         unsigned short qosCtrl;
         int headerlength;
-        //DBG_ENTER();
-        //
-       // if(STA2_VMAC1_RX_FRAME_DUMP)
-        // dump_memory_internal(packet,len);
-
+        
         frame_control = *(unsigned int*)packet;
         headerlength = MacFrame_GetHeaderSize( frame_control );
         if (MacFrame_IsType( frame_control, FRAME_TYPE_DATA|FRAME_SUBTYPE_QOS  )) {
                 qosCtrl = b2b_read_16b( packet + 24);
                 tid = qosCtrl&0xF;
-                //PRINT("qosCtrl = 0x%x,tid = 0x%x",qosCtrl,tid);
+                
                 RcvFrameTestSeq(packet,tid);
         }
         else {
                 tid = 8;
-                //PRINT("tid = 0x%x",tid);
+                
                 RcvFrameTestSeq(packet,tid);
                 headerlength = 24;
         }
 
-        //PRINT("headerlength = %d \n",headerlength);
         packet += headerlength;
-        //
-        // Read EtherType in the LLC/SNAP header
-        //
+        
         ether_type = b2b_read_16b( packet + 6 );
         packet += 8;
 
-        //PRINT("ether_type = 0x%x \n",ether_type);
         if ( ether_type == NET_ETHER_TYPE_IP ) {
-                //
-                // Receive IP packet, which can be PING or UDP
-                //
+                
                 unsigned int dst_ip_address = b2b_read_32b( packet + 16 );
 
                 if ( dst_ip_address == my_network.src_ip_address ) {
@@ -363,7 +326,7 @@ void Net_Receive(unsigned char *packet,unsigned short len,unsigned char rssi)
                                 unsigned short type = b2b_read_16b( packet + header_length );
 
                                 if ( type == NET_ICMP_TYPE_ECHO_REQUEST ) {
-                                        //Net_Send( NET_MESSAGE_PING_REPLY, packet ,vmac_id);
+                                        
                                         Net_Send( NET_MESSAGE_PING_REPLY, packet);
 
                                         my_network.rx_ping_request_count++;
@@ -398,7 +361,7 @@ void Net_Receive(unsigned char *packet,unsigned short len,unsigned char rssi)
 
                         opcode = b2b_read_16b( packet + 6 );
                         if ( opcode == NET_ARP_OPCODE_REQUEST ) {
-                                //Net_Send( NET_MESSAGE_ARP_REPLY, 0 ,vmac_id);
+                                
                                 Net_Send( NET_MESSAGE_ARP_REPLY, 0);
 
                                 my_network.rx_arp_request_count++;
@@ -416,30 +379,28 @@ void Net_Receive(unsigned char *packet,unsigned short len,unsigned char rssi)
         }
 }
 
-
-//void Net_Task(unsigned char vmac_id)
 void Net_Task(void)
 {
 #ifdef STA2_TCPIP_CHECKSUM
 #if STA2_TCPIP_CHECKSUM
-    my_network.state = 4;//NET_STATE_SEND_TCP
+    my_network.state = 4;
 #else
-    my_network.state = 3;//NET_STATE_SEND_SIM_TEST
-#endif//
+    my_network.state = 3;
+#endif
 #else
-    my_network.state = 3;//NET_STATE_SEND_SIM_TEST
+    my_network.state = 3;
 #endif
     switch ( my_network.state ) {
-    case 2://NET_STATE_SEND_UDP
+    case 2:
         Net_Send( NET_MESSAGE_UDP, 0);
         break;
-    case 1: //NET_STATE_SEND_PING:
+    case 1: 
         Net_Send( NET_MESSAGE_PING_REQUEST, 0);
         break;
-    case 3: //NET_STATE_SEND_SIM_TEST:
+    case 3: 
         Net_Send( NET_SIM_CHECK, 0);
         break;
-    case 4: //NET_STATE_SEND_TCP:
+    case 4: 
         Net_Send( NET_TCP_IP, 0);
         break;
     default:
@@ -450,7 +411,7 @@ void Net_Task(void)
 unsigned char * Net_GetNextPacketDes(void)
 {
     DBG_HAL_THR_ENTER();
-    //Net_Task(vmac_id);
+    
     Net_Task();
     if (!Queue_IsEmpty(&pNetworkTx->tx_queue))
         return (unsigned char *)Queue_Dequeue( &pNetworkTx->tx_queue );
@@ -475,7 +436,7 @@ void network_init(void)
     my_network.src_ip_address  = the_src_ip_address;
     my_network.dst_ip_address  = the_dst_ip_address;
     my_network.tx_rate = PHY_RATE_54;
-    my_network.state = NET_STATE_IDLE;//NET_STATE_IDLE;
+    my_network.state = NET_STATE_IDLE;
 
     Queue_Create( &pNetworkTx->tx_queue, pNetworkTx->tx_queue_buffer, ACCESS_TX_QUEUE_SIZE );
     Queue_Create( &pNetworkTx->manage_queue, pNetworkTx->manage_queue_buffer, ACCESS_TX_QUEUE_SIZE );
@@ -505,4 +466,3 @@ void prepare_test_hal_layer_thr_init(int usrtesttype)
 
     DBG_HAL_THR_EXIT();
 }
-

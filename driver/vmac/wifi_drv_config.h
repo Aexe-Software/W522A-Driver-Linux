@@ -1,35 +1,33 @@
 #ifndef _AUTO_CONFIG_H
 #define _AUTO_CONFIG_H
 
-/*0:sample rate, 1: minstrel*/
 #define DEFAULT_SELECT_MODE                 HAL_BAND_2G
-/* v16p AMSDU-OFF: on X96 Max Plus / Amlogic W155S1 SDIO, TX A-MSDU
- * concatenation reproducibly hangs the kernel network path under load
- * (queue fills, watchdog fires, interface effectively dies). Keep the
- * code path compiled in so cfg_txamsdu=1 in the .conf is still a valid
- * override for boards that tolerate it, but default to OFF. */
-#define DEFAULT_TXAMSDU_EN                  0   //v16p: default OFF, A-MSDU hangs SDIO on X96
 
+#define DEFAULT_TXAMSDU_EN                  0   
 
-#define DEFAULT_TXAMSDU_SUB_MAX              2
-#define DEFAULT_TXAMSDU_SUB_MAX_BW80              4
+#define DEFAULT_TXAMSDU_SUB_MAX              4
+#define DEFAULT_TXAMSDU_SUB_MAX_BW80              8
 #define DEFAULT_TXAMPDU_SUB_MIN               1
-#define DEFAULT_TXAMPDU_SUB_MAX_FOR_HT        32
-#define DEFAULT_TXAMPDU_SUB_MAX_COEX_ESCO     4   /*BT have eSCO logic link, we max aggregation 4 subfram*/
-#define DEFAULT_TXAMPDU_SUB_MAX_COEX               6   /*WIFI max aggregation sub  when WIFI/BT coexist */
-#define DEFAULT_TXAMPDU_SUB_MAX              32
-/*
- * v15r TX-AMPDU LENGTH DEFAULT: pre-v15r this was 1538 * 20 = 30760, an
- * arbitrary "20 MPDUs of 1538 B" cap. The HW aggregator descriptor's
- * `AGGR_len` field is u16 so the absolute ceiling is 65535, and the
- * negotiated BA window (64) lets us pack up to 64 MPDUs into one
- * A-MPDU. With the v15r wire-IE fix the peer now advertises 1 MiB so
- * the only remaining cap is this default. Bump to 65535 (u16 max) to
- * actually let the chip use the full BA window for jumbo A-MPDUs.
- */
-#define DEFAULT_TXAMPDU_LEN_MAX             65535 //max u16, HW AGGR_len ceiling
+#define DEFAULT_TXAMPDU_SUB_MAX_FOR_HT        64
+#define DEFAULT_TXAMPDU_SUB_MAX_COEX_ESCO     8   
+#define DEFAULT_TXAMPDU_SUB_MAX_COEX               16   
+#define DEFAULT_TXAMPDU_SUB_MAX              64
+
+#define DEFAULT_VHT_STA_AMPDU_LIMIT           8
+
+#define DEFAULT_TXAMPDU_LEN_MAX             65535 
 
 #define DEFAULT_BLOCKACK_BITMAPSIZE         64
+#define DEFAULT_RX_BA_WINDOW                64
+#define DEFAULT_RX_REORDER_TIMEOUT          1
+#define DEFAULT_AP_AMPDU_WAIT_TARGET        1
+#define DEFAULT_AP_AMPDU_HT20_LIMIT         32
+#define DEFAULT_AP_AMPDU_WIDE_LIMIT         64
+#define DEFAULT_AP_VHT80_TXAGGR             1
+#define DEFAULT_AP_TXAMPDU_EN               1
+#define DEFAULT_AP_RXAMPDU_EN               1
+#define DEFAULT_MONITOR_TXAMPDU_EN          0
+#define DEFAULT_MONITOR_RXAMPDU_EN          0
 #define DEFAULT_TXAMPDU_ONEFRAME        1
 #define DEFAULT_RXCHAINMASKLEGACY           1
 #define DEFAULT_TXCHAINMASKLEGACY           1
@@ -51,13 +49,13 @@
 #define DEFAULT_AMPDUACKPOLICY              0xff
 #define DEFAULT_TXAGG_PROT                  1
 #define DEFAULT_TXPOWER                     11
-#define DEFAULT_MCAST_EAPOL_NULLDATA_RATE_11N                      6500        /* Kbps */
-#define DEFAULT_MCAST_EAPOL_NULLDATA_RATE_11G                      1000        /* Kbps */
+#define DEFAULT_MCAST_EAPOL_NULLDATA_RATE_11N                      6500        
+#define DEFAULT_MCAST_EAPOL_NULLDATA_RATE_11G                      1000        
 #define DEFAULT_CONTRY                      0
 #define DEFAULT_CACHESIZE                   32
 #define DEFAULT_DSSUPPORT                   1
 #define DEFAULT_WMMSUPPORT                  1
-#define DEFAULT_MAX_VMAC                    4 /* number of vmac support */
+#define DEFAULT_MAX_VMAC                    4 
 
 #define DEFAULT_EAT_COUNT_MAX 1
 #define DEFAULT_MFP_EN 1
@@ -73,8 +71,6 @@
 
 #define DEFAULT_SUPPORT_WIFI_BT_COEXIST   0
 
-//ampdu burst may be not supported by ap, so default disabled here
-//802.11 define, imm ba is mandatory, delayed ba is optional. but practically, ap support delayed ba, not support imm ba.
 #define DEFAULT_BURST_ENABLE                1
 
 #define DEFAULT_CHANNEL_AUTO            0
@@ -83,20 +79,13 @@
 #define DEFAULT_CHANNEL                     149
 
 #define DEFAULT_RTC_ENABLE          0
-#define DEFAULT_INITIAL_POWERMODE  0 //0 no powersave ,1:powersave
+#define DEFAULT_INITIAL_POWERMODE  0 
 
-#define DEFAULT_TXAMPDU_EN              1   //default  support Aggr tx : Legacy & capture mode: AMPDU=0; 
-#define DEFAULT_RXAMPDU_EN              1    //default  support Aggr rx : Legacy & capture mode: AMPDU=0; 
+#define DEFAULT_TXAMPDU_EN              1   
+#define DEFAULT_RXAMPDU_EN              1    
 
+#define SRAM_16KMODE 0  
 
-#define SRAM_16KMODE 0  // 0: normal ; 1: capture 
-/*
- *  Wireless Mode Definition
- */
-
-//#if (DEFAULT_TXAMSDU_EN==1) && (DEFAULT_HW_CSUM==1)
-//#error  "DEFAULT_TXAMSDU_EN and DEFAULT_HW_CSUM should not be 1 both"
-//#endif
 extern int mac_addr0;
 extern int mac_addr1;
 extern int mac_addr2;
@@ -118,7 +107,7 @@ enum cip_param_id
     CHIP_PARAM_AMPDU_RX,
     CHIP_PARAM_AMPDU_LIMIT,
     CHIP_PARAM_AMPDU_SUBFRAMES,
-    CHIP_PARAM_AGGR_PROT,//10
+    CHIP_PARAM_AGGR_PROT,
     CHIP_PARAM_TXPOWER_LIMIT,
     CHIP_PARAM_BURST_ACK,
     CHIP_PARAM_ACK_POLICY,
@@ -127,28 +116,28 @@ enum cip_param_id
     CHIP_PARAM_USE_EAP_LOWEST_RATE,
     CHIP_PARAM_SHORTGI_ENABLE,
     CHIP_PARAM_BWC_ENABLE,
-    CHIP_PARAM_CBW_OFFSET,//19
+    CHIP_PARAM_CBW_OFFSET,
     CHIP_PARAM_SHORTPREAMBLE,
     CHIP_PARAM_RDG,
     CHIP_PARAM_UAPSU_EN,
     CHIP_PARAM_BEACONINV,
     CHIP_PARAM_HWTKIPMIC,
-    CHIP_PARAM_HWCSUM,//25
+    CHIP_PARAM_HWCSUM,
     CHIP_PARAM_RETRY_LIMIT,
     CHIP_PARAM_HTSUPPORT,
     CHIP_PARAM_DISABLE_RATECONTROL,
     CHIP_PARAM_AMPDU_ONE_FRAME,
-    CHIP_PARAM_TXLIVETIME,//30
+    CHIP_PARAM_TXLIVETIME,
     CHIP_PARAM_DEBUG,
     CHIP_PARAM_DBG_RXERR_RESET,
     CHIP_PARAM_RTC_ENABLE,
     CHIP_PARAM_WMM,
-    CHIP_PARAM_HT,//35
+    CHIP_PARAM_HT,
     CHIP_PARAM_VHT,
     CHIP_PARAM_UAPSD,
     CHIP_PARAM_DS,
     CHIP_PARAM_CIPHER_WEP,
-    CHIP_PARAM_CIPHER_AES_CCM,//40
+    CHIP_PARAM_CIPHER_AES_CCM,
     CHIP_PARAM_CIPHER_WPI,
     CHIP_PARAM_CIPHER_TKIP,
     CHIP_PARAM_DISRATECONTROL,
@@ -180,4 +169,4 @@ enum wifi_band
 int drv_get_config(void * dev, enum cip_param_id id);
 int drv_set_config(void * dev, enum cip_param_id id, int data);
 int drv_cfg_load_from_file(void);
-#endif // _AUTO_CONFIG_H
+#endif 

@@ -1,21 +1,3 @@
-/*
- * drivers/amlogic/wifi/aml_static_buf.c
- *
- * Copyright (C) 2017 Amlogic, Inc. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
- * more details.
- *
- */
-
-//#define pr_fmt(fmt)	"Wifi: %s: " fmt, __func__
 
 #include <linux/module.h>
 #include <linux/kernel.h>
@@ -26,10 +8,7 @@
 #include "wifi_common.h"
 #include <linux/skbuff.h>
 #include <linux/version.h>
-/* wlan_plat.h is Amlogic-specific.
- * On non-Amlogic platforms (Armbian) we skip it entirely because
- * bcmdhd_mem_prealloc() is behind #else NOT_AMLOGIC_PLATFORM and
- * therefore never referenced in this build. */
+
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 0))
 #include <linux/wlan_plat.h>
 #elif !defined(NOT_AMLOGIC_PLATFORM)
@@ -48,7 +27,11 @@ enum aml_prealloc_index {
 #define AML_RX   11
 #define AML_TX   20
 #define AML_RX_FIFO_SIZE   (1290 * 1024)
-#define AML_TX_DESC_BUF_SIZE            (256 * 1024)
+/* Must hold sizeof(struct drv_txdesc) * DRV_TXDESC_NUM. With SYSTEM64 that is
+ * 224 * 1280 = 286720 bytes, which overflowed the old 256K limit and made
+ * wifi_mem_prealloc() return NULL. 512K matches the order-7 page block that
+ * __get_free_pages(get_order()) actually allocates for the backing buffer. */
+#define AML_TX_DESC_BUF_SIZE            (512 * 1024)
 
 void *wifi_mem_prealloc(int section, unsigned long size)
 {
@@ -81,4 +64,3 @@ void *wifi_mem_prealloc(int section, unsigned long size)
     }
     return NULL;
 }
-

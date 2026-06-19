@@ -16,9 +16,7 @@ int drv_rx_addbareq( struct drv_private *drv_priv, void *, unsigned char dialogt
 
 void drv_rx_addbarsp(struct drv_private *drv_priv, void * nsta, unsigned char tid_index);
 
-
 void drv_rx_delba(struct drv_private *drv_priv, void *, struct wifi_mac_delba_parameterset *delbaparamset, unsigned short reasoncode);
 void drv_rxampdu_del(struct drv_private *drv_priv, struct aml_driver_nsta *drv_sta, unsigned char tid_index);
 
 #endif
-

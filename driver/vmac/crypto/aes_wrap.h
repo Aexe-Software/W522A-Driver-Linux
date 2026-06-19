@@ -1,19 +1,3 @@
-/*
- * AES-based functions
- *
- * - AES Key Wrap Algorithm (RFC3394)
- * - One-Key CBC MAC (OMAC1) hash with AES-128 and AES-256
- * - AES-128/192/256 CTR mode encryption
- * - AES-128 EAX mode encryption/decryption
- * - AES-128 CBC
- * - AES-GCM
- * - AES-CCM
- *
- * Copyright (c) 2003-2012, Jouni Malinen <j@w1.fi>
- *
- * This software may be distributed under the terms of the BSD license.
- * See README for more details.
- */
 
 #ifndef AES_WRAP_H
 #define AES_WRAP_H
@@ -72,4 +56,4 @@ int __must_check aes_ccm_ad(const u8 *key, size_t key_len, const u8 *nonce,
 			    const u8 *aad, size_t aad_len, const u8 *auth,
 			    u8 *plain);
 
-#endif /* AES_WRAP_H */
+#endif 

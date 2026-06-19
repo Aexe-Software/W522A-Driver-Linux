@@ -2,31 +2,24 @@
 #ifndef __NET80211_RATE_H__
 #define __NET80211_RATE_H__
 
-/* Definitions for valid VHT MCS map */
-#define VHT_MCSMAP_NSS1_MCS0_7  0xfffc  /* NSS=1 MCS 0-7, NSS=2 not supported, NSS=3 not supported */
-#define VHT_MCSMAP_NSS1_MCS0_8  0xfffd  /* NSS=1 MCS 0-8, NSS=2 not supported, NSS=3 not supported */
-#define VHT_MCSMAP_NSS2_MCS0_8  0xfff5  /* NSS=1 MCS 0-8, NSS=2       MCS 0-8, NSS=3 not supported */
-#define VHT_MCSMAP_NSS1_MCS0_9  0xfffe  /* NSS=1 MCS 0-9, NSS=2 not supported, NSS=3 not supported */
-#define VHT_MCSMAP_NSS2_MCS0_9  0xfffa  /* NSS=1 MCS 0-9, NSS=2       MCS 0-9, NSS=3 not supported */
-#define VHT_MCSMAP_NSS3_MCS0_9  0xffea  /* NSS=1 MCS 0-9, NSS=2       MCS 0-9, NSS=3       MCS 0-9 */
+#define VHT_MCSMAP_NSS1_MCS0_7  0xfffc  
+#define VHT_MCSMAP_NSS1_MCS0_8  0xfffd  
+#define VHT_MCSMAP_NSS2_MCS0_8  0xfff5  
+#define VHT_MCSMAP_NSS1_MCS0_9  0xfffe  
+#define VHT_MCSMAP_NSS2_MCS0_9  0xfffa  
+#define VHT_MCSMAP_NSS3_MCS0_9  0xffea  
 
-/* Definitions for valid VHT MCS mask */
-#define VHT_MCSMAP_NSS1_MASK   0xfffc   /* Single stream mask */
-#define VHT_MCSMAP_NSS2_MASK   0xfff0   /* Dual stream mask */
-#define VHT_MCSMAP_NSS3_MASK   0xffc0   /* Tri stream mask */
-
-/* Default VHT80 rate mask support all MCS rates except NSS=3 MCS 6 */
-
+#define VHT_MCSMAP_NSS1_MASK   0xfffc   
+#define VHT_MCSMAP_NSS2_MASK   0xfff0   
+#define VHT_MCSMAP_NSS3_MASK   0xffc0   
 
 #define VHT_MCS0_MC9 2
 #define VHT_MCS0_MC8 1
 #define VHT_MCS0_MC7 0
 
-
 #define  MAX_VHT_STREAMS 8
 
 #define RATE_ALGORITHM_NUMS 1
-
 
 struct wifi_mac_vht_rate_s {
     int num_streams;

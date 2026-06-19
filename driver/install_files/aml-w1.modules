@@ -1,1 +1,6 @@
+# W522A auto-load at boot — installed to /etc/modules-load.d/aml-w1.conf
+# ONLY when building/installing with W522A_AUTOLOAD=1.
+# Order matters: the SDIO bus driver (exports symbols) must come before the
+# WiFi MAC driver.
 aml_sdio
+vlsicomm

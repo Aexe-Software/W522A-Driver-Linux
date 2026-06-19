@@ -1,10 +1,3 @@
-/*
- * wlantest - IEEE 802.11 protocol monitoring and testing tool
- * Copyright (c) 2010-2013, Jouni Malinen <j@w1.fi>
- *
- * This software may be distributed under the terms of the BSD license.
- * See README for more details.
- */
 
 #ifndef WLANCRYPTO_WRAP_H
 #define WLANCRYPTO_WRAP_H
@@ -34,4 +27,4 @@ u8* gcmp_encrypt(const u8 *tk, size_t tk_len, const u8 *frame, size_t len,
 	size_t hdrlen, const u8 *qos,
 	const u8 *pn, int keyid, size_t *encrypted_len);
 
-#endif /* WLANCRYPTO_WRAP_H */
+#endif 

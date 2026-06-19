@@ -3,9 +3,7 @@
 
 #include <linux/skbuff.h>
 
-//#define SKBBUF_DEBUG
-
-#define OS_SKB_CB_MAXLEN (48)//kernel skb -> cb len = 48
+#define OS_SKB_CB_MAXLEN (48)
 #define os_skb_data(_skb) ((_skb)->data)
 #define os_skb_cb(_skb) ((_skb)->cb)
 #define os_skb_get_pktlen(_skb) ((_skb)->len)
@@ -17,10 +15,7 @@
 
 #define os_skb_push(_skb, _len) skb_push(_skb, _len)
 #define os_skb_trim(_skb, _len) skb_trim(_skb,_len)
-/* БАГ 9 fix: os_skb_pull без перевірки меж → негативний skb->len при
- * укороченому/пошкодженому пакеті → пошкодження пам'яті.
- * Використовуємо pskb_may_pull() перед pull: якщо даних недостатньо —
- * повертаємо NULL (caller отримує NULL замість переповнення). */
+
 static inline void *aml_skb_pull_safe(struct sk_buff *skb, unsigned int len)
 {
     if (unlikely(!pskb_may_pull(skb, len)))
@@ -57,4 +52,4 @@ extern int skb_free_time;
 #define os_skb_copy_expand(ori_skb, header_len, tail_len, priority, skb) skb_copy_expand(ori_skb, header_len, tail_len, priority);
 #endif
 
-#endif//_WIFI_SKBBUF_H_
+#endif

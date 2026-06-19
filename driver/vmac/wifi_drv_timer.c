@@ -1,16 +1,3 @@
-/*
- ****************************************************************************************
- *
- * Copyright (C) Amlogic 2010-2014
- *
- * Project: 11N 80211 driver  layer Software
- *
- * Description:
- *     driver layer timer function
- *
- *
- ****************************************************************************************
- */
 
 #include "wifi_mac_com.h"
 
@@ -27,50 +14,42 @@ static void os_timer_ex_handler(unsigned long timer_arg)
 #else
     timer_object = (struct os_timer_ext *)(timer_arg);
 #endif
-    /*
-     * Acquire the synchronization object.
-     * This is used to synchronize with routine drv_cancelTimer.
-     */
+    
     if (cmpxchg(&(timer_object->timer_lock), 0, 1) == 1)
     {
-        /* M-8 FIX: smp_wmb() ensures active_flag=0 is visible to other CPUs only after
-         * they see timer_lock has not been acquired (ARM64 weak memory model). */
+        
         smp_wmb();
         WRITE_ONCE(timer_object->active_flag, 0);
         return;
     }
-    //here, timer_lock=1
-    // if timer is being cancelled, do not run handler, and do not rearm timer.
+    
     if (timer_object->cancel_flag)
     {
-        // release the synchronization object
-        smp_wmb(); /* M-8 FIX */
+        
+        smp_wmb(); 
         WRITE_ONCE(timer_object->active_flag, 0);
         (void) cmpxchg(&(timer_object->timer_lock), 1, 0);
         return;
     }
 
-    // run timer handler
     if ((timer_object->timer_handler != NULL) &&
         (timer_object->context != NULL) &&
         (timer_object->timer_handler(timer_object->context) == OS_TIMER_REARMED) &&
         (!timer_object->cancel_flag))
     {
-        // rearm timer only if handler function returned 0
+        
         OS_SET_TIMER(&timer_object->os_timer, timer_object->timer_period);
     }
     else
     {
-        // timer not rearmed - no longer active
-        smp_wmb(); /* M-8 FIX */
+        
+        smp_wmb(); 
         WRITE_ONCE(timer_object->active_flag, 0);
     }
 
-    // release the synchronization object
     (void) cmpxchg(&(timer_object->timer_lock), 1, 0);
-    //here, timer_lock=0
+    
 }
-
 
 unsigned char os_timer_ex_initialize(struct os_timer_ext *timer_object,
     unsigned int timer_period, timer_handler_func timer_handler, void *context)
@@ -84,6 +63,29 @@ unsigned char os_timer_ex_initialize(struct os_timer_ext *timer_object,
         timer_object->timer_lock = 0;
         timer_object->active_flag = 0;
         timer_object->cancel_flag = 0;
+        timer_object->deferrable_flag = 0;
+        timer_object->timer_period = timer_period;
+        timer_object->context = context;
+        timer_object->timer_handler = timer_handler;
+        return 1;
+    }
+
+    return 0;
+}
+
+unsigned char os_timer_ex_initialize_deferrable(struct os_timer_ext *timer_object,
+    unsigned int timer_period, timer_handler_func timer_handler, void *context)
+{
+    ASSERT(timer_object != NULL);
+
+    if (timer_object != NULL)
+    {
+        OS_INIT_TIMER_DEFERRABLE(&timer_object->os_timer, os_timer_ex_handler, timer_object);
+
+        timer_object->timer_lock = 0;
+        timer_object->active_flag = 0;
+        timer_object->cancel_flag = 0;
+        timer_object->deferrable_flag = 1;
         timer_object->timer_period = timer_period;
         timer_object->context = context;
         timer_object->timer_handler = timer_handler;
@@ -98,17 +100,14 @@ void os_set_timer_period (struct os_timer_ext* timer_object, unsigned int timer_
     timer_object->timer_period  = timer_period;
 }
 
-/* may lower than timer */
 unsigned char os_timer_ex_start (struct os_timer_ext* timer_object)
 {
     if (timer_object == NULL || timer_object->timer_handler == NULL)
         return 0;
 
-    // mark timer as active
     timer_object->active_flag = 1;
     timer_object->cancel_flag = 0;
 
-    // arm timer for the first time
     OS_SET_TIMER(&timer_object->os_timer, timer_object->timer_period);
 
     return 1;
@@ -120,7 +119,6 @@ unsigned char os_timer_ex_start_period (struct os_timer_ext* timer_object, unsig
     return os_timer_ex_start(timer_object);
 }
 
-/* timer handler cannot cancle himself */
 unsigned char os_timer_ex_cancel (struct os_timer_ext* timer_object, enum timer_flags flags)
 {
     unsigned char    canceled     = 1;
@@ -128,7 +126,6 @@ unsigned char os_timer_ex_cancel (struct os_timer_ext* timer_object, enum timer_
     if (timer_object == NULL)
         return 0;
 
-    // indicate timer is being cancelled
     timer_object->cancel_flag = 1;
 
     if ((flags == CANCEL_SLEEP) && !in_atomic() && !irqs_disabled())

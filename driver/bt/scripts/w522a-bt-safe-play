@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+MAC="${1:-41:42:C6:B3:06:9B}"
+SRC="${2:-}"
+VOL="${3:-8}"
+LOG=/var/log/w522a-bt-m45.log
+exec >>"$LOG" 2>&1
+
+if [ -z "$SRC" ] || [ ! -f "$SRC" ]; then
+  echo "usage: w522a-bt-safe-play MAC /path/file [volume_percent]"
+  exit 2
+fi
+
+echo "$(date '+%F %T') safe-play start $SRC vol=$VOL"
+/usr/local/sbin/w522a-bt-connect-m45 "$MAC"
+
+PCM="$(bluealsa-cli list-pcms 2>/dev/null | grep "$MAC" | head -1 || true)"
+[ -n "$PCM" ] || { echo "no bluealsa pcm"; exit 3; }
+
+bluealsa-cli soft-volume "$PCM" true || true
+bluealsa-cli volume "$PCM" "$VOL" "$VOL" || bluealsa-cli volume "$PCM" "$VOL" || true
+bluealsa-cli mute "$PCM" false || true
+
+ffmpeg -hide_banner -loglevel error -i "$SRC" -vn -ac 2 -ar 44100 -sample_fmt s16 \
+  -af "volume=${VOL}/100" -f wav /tmp/w522a-bt-safe.wav -y
+timeout 60s aplay -D "bluealsa:DEV=$MAC,PROFILE=a2dp" /tmp/w522a-bt-safe.wav
+
+echo "$(date '+%F %T') safe-play done"

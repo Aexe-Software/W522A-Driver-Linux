@@ -1,10 +1,3 @@
-/*
- * AES SIV (RFC 5297)
- * Copyright (c) 2013 Cozybit, Inc.
- *
- * This software may be distributed under the terms of the BSD license.
- * See README for more details.
- */
 
 #include "aml_crypto_wrap.h"
 
@@ -12,9 +5,7 @@
 #include "aes_wrap.h"
 #include "aes_siv.h"
 
-
-static const u8 zero[AES_BLOCK_SIZE];
-
+static const u8 zero[AES_BLOCK_SIZE] = { 0 };
 
 static void dbl(u8 *pad)
 {
@@ -28,7 +19,6 @@ static void dbl(u8 *pad)
 		pad[AES_BLOCK_SIZE - 1] ^= 0x87;
 }
 
-
 static void xor(u8 *a, const u8 *b)
 {
 	int i;
@@ -36,7 +26,6 @@ static void xor(u8 *a, const u8 *b)
 	for (i = 0; i < AES_BLOCK_SIZE; i++)
 		*a++ ^= *b++;
 }
-
 
 static void xorend(u8 *a, int alen, const u8 *b, int blen)
 {
@@ -49,7 +38,6 @@ static void xorend(u8 *a, int alen, const u8 *b, int blen)
 		a[alen - blen + i] ^= b[i];
 }
 
-
 static void pad_block(u8 *pad, const u8 *addr, size_t len)
 {
 	os_memset(pad, 0, AES_BLOCK_SIZE);
@@ -58,7 +46,6 @@ static void pad_block(u8 *pad, const u8 *addr, size_t len)
 	if (len < AES_BLOCK_SIZE)
 		pad[len] = 0x80;
 }
-
 
 static int aes_s2v(const u8 *key, size_t key_len,
 		   size_t num_elem, const u8 *addr[], size_t *len, u8 *mac)
@@ -114,7 +101,6 @@ static int aes_s2v(const u8 *key, size_t key_len,
 	return omac1_aes_vector(key, key_len, 1, data, data_len, mac);
 }
 
-
 int aes_siv_encrypt(const u8 *key, size_t key_len,
 		    const u8 *pw, size_t pwlen,
 		    size_t num_elem, const u8 *addr[], const size_t *len,
@@ -151,12 +137,10 @@ int aes_siv_encrypt(const u8 *key, size_t key_len,
 	os_memcpy(iv, v, AES_BLOCK_SIZE);
 	os_memcpy(crypt_pw, pw, pwlen);
 
-	/* zero out 63rd and 31st bits of ctr (from right) */
 	v[8] &= 0x7f;
 	v[12] &= 0x7f;
 	return aes_ctr_encrypt(k2, key_len, v, crypt_pw, pwlen);
 }
-
 
 int aes_siv_decrypt(const u8 *key, size_t key_len,
 		    const u8 *iv_crypt, size_t iv_c_len,

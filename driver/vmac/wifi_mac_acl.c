@@ -1,21 +1,7 @@
-/*
- ****************************************************************************************
- *
- * Copyright (C) Amlogic 2010-2014
- *
- * Project: 11N 80211 mac  layer Software
- *
- * Description:
- *     wifi_mac ACL module ,access control module,
- *
- *
- ****************************************************************************************
- */
 
 #include "wifi_mac_com.h"
 
 int my_mod_use = 0;
-
 
 enum
 {
@@ -23,7 +9,6 @@ enum
     ACL_POLICY_ALLOW    = 1,
     ACL_POLICY_DENY     = 2,
 };
-
 
 struct NETWIFI_S_ACL_INFO
 {
@@ -38,9 +23,6 @@ struct NETWIFI_S_ACL
     struct list_head   as_list;
     struct list_head       as_hash[ACL_HASHSIZE];
 };
-
-
-
 
 static  void acl_free_all_locked(struct NETWIFI_S_ACL *);
 static int
@@ -105,7 +87,7 @@ _acl_free(struct NETWIFI_S_ACL *aclpriv, struct NETWIFI_S_ACL_INFO *aclinfo)
 
     list_del_init(&aclinfo->acl_list);
     list_del_init(&aclinfo->acl_hash);
-//        LIST_REMOVE(NETWIFI_S_ACL_INFO, acl_hash);
+
     FREE(aclinfo,"aclinfo");
 }
 
@@ -123,7 +105,7 @@ acl_check(struct wlan_net_vif *wnet_vif, const unsigned char mac[WIFINET_ADDR_LE
         case ACL_POLICY_DENY:
             return _find_acl(aclpriv, mac) == NULL;
     }
-    return 0;       /* should not happen */
+    return 0;       
 }
 
 static int
@@ -240,7 +222,6 @@ static const struct wifi_mac_actuator mac_acl=
     .iac_getpolicy  = acl_getpolicy,
 };
 
-
 struct wifi_mac_actuator * wifi_mac_acl_attach(void)
 {
     return (struct wifi_mac_actuator *)&mac_acl;
@@ -249,5 +230,3 @@ struct wifi_mac_actuator * wifi_mac_acl_attach(void)
 void wifi_mac_acl_deattach(void)
 {
 }
-
-

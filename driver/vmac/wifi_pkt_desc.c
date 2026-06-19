@@ -27,7 +27,7 @@ struct drv_txdesc *wifi_mac_alloc_txdesc(struct wifi_mac *wifimac)
         }
 
         if (free_page_hold_count >= 50) {
-            //pr_debug("free_page_hold_count lager than 50, maybe we can reboot here\n");
+            
         }
         return NULL;
     }
@@ -47,12 +47,12 @@ void wifi_mac_recycle_txdesc(struct sk_buff *skbbuf)
 
     wifimac = wifi_mac_get_mac_handle();
 
-    //pr_debug("%s ptxdesc:%p, txinfo:%p\n", __func__, txinfo->ptxdesc, txinfo);
     INIT_LIST_HEAD(&tx_queue);
 
     if (txinfo->ptxdesc != NULL) {
-        list_add_tail(&txinfo->ptxdesc->txdesc_queue, &tx_queue);
         memset(txinfo->ptxdesc, 0, sizeof(struct drv_txdesc));
+        INIT_LIST_HEAD(&txinfo->ptxdesc->txdesc_queue);
+        list_add_tail(&txinfo->ptxdesc->txdesc_queue, &tx_queue);
 
         TX_DESC_BUF_LOCK(wifimac);
         list_splice_tail_init(&tx_queue, &wifimac->txdesc_freequeue);

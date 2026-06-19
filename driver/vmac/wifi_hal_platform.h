@@ -1,16 +1,14 @@
 #ifndef __PLATFORM_WIFI_AML__
 #define __PLATFORM_WIFI_AML__
 
-
-
 #ifdef HAL_FPGA_VER
 #define OWNER_NAME "AML_WIFI"
 
-#define GPIOX_6     234  //GET ( kernel dts print)
+#define GPIOX_6     234  
 #define GPIOX_7     235
 #define GPIOX_19    247
-#define GPIOY_15    226 //IRQ TEST USE OK
-#define GPIOX_20    248  //used to clk_sel,replace before GPIOY_15
+#define GPIOY_15    226 
+#define GPIOX_20    248  
 
 typedef struct version_info {
     char version_name[10];

@@ -62,16 +62,22 @@ enum
 #define DBG_HAL_THR_EXIT()
 
 extern int aml_debug;
+extern int w522a_debug_printk;
 extern unsigned long long g_dbg_info_enable;
 extern unsigned long long g_dbg_modules;
 
-/*
- * DPRINTF — fixed: wrap pr_debug in its own braces to avoid -Wempty-body
- * when the macro is used after an if/else without {} in caller code.
- */
+#define W522A_DBG_OUT(...) do {                         \
+        if (w522a_debug_printk > 1)                      \
+            printk(KERN_INFO __VA_ARGS__);               \
+        else if (w522a_debug_printk == 1)                \
+            printk_ratelimited(KERN_INFO __VA_ARGS__);   \
+        else                                             \
+            pr_debug(__VA_ARGS__);                       \
+    } while (0)
+
 #define DPRINTF(_m, ...) do {                   \
         if (aml_debug & (_m))                   \
-            pr_debug(__VA_ARGS__);              \
+            W522A_DBG_OUT(__VA_ARGS__);         \
     } while (0)
 
 enum
@@ -94,50 +100,36 @@ enum
 #define AML_PRINT(_m, format, ...) do {                                         \
         if (g_dbg_modules & (_m)) {                                             \
             if ((_m) == AML_DBG_MODULES_P2P)                                    \
-                pr_debug("[p2p] <%s> %d " format "", __func__, __LINE__, ##__VA_ARGS__); \
+                W522A_DBG_OUT("[p2p] <%s> %d " format "", __func__, __LINE__, ##__VA_ARGS__); \
             else if ((_m) == AML_DBG_MODULES_RATE_CTR)                          \
-                pr_debug("[mi_rate] <%s> %d " format "", __func__, __LINE__, ##__VA_ARGS__); \
+                W522A_DBG_OUT("[mi_rate] <%s> %d " format "", __func__, __LINE__, ##__VA_ARGS__); \
             else if ((_m) == AML_DBG_MODULES_TX)                                \
-                pr_debug("[TX] <%s> %d " format "", __func__, __LINE__, ##__VA_ARGS__); \
+                W522A_DBG_OUT("[TX] <%s> %d " format "", __func__, __LINE__, ##__VA_ARGS__); \
             else if ((_m) == AML_DBG_MODULES_TX_ERROR)                          \
-                pr_debug("[TX_ERROR] <%s> %d " format "", __func__, __LINE__, ##__VA_ARGS__); \
+                W522A_DBG_OUT("[TX_ERROR] <%s> %d " format "", __func__, __LINE__, ##__VA_ARGS__); \
             else if ((_m) == AML_DBG_MODULES_SCAN)                              \
-                pr_debug("[SCAN] <%s> %d " format "", __func__, __LINE__, ##__VA_ARGS__); \
+                W522A_DBG_OUT("[SCAN] <%s> %d " format "", __func__, __LINE__, ##__VA_ARGS__); \
         }                                                                        \
     } while (0)
 
+/* The crypto/ wpa-derived sources (aml_crypto_wrap.h) define their own
+ * ERROR_DEBUG_OUT -> wpa_printf before pulling this header in via
+ * wifi_mac_com.h. Guard with #ifndef so we don't redefine it there (which
+ * warned on every crypto/*.c). Non-crypto translation units have it undefined
+ * and get the kernel pr_err() version below. */
+#ifndef ERROR_DEBUG_OUT
 #define ERROR_DEBUG_OUT(format, ...) do {                               \
         pr_err("FUNCTION: %s LINE: %d:" format "", __func__, __LINE__, ##__VA_ARGS__); \
     } while (0)
+#endif
 
 #define AML_OUTPUT(format, ...) do {                                    \
-        pr_debug("<%s> %d:" format "", __func__, __LINE__, ##__VA_ARGS__); \
+        W522A_DBG_OUT("<%s> %d:" format "", __func__, __LINE__, ##__VA_ARGS__); \
     } while (0)
-
 
 #include "wifi_pt_init.h"
 extern struct _B2B_Platform_Conf gB2BPlatformConf;
 
-
-/*
- * OS_SPIN_* macros — fixed for mainline kernel / Armbian:
- *
- * Original code used bare {if (...) pr_debug(...); spin_lock...} which
- * triggers -Wempty-body because the semicolon after pr_debug ends the
- * if-body, leaving spin_lock outside the if — and gcc warns about the
- * empty if-body when DEBUG_LOCK is disabled.
- *
- * Fix: use do { } while(0) wrappers with proper braces around the if.
- * DEBUG_LOCK is left defined but the pr_debug paths only fire when
- * AML_DEBUG_LOCK bit is set at runtime (default: off).
- */
-
-/* ---- Spinlock (IRQ save) --------------------------------- */
-/* БАГ 5 fix: pr_debug переміщено ПІСЛЯ spin_lock_irqsave для LOCK
- * і ДО spin_unlock_irqrestore для UNLOCK. Виклик pr_debug (dynamic_debug)
- * до взяття блокування може спробувати взяти внутрішній лок у IRQ-контексті
- * раніше ніж irqsave вимкнув переривання → deadlock або BUG().
- */
 #define OS_SPIN_LOCK_IRQ(a, b) do {                                         \
         spin_lock_irqsave((a), (b));                                        \
         if (aml_debug & AML_DEBUG_LOCK)                                     \
@@ -150,7 +142,6 @@ extern struct _B2B_Platform_Conf gB2BPlatformConf;
         spin_unlock_irqrestore((a), (b));                                   \
     } while (0)
 
-/* ---- Spinlock (BH) --------------------------------------- */
 #define OS_SPIN_LOCK_BH(a) do {                                             \
         if (aml_debug & AML_DEBUG_LOCK)                                     \
             pr_debug("%s,%d,%p, lock_bh ++\n", __func__, __LINE__, (a));   \
@@ -163,7 +154,6 @@ extern struct _B2B_Platform_Conf gB2BPlatformConf;
         spin_unlock_bh((a));                                                \
     } while (0)
 
-/* ---- Spinlock (plain) ------------------------------------ */
 #define OS_SPIN_LOCK(a) do {                                                \
         if (aml_debug & AML_DEBUG_LOCK)                                     \
             pr_debug("%s,%d,%p, spin ++\n", __func__, __LINE__, (a));      \
@@ -176,7 +166,6 @@ extern struct _B2B_Platform_Conf gB2BPlatformConf;
         spin_unlock((a));                                                   \
     } while (0)
 
-/* ---- Read-write lock ------------------------------------- */
 #define OS_WRITE_LOCK(a) do {                                               \
         if (aml_debug & AML_DEBUG_LOCK)                                     \
             pr_debug("%s,%d,%p, wlock ++\n", __func__, __LINE__, (a));     \
@@ -213,10 +202,8 @@ extern struct _B2B_Platform_Conf gB2BPlatformConf;
         write_unlock_irqrestore((a), (b));                                  \
     } while (0)
 
-/* ---- Mutex ----------------------------------------------- */
 #define OS_MUTEX_LOCK(a)   do { mutex_lock(a);   } while (0)
 #define OS_MUTEX_UNLOCK(a) do { mutex_unlock(a); } while (0)
-
 
 #if defined(FPGA) || defined(CHIP)
 #define PRINT(...)          do { pr_debug(__VA_ARGS__); } while (0)
@@ -229,7 +216,6 @@ extern struct _B2B_Platform_Conf gB2BPlatformConf;
 #define DBG_ENTER()
 #define DBG_EXIT()
 #endif
-
 
 #ifndef ASSERT
 #define ASSERT(exp) do {                                                    \
@@ -249,7 +235,7 @@ extern struct _B2B_Platform_Conf gB2BPlatformConf;
         }                                       \
     } while (0)
 
-#endif /* __KERNEL__ */
+#endif 
 
 void address_print(unsigned char *address);
 void IPv4_address_print(unsigned char *address);
@@ -268,4 +254,4 @@ void WRITE_32B(unsigned char *address, unsigned int value);
 
 void ie_dbg(unsigned char *ie);
 
-#endif /* _AML_DEBUG_H_ */
+#endif 

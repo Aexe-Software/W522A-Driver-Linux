@@ -1,6 +1,10 @@
 #ifndef __WIFI_SDIO_CFG_ADDR_H__
 #define __WIFI_SDIO_CFG_ADDR_H__
 
+#ifndef BIT
+#define BIT(n) (1UL << (n))
+#endif
+
 //Base ADDR
 // for statistic host module
 #define MOD_VADDR (0xF000)  

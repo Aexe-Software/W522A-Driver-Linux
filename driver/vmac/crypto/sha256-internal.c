@@ -1,28 +1,11 @@
-/*
- * SHA-256 hash implementation and interface functions
- * Copyright (c) 2003-2011, Jouni Malinen <j@w1.fi>
- *
- * This software may be distributed under the terms of the BSD license.
- * See README for more details.
- */
 
 #include "aml_crypto_wrap.h"
 
-//#include "common.h"
 #include "sha256.h"
 #include "sha256_i.h"
-//#include "crypto.h"
+
 #include "wlancrypto_wrap.h"
 
-
-/**
- * aml_sha256_vector - SHA256 hash for data vector
- * @num_elem: Number of elements in the data vector
- * @addr: Pointers to the data areas
- * @len: Lengths of the data blocks
- * @mac: Buffer for the hash
- * Returns: 0 on success, -1 of failure
- */
 int aml_sha256_vector(size_t num_elem, const u8 *addr[], const size_t *len,
 		  u8 *mac)
 {
@@ -41,13 +24,6 @@ int aml_sha256_vector(size_t num_elem, const u8 *addr[], const size_t *len,
 	return 0;
 }
 
-
-/* ===== start - public domain SHA256 implementation ===== */
-
-/* This is based on SHA256 implementation in LibTomCrypt that was released into
- * public domain by Tom St Denis. */
-
-/* the K array */
 static const unsigned long K[64] = {
 	0x428a2f98UL, 0x71374491UL, 0xb5c0fbcfUL, 0xe9b5dba5UL, 0x3956c25bUL,
 	0x59f111f1UL, 0x923f82a4UL, 0xab1c5ed5UL, 0xd807aa98UL, 0x12835b01UL,
@@ -64,8 +40,6 @@ static const unsigned long K[64] = {
 	0x90befffaUL, 0xa4506cebUL, 0xbef9a3f7UL, 0xc67178f2UL
 };
 
-
-/* Various logical functions */
 #define RORc(x, y) \
 ( ((((unsigned long) (x) & 0xFFFFFFFFUL) >> (unsigned long) ((y) & 31)) | \
    ((unsigned long) (x) << (unsigned long) (32 - ((y) & 31)))) & 0xFFFFFFFFUL)
@@ -81,29 +55,24 @@ static const unsigned long K[64] = {
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 #endif
 
-/* compress 512-bits */
 static int sha256_compress(struct aml_sha256_state *md, unsigned char *buf)
 {
 	u32 S[8], W[64], t0, t1;
 	u32 t;
 	int i;
 
-	/* copy state into S */
 	for (i = 0; i < 8; i++) {
 		S[i] = md->state[i];
 	}
 
-	/* copy the state into 512-bits into W[0..15] */
 	for (i = 0; i < 16; i++)
 		W[i] = WPA_GET_BE32(buf + (4 * i));
 
-	/* fill W[16..63] */
 	for (i = 16; i < 64; i++) {
 		W[i] = Gamma1(W[i - 2]) + W[i - 7] + Gamma0(W[i - 15]) +
 			W[i - 16];
 	}
 
-	/* Compress */
 #define RND(a,b,c,d,e,f,g,h,i)                          \
 	t0 = h + Sigma1(e) + Ch(e, f, g) + K[i] + W[i];	\
 	t1 = Sigma0(a) + Maj(a, b, c);			\
@@ -116,15 +85,12 @@ static int sha256_compress(struct aml_sha256_state *md, unsigned char *buf)
 		S[4] = S[3]; S[3] = S[2]; S[2] = S[1]; S[1] = S[0]; S[0] = t;
 	}
 
-	/* feedback */
 	for (i = 0; i < 8; i++) {
 		md->state[i] = md->state[i] + S[i];
 	}
 	return 0;
 }
 
-
-/* Initialize the hash state */
 void aml_sha256_init(struct aml_sha256_state *md)
 {
 	md->curlen = 0;
@@ -139,13 +105,6 @@ void aml_sha256_init(struct aml_sha256_state *md)
 	md->state[7] = 0x5BE0CD19UL;
 }
 
-/**
-   Process a block of memory though the hash
-   @param md     The hash state
-   @param in     The data to hash
-   @param inlen  The length of the data (octets)
-   @return CRYPT_OK if successful
-*/
 int aml_sha256_process(struct aml_sha256_state *md, const unsigned char *in,
 		   unsigned long inlen)
 {
@@ -179,13 +138,6 @@ int aml_sha256_process(struct aml_sha256_state *md, const unsigned char *in,
 	return 0;
 }
 
-
-/**
-   Terminate the hash to get the digest
-   @param md  The hash state
-   @param out [out] The destination of the hash (32 bytes)
-   @return CRYPT_OK if successful
-*/
 int aml_sha256_done(struct aml_sha256_state *md, unsigned char *out)
 {
 	int i;
@@ -193,16 +145,10 @@ int aml_sha256_done(struct aml_sha256_state *md, unsigned char *out)
 	if (md->curlen >= sizeof(md->buf))
 		return -1;
 
-	/* increase the length of the message */
 	md->length += md->curlen * 8;
 
-	/* append the '1' bit */
 	md->buf[md->curlen++] = (unsigned char) 0x80;
 
-	/* if the length is currently above 56 bytes we append zeros
-	 * then compress.  Then we can fall back to padding zeros and length
-	 * encoding like normal.
-	 */
 	if (md->curlen > 56) {
 		while (md->curlen < SHA256_BLOCK_SIZE) {
 			md->buf[md->curlen++] = (unsigned char) 0;
@@ -211,20 +157,15 @@ int aml_sha256_done(struct aml_sha256_state *md, unsigned char *out)
 		md->curlen = 0;
 	}
 
-	/* pad up to 56 bytes of zeroes */
 	while (md->curlen < 56) {
 		md->buf[md->curlen++] = (unsigned char) 0;
 	}
 
-	/* store length */
 	WPA_PUT_BE64(md->buf + 56, md->length);
 	sha256_compress(md, md->buf);
 
-	/* copy output */
 	for (i = 0; i < 8; i++)
 		WPA_PUT_BE32(out + (4 * i), md->state[i]);
 
 	return 0;
 }
-
-/* ===== end - public domain SHA256 implementation ===== */

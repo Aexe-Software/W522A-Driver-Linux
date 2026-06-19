@@ -1,16 +1,3 @@
-/*
- ****************************************************************************************
- *
- * Copyright (C) Amlogic 2010-2014
- *
- * Project: 11N 80211 mac  layer Software
- *
- * Description:
- *     wifi_mac layer interface function/interface use by driver layer
- *
- *
- ****************************************************************************************
- */
 
 #ifndef _WIFI_MAC_PMF_H_
 #define _WIFI_MAC_PMF_H_
@@ -19,7 +6,6 @@
 #include "wifi_mac_encrypt.h"
 
 #define WEP_KEYS 4
-//#define PMF_PKT_PRINT 1
 
 #define SET_ICE_IV_LEN(iv_len, icv_len, encrypt)\
     do {\
@@ -88,4 +74,4 @@ void wifi_mac_disable_hw_mgmt_decrypt(void);
 int wifi_mac_unprotected_mgmt_pkt_handle(struct wifi_station *sta, struct sk_buff *skb, unsigned char subtype);
 int wifi_mac_mgmt_validate(struct wifi_station *sta, struct sk_buff *skb, unsigned char subtype);
 
-#endif//_WIFI_MAC_PMF_H_
+#endif

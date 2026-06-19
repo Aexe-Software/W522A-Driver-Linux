@@ -1,24 +1,3 @@
-/*
- ****************************************************************************************
- *
- * Copyright (C) amlogic.com 2009
- *
- * Project: amlogic Software
- *
- * Description:
- *      wifi soft mac hardware function
- *
- * Revision History:
- * $Source: wifi_hal_cmd.c
- *
- ****************************************************************************************
- */
-#ifdef HAL_SIM_VER
-#ifdef FW_NAME
-namespace FW_NAME
-{
-#endif
-#endif
 
 #include "wifi_hal_com.h"
 #include "wifi_hif.h"
@@ -33,32 +12,30 @@ namespace FW_NAME
 #include <linux/firmware.h>
 #include "wifi_mac_com.h"
 
-#if defined (HAL_FPGA_VER)
 #include "wifi_drv_statistic.h"
-#endif
-
 
 #define WIFI_CONF_PATH "/lib/firmware/aml"
 
 static char * conf_path = WIFI_CONF_PATH;
 module_param(conf_path, charp, S_IRUGO);
 
-unsigned char g_tx_power_change_disable = 0;
+static int rf_count_override;
+module_param(rf_count_override, int, 0644);
+MODULE_PARM_DESC(rf_count_override,
+    "Override RF chain count after efuse detection for testing (0=auto, 1 or 2=force)");
+
+unsigned char g_tx_power_change_disable = 1;
 unsigned char g_wftx_pwrtbl_en = 0;
 unsigned char g_initial_gain_change_disable = 0;
 static struct WF2G_Txpwr_Param g_wf2g_txpwr_param;
 static struct WF5G_Txpwr_Param g_wf5g_txpwr_param;
 extern unsigned char tpc_mode;
 
-//set cmd to firmware
 unsigned int phy_set_param_cmd(unsigned char cmd,unsigned char vid,unsigned int data)
 {
     unsigned char CmdData[64] = {0};
     struct hal_private * hal_priv = hal_get_priv();
     bool ret = false;
-#ifdef POWER_SAVE_NO_SDIO
-    unsigned int ptr = 0;
-#endif
     DBG_ENTER();
 
     CmdData[0] = cmd;
@@ -73,10 +50,10 @@ unsigned int phy_set_param_cmd(unsigned char cmd,unsigned char vid,unsigned int 
 
     POWER_BEGIN_LOCK();
     if ((cmd == Power_Save_Cmd)
-            //&& (data == PS_DOZE)
+            
             && (hal_priv->powersave_init_flag == 0))
     {
-        /* whatever driver ps status (active or sleep), just return when new cmd is PS_DOZE */
+        
         if ((hal_priv->hal_drv_ps_status & HAL_DRV_STS_MASK) != 0)
         {
             POWER_END_LOCK();
@@ -92,7 +69,7 @@ unsigned int phy_set_param_cmd(unsigned char cmd,unsigned char vid,unsigned int 
         }
         else
         {
-            // set driver sleep flag to protect power save flow
+            
             hal_priv->hal_drv_ps_status |= HAL_DRV_IN_SLEEPING;
         }
 
@@ -121,15 +98,6 @@ unsigned int phy_set_param_cmd(unsigned char cmd,unsigned char vid,unsigned int 
 
     POWER_END_LOCK();
     HAL_END_LOCK();
-
-#ifdef POWER_SAVE_NO_SDIO
-    if ((ret && (cmd == Power_Save_Cmd) && (data == PS_ACTIVE))
-            || (!ret && (cmd == Power_Save_Cmd) && (data == PS_DOZE)))
-    {
-        ptr = hal_priv->hal_ops.phy_get_rw_ptr(0);
-        hal_priv->rx_host_offset = ((ptr >> 16) & 0xffff) * 4;
-    }
-#endif
 
     if (cmd == Power_Save_Cmd)
         hal_priv->hal_call_back->drv_pwrsave_wake_req(hal_priv->drv_priv, 0);
@@ -161,15 +129,12 @@ unsigned long long phy_get_param_cmd_ull(unsigned char cmd,unsigned char vid)
     return scmd.param0;
 }
 
-#if defined (HAL_FPGA_VER)
 unsigned int phy_set_rtc_enable(int enrtc)
 {
     PRINT("Mac_Rtc_Cmd %x \n", enrtc);
     phy_set_param_cmd( Mac_Rtc_Cmd, 0, enrtc);
     return 1;
 }
-
-#endif
 
 unsigned int phy_register_sta_id(unsigned char vid,unsigned short StaAid,unsigned char *pMac, unsigned char encrypt)
 {
@@ -200,15 +165,12 @@ unsigned int phy_addba_ok(unsigned char wnet_vif_id,unsigned short StaAid,unsign
     struct hal_private *hal_priv = hal_get_priv();
     Add_BA_Struct AddBA = {0};
 
-    //PRINT("phy_addba_okwnet_vif_id %d StaAid %d,tid %d,sn 0x%x,baw,%d,authorless %d,batype %d \n",
-      //  wnet_vif_id, StaAid, TID, SeqNumStart, BA_Size, AuthRole, BA_TYPE);
-
     DBG_ENTER();
     AddBA.Cmd = ADDBA_OK_CMD;
     AddBA.vid = wnet_vif_id;
     AddBA.STA_ID = StaAid;
     AddBA.TID = TID;
-    AddBA.BA_TYPE = BA_TYPE /*immidiate_BA_TYPE*/;
+    AddBA.BA_TYPE = BA_TYPE ;
     AddBA.AuthRole = AuthRole;
     AddBA.BA_Size = BA_Size;
     AddBA.SeqNumStart = SeqNumStart;
@@ -271,9 +233,7 @@ unsigned int phy_enable_bcn(unsigned char wnet_vif_id,unsigned short BeaconInter
     }
     phy_set_bcn_intvl(wnet_vif_id,BeaconInterval);
     phy_set_param_cmd( Beacon_Enable_Cmd, wnet_vif_id,ENABLE_BEACON );
-#if defined (HAL_FPGA_VER)
     hal_priv->sts_en_bcn[wnet_vif_id]++;
-#endif
 
     return 1;
 }
@@ -297,21 +257,20 @@ unsigned int phy_set_bcn_buf(unsigned char wnet_vif_id,unsigned char *pBeacon,
     unsigned int BcnAddr = hif->hw_config.beaconframeaddress;
     struct TxDescPage *pbeacon_s = (struct TxDescPage *)buffer;
     struct OtherTxPage  *other_page = NULL;
-    int total_valid_len = len + sizeof(struct TxDescPage) - 1; /*not include fcs len*/
-    /* beacon len per page */
+    int total_valid_len = len + sizeof(struct TxDescPage) - 1; 
+    
     int firstpagelen = 0, otherpagelen = 0;
 
     ASSERT(len < (sizeof(buffer) - sizeof(struct TxDescPage) - sizeof(struct HW_TxBufferInfo)));
-    /* get beacon frame address in firmware */
+    
     if (hal_priv->beaconaddr[wnet_vif_id] == 0) {
         hal_priv->beaconaddr[wnet_vif_id] = phy_get_param_cmd_ul(Bcn_Frm_Addr_Cmd, wnet_vif_id);
     }
     BcnAddr = hal_priv->beaconaddr[wnet_vif_id];
     memcpy(pbeacon_s->txdata,  pBeacon,  len);
 
-    /* build page flag */
     if (total_valid_len <= PAGE_LEN) {
-        /* set firstpagelen and otherpagelen to 0 to be flag */
+        
         firstpagelen = otherpagelen = 0;
         pbeacon_s->BufferInfo.MPDUBufFlag = 0;
         pbeacon_s->BufferInfo.MPDUBufFlag =  HW_FIRST_MPDUBUF_FLAG
@@ -330,11 +289,11 @@ unsigned int phy_set_bcn_buf(unsigned char wnet_vif_id,unsigned char *pBeacon,
         other_page = (struct OtherTxPage *)(buffer + PAGE_LEN);
 
         if (otherpagelen > 0) {
-            /* move or push the beacon data to later position to prepare BufferInfo of 'other_page' */
+            
             memmove((void *)(other_page->txdata), (void *)other_page, otherpagelen);
             memset((void *)other_page, 0, sizeof(struct HW_TxBufferInfo));
         }
-        /*first page */
+        
         pbeacon_s->BufferInfo.MPDUBufFlag = 0;
         pbeacon_s->BufferInfo.MPDUBufFlag = HW_FIRST_MPDUBUF_FLAG
             | HW_FIRST_AGG_FLAG | HW_LAST_AGG_FLAG;
@@ -345,7 +304,6 @@ unsigned int phy_set_bcn_buf(unsigned char wnet_vif_id,unsigned char *pBeacon,
         pbeacon_s->BufferInfo.MPDUBufNext =
                     (unsigned int)(SYS_TYPE)(BcnAddr + PAGE_LEN);
 
-        /* other page */
         other_page->BufferInfo.MPDUBufFlag = 0;
         other_page->BufferInfo.MPDUBufFlag = HW_LAST_MPDUBUF_FLAG
             |HW_FIRST_AGG_FLAG | HW_LAST_AGG_FLAG;
@@ -358,7 +316,6 @@ unsigned int phy_set_bcn_buf(unsigned char wnet_vif_id,unsigned char *pBeacon,
         pbeacon_s->TxPriv.PageNum = 2;
     }
 
-    /* build tx vector */
     TxVector_Bit = &pbeacon_s->TxVector;
     TxVector_Bit->tv_reserved0 = 0;
     TxVector_Bit->tv_fw_duration_valid = 0;
@@ -420,7 +377,6 @@ unsigned int phy_set_bcn_buf(unsigned char wnet_vif_id,unsigned char *pBeacon,
     TxVector_Bit->tv_control_wrapper = 0;
     TxVector_Bit->tv_llength_hw_calc = 0;
 
-    /* build firmware private data */
     pbeacon_s->TxPriv.TID = QUEUE_BEACON;
     pbeacon_s->TxPriv.StaId = 1;
     pbeacon_s->TxPriv.Flag = WIFI_IS_Group|WIFI_IS_NOACK|(Flag << 8);
@@ -449,33 +405,29 @@ unsigned int phy_set_bcn_buf(unsigned char wnet_vif_id,unsigned char *pBeacon,
     return 1;
 }
 
-
 unsigned int phy_init_hmac(unsigned char wnet_vif_id)
 {
-    //clear all key
+    
     phy_set_param_cmd(Reset_Key_Cmd,wnet_vif_id,ALL_KEY_RST);
-    //life time
+    
     phy_set_param_cmd(MaxTxLifetime_Cmd,0,512);
     pr_debug("%s(%d)\n", __func__, __LINE__);
     return 1;
 }
 
-//vmac disconnect to ap
 unsigned int  phy_vmac_disconnect(unsigned char wnet_vif_id)
 {
     struct hal_private *hal_priv = hal_get_priv();
-    // trun off beacon send
+    
     phy_set_param_cmd(Beacon_Enable_Cmd,wnet_vif_id,DISABLE_BEACON);
-#if defined (HAL_FPGA_VER)
     hal_priv->sts_dis_bcn[wnet_vif_id]++;
-#endif
     return 1;
 }
 
 unsigned int phy_update_bcn_intvl(unsigned char wnet_vif_id,unsigned short BcnInterval)
 {
     PRINT("phy_update_bcn_intvl  0x%x \n",BcnInterval);
-    // Make sure that BcnInterval  > ATIMWnd >= 0
+    
     if (BcnInterval < 10)
     {
         BcnInterval = 10;
@@ -507,8 +459,7 @@ unsigned int phy_unregister_all_sta_id(unsigned char wnet_vif_id)
 unsigned int phy_switch_chan(unsigned short channel, unsigned char bw, unsigned char restore)
 {
     struct hw_interface* hif =hif_get_hw_interface();
-    // fix me, it works,but why len = sizeof(unsigned int) for read unsigned short channel
-
+    
     hif->hif_ops.hi_write_word(RG_MAC_CHANNEL_INDEX, channel);
     return 1;
 }
@@ -530,7 +481,7 @@ unsigned int phy_set_rf_chan(struct hal_channel *hchan, unsigned char flag, unsi
     channel_switch.flag = flag;
     channel_switch.vid = vid;
     channel_switch.rssi = 0;
-    channel_switch.res[0] = (opmode == WIFINET_M_HOSTAP); //bit0 : 1 - softap mode
+    channel_switch.res[0] = (opmode == WIFINET_M_HOSTAP); 
 
     primary_chan.rf_fs = RF_SMP_160;
     primary_chan.ap_bw = hchan->chan_bw;
@@ -565,7 +516,6 @@ unsigned int phy_set_rf_chan(struct hal_channel *hchan, unsigned char flag, unsi
         hal_dpd_memory_download();
     }
 
-    //pr_debug("%s:%d, channel %d, bw %d, flag %d \n", __func__, __LINE__, channel, bw, flag);
     HAL_BEGIN_LOCK();
     hi_set_cmd((unsigned char *)&channel_switch, sizeof(struct Channel_Switch));
     HAL_END_LOCK();
@@ -624,13 +574,11 @@ unsigned int phy_set_chan_support_type(struct hal_channel *chan)
             break;
     }
 
-
     hif->hif_ops.hi_write_word(RG_PHY_BW_REG, to_set);
 
     to_set = 0;
     to_set = hif->hif_ops.hi_read_word( RG_PHY_BW_REG);
-    //pr_debug("%s(%d) check: reg_0x%x is 0x%x cchan_num %d, chan_bw %d, cchan %d\n", __func__, __LINE__,
-        //RG_PHY_BW_REG, to_set, chan->cchan_num, chan->chan_bw, chan->cchan_num);
+    
     return 1;
 #else
     return 0;
@@ -669,7 +617,7 @@ unsigned int phy_set_mac_addr(unsigned char wnet_vif_id,unsigned char * MacAddr)
     struct hw_interface* hif = hif_get_hw_interface();
 
     halPriv = hal_get_priv();
-    /* BUP stores the first 4 bytes and last 2 bytes in two separate registers*/
+    
     temp = MacAddr[0] | ( MacAddr[1] << 8 ) | ( MacAddr[2] << 16 ) | ( MacAddr[3] << 24 );
     hif->hif_ops.hi_write_word(RG_MAC_LOCAL_ADDRLN(wnet_vif_id), temp);
 
@@ -695,7 +643,6 @@ unsigned int phy_debug( unsigned short len,unsigned int offset,unsigned char * b
     return 0;
 }
 
-// reset key table
 unsigned int phy_rst_all_key(unsigned char wnet_vif_id)
 {
     struct hal_private * hal_priv =hal_get_priv();
@@ -707,7 +654,6 @@ unsigned int phy_rst_all_key(unsigned char wnet_vif_id)
     return 1;
 }
 
-// reset key table
 unsigned int phy_rst_ucast_key(unsigned char wnet_vif_id)
 {
     struct hal_private * hal_priv =hal_get_priv();
@@ -718,7 +664,6 @@ unsigned int phy_rst_ucast_key(unsigned char wnet_vif_id)
     return 1;
 }
 
-// reset key table
 unsigned int phy_rst_mcast_key(unsigned char wnet_vif_id)
 {
     struct hal_private * hal_priv =hal_get_priv();
@@ -729,7 +674,6 @@ unsigned int phy_rst_mcast_key(unsigned char wnet_vif_id)
     return 1;
 }
 
-//reset StaAid key
 unsigned int phy_clr_key(unsigned char wnet_vif_id,unsigned short StaAid)
 {
     PRINT(" ++  %s StaAid = %x\n",__FUNCTION__,StaAid);
@@ -742,7 +686,7 @@ unsigned int phy_set_ucast_key(unsigned char wnet_vif_id,unsigned short StaAid,
     unsigned char keyId)
 {
     struct hal_private * hal_priv =hal_get_priv();
-    //UniCastKeyCmd
+    
     unsigned char       cmdbuf[68]= {0};
     struct UniCastKeyCmd *unitikey = (struct UniCastKeyCmd *)ALIGN_POINT(cmdbuf,4);
 
@@ -774,7 +718,6 @@ unsigned int phy_set_mcast_key(unsigned char wnet_vif_id, unsigned char *pKey,
 {
     struct hal_private * hal_priv =hal_get_priv();
 
-//Multicast_Key_Set_Cmd
     unsigned char       cmdbuf[68]= {0};
     struct MultiCastKeyCmd *multikey = (struct MultiCastKeyCmd *)ALIGN_POINT(cmdbuf,4);
     if (( encryType !=  WIFI_WEP64)
@@ -852,14 +795,7 @@ unsigned int phy_set_rd_support(unsigned char wnet_vif_id, unsigned int data)
 
 unsigned int phy_pwr_save_mode(unsigned char wnet_vif_id,unsigned int data)
 {
-#ifdef CONFIG_RTC_ENABLE
-    Phy_WakeUp_RTC(wnet_vif_id, data);
     phy_set_param_cmd(Power_Save_Cmd,wnet_vif_id,data);
-    Phy_Restore_Wakeup_Bit(data);
-    PhySetFw2Rtc(wnet_vif_id,  data);
-#else
-    phy_set_param_cmd(Power_Save_Cmd,wnet_vif_id,data);
-#endif
     return 1;
 }
 
@@ -890,8 +826,6 @@ void phy_set_channel_rssi(unsigned char rssi)
         return;
     }
 
-    //DPRINTF(AML_DEBUG_WARNING, "%s channel rssi:%d\n", __func__, rssi);
-
     HAL_BEGIN_LOCK();
     hi_set_cmd((unsigned char*)&channel_switch, sizeof(struct Channel_Switch));
     HAL_END_LOCK();
@@ -908,7 +842,6 @@ unsigned int phy_set_slot_time(unsigned int slot)
     hal_priv->sta_con_msg.slot = slot;
     return 0;
 }
-
 
 unsigned int phy_set_bcn_intvl(unsigned char vid,unsigned int bcninterval)
 {
@@ -997,7 +930,6 @@ unsigned int phy_get_rw_ptr(unsigned char vid)
     return phy_get_param_cmd_ul(GET_SDIO_PTR_CMD, vid);
 }
 
-//for beamform test
 unsigned int phy_send_ndp_announcement(struct NDPAnncmntCmd ndp_anncmnt)
 {
     HAL_BEGIN_LOCK();
@@ -1010,7 +942,7 @@ unsigned int phy_send_null_data(struct NullDataCmd null_data, int len)
 {
     null_data.Cmd = Send_NullData_Cmd;
     null_data.tv_l_length = hal_tx_desc_get_len(null_data.rate, len,
-        0/*GI*/, null_data.bw/*bw*/, 0/*green mode*/);
+        0, null_data.bw, 0);
 
     HAL_BEGIN_LOCK();
     hi_set_cmd((unsigned char *)&null_data, sizeof(struct NullDataCmd));
@@ -1024,7 +956,7 @@ unsigned int phy_keep_alive(struct NullDataCmd null_data_param, int null_data_le
     struct KeepAliveCmd keep_alive_cmd;
 
     null_data_param.tv_l_length = hal_tx_desc_get_len(null_data_param.rate, null_data_len,
-        0/*GI*/, null_data_param.bw/*bw*/, 0/*green mode*/);
+        0, null_data_param.bw, 0);
 
     keep_alive_cmd.Cmd = Keep_Alive_Cmd;
     keep_alive_cmd.null_data_param = null_data_param;
@@ -1097,7 +1029,7 @@ unsigned int phy_set_pattern(unsigned char vid, unsigned char offset, unsigned c
     add_pattern_cmd.Cmd = Add_Pattern_Cmd;
     add_pattern_cmd.vid = vid;
     add_pattern_cmd.pattern_offset = offset;
-    /*we just compare pattern with max pattern size */
+    
     add_pattern_cmd.pattern_len = len > WOW_PATTERN_SIZE ? WOW_PATTERN_SIZE : len;
     add_pattern_cmd.pattern_id = id;
     memcpy(add_pattern_cmd.pattern, pattern, add_pattern_cmd.pattern_len);
@@ -1134,7 +1066,7 @@ int phy_set_suspend(unsigned char vid, unsigned char enable,
     if (enable == 1)
     {
         memcpy(suspend_cmd.PN, hal_priv->uRepCnt[vid][1].txPN[TX_UNICAST_REPCNT_ID], 8);
-        /* wait for fw upload tx status */
+        
         while (hal_priv->bhaltxdrop == 1)
         {
             msleep(20);
@@ -1160,7 +1092,7 @@ int phy_set_suspend(unsigned char vid, unsigned char enable,
                 return -1;
             }
         }
-        /* in case */
+        
         if (hal_priv->bhaltxdrop == 1)
         {
             pr_debug("%s:%d, haltxdrop = 1 0x%lx, 0x%lx, pagenum %d \n", __func__, __LINE__,
@@ -1176,21 +1108,19 @@ int phy_set_suspend(unsigned char vid, unsigned char enable,
 
     atomic_set(&hal_priv->sdio_suspend_cnt, 0);
 
-    /* if last suspend fail,this time is resume,just return */
     if ((enable == 0) && (atomic_read(&hal_priv->drv_suspend_cnt) == 0))
     {
         ERROR_DEBUG_OUT("last suspend fail,don't need resume, just return -1\n");
         return -1;
     }
 
-    /* wait for set driver sleep flag */
     while ((enable == 1) && (hal_priv->hal_drv_ps_status & HAL_DRV_IN_ACTIVE))
     {
         msleep(20);
         cnt++;
         if (cnt > 10)
         {
-            //AML_OUTPUT("suspend hal_drv_ps_status=%d   time=%d\n",hal_priv->hal_drv_ps_status,cnt);
+            
             break;
         }
     }
@@ -1206,7 +1136,7 @@ int phy_set_suspend(unsigned char vid, unsigned char enable,
         }
         else
         {
-            // set driver sleep flag to protect power save flow
+            
             hal_priv->hal_drv_ps_status |= HAL_DRV_IN_SLEEPING;
         }
     }
@@ -1300,7 +1230,7 @@ int phy_set_suspend(unsigned char vid, unsigned char enable,
                 atomic_read(&hif->HiStatus.Tx_Send_num));
 #endif
         }
-        /* flush packetes when suspend and when resume restore initial value */
+        
         hal_priv->HalTxFrameDoneCounter = hal_priv->txcompletestatus->txdoneframecounter;
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5,15,0) && !defined (LINUX_PLATFORM)
         hif->HiStatus.Tx_Free_num = hif->HiStatus.Tx_Send_num;
@@ -1319,28 +1249,12 @@ void phy_set_bmfm_info(int wnet_vif_id, unsigned char *group_id,
         unsigned char * user_position, unsigned char feedback_type)
 {
     struct Bmfm_Info_Cmd bmfm_info_cmd = {0};
-#ifdef PROJECT_T9026
-    struct hw_interface* hif =hif_get_hw_interface();
-
     if (group_id == NULL) {
-        hif->hif_ops.hi_write_word(0x000001d0, 0x20000000);
-        hif->hif_ops.hi_write_word(0x000001d4, 0x20000000);
-        hif->hif_ops.hi_write_word(0x000001d8, 0x20000000);
-        hif->hif_ops.hi_write_word(0x000001dC, 0x20000000);
-        return;
-    }
-#else
-    if (group_id == NULL) {
-        /* v15z: this fires on every cold boot in STA mode — no MU-MIMO
-         * group is configured because beamforming groups are an AP-side
-         * concept. Demote from ERROR_DEBUG_OUT (pr_err) to pr_debug so it
-         * doesn't pollute production dmesg. Per
-         * w522a-v15y-remaining-problems.md §6 this is benign vendor noise. */
+        
         pr_debug("FUNCTION: %s LINE: %d:group id null (benign for STA mode)\n",
                  __func__, __LINE__);
         return;
     }
-#endif
 
     bmfm_info_cmd.Cmd = BmfmInfo_Cmd;
     bmfm_info_cmd.vid = wnet_vif_id;
@@ -1418,10 +1332,7 @@ unsigned int phy_set_coexist_req_timeslice_timeout_value( unsigned int timeout_v
     HAL_END_LOCK();
     return 0;
 
-
 }
-
-
 
 unsigned int phy_set_coexist_not_grant_weight( unsigned int not_grant_weight)
 {
@@ -1439,9 +1350,7 @@ unsigned int phy_set_coexist_not_grant_weight( unsigned int not_grant_weight)
 
     return 0;
 
-
 }
-
 
 unsigned int phy_set_coexist_max_not_grant_cnt( unsigned int coexist_max_not_grant_cnt)
 {
@@ -1461,10 +1370,6 @@ unsigned int phy_set_coexist_max_not_grant_cnt( unsigned int coexist_max_not_gra
 
 }
 
-/*
-bit31-bit16 : minimal  priority
-bit15:bit0: max priority
-*/
 unsigned int phy_set_coexist_scan_priority_range( unsigned int coexist_scan_priority_range)
 {
     struct Coexist_Cmd coexist_cmd;
@@ -1483,11 +1388,6 @@ unsigned int phy_set_coexist_scan_priority_range( unsigned int coexist_scan_prio
 
 }
 
-
-/*
-bit31-bit16 : minimal  priority
-bit15:bit0: max priority
-*/
 unsigned int phy_set_coexist_be_bk_noqos_priority_range( unsigned int coexist_scan_priority_range)
 {
     struct Coexist_Cmd coexist_cmd;
@@ -1505,7 +1405,6 @@ unsigned int phy_set_coexist_be_bk_noqos_priority_range( unsigned int coexist_sc
     return 0;
 
 }
-
 
 unsigned int phy_coexist_config(const void *data, int data_len)
 {
@@ -1536,32 +1435,6 @@ unsigned int phy_coexist_config(const void *data, int data_len)
 
 unsigned int phy_interface_enable(unsigned char enable, unsigned char vid)
 {
-#if 0
-    struct hw_interface* hif = hif_get_hw_interface();
-    struct hal_private *hal_priv = hal_get_priv();
-    unsigned int reg_data = 0;
-
-    if (enable == 1)
-    {
-        if (hal_priv->bRfInit == 0)
-            return 0;
-
-        /* 0x00a08010 */
-        reg_data = hif->hif_ops.hi_read_word(RG_AGC_EN);
-        hif->hif_ops.hi_write_word(RG_AGC_EN, reg_data & ~BIT(28));
-
-        phy_set_coexist_en(enable);
-    }
-    else
-    {
-        phy_set_coexist_en(enable);
-
-        reg_data = hif->hif_ops.hi_read_word(RG_AGC_EN);
-        hif->hif_ops.hi_write_word(RG_AGC_EN, reg_data | BIT(28));
-    }
-    reg_data = hif->hif_ops.hi_read_word(RG_AGC_EN);
-    pr_debug("%s:%d, enable %d, agc 0x%x \n", __func__, __LINE__, enable, reg_data);
-#endif
     struct Phy_Interface_Param phy_interface;
     memset(&phy_interface, 0, sizeof(struct Phy_Interface_Param));
 
@@ -1589,7 +1462,7 @@ unsigned int hal_set_fwlog_cmd(unsigned char mode)
     if (mode == 0)
     {
         fwlog_mode.mode = 0;
-        /* reset ram share */
+        
         hif->hif_ops.hi_write_word(0x00a0d0e4, 0x0000007f);
     }
     else
@@ -1597,7 +1470,7 @@ unsigned int hal_set_fwlog_cmd(unsigned char mode)
         fwlog_mode.mode = mode;
         if (mode == 1)
         {
-            /* set ram share */
+            
             hif->hif_ops.hi_write_word(0x00a0d0e4, 0x8000007f);
             print_type = 0;
         }
@@ -1605,11 +1478,11 @@ unsigned int hal_set_fwlog_cmd(unsigned char mode)
         {
             hal_get_fwlog();
         }
-        else if (mode == 4) //open auto print
+        else if (mode == 4) 
         {
             print_type = 1;
         }
-        else if (mode == 5) //close auto print
+        else if (mode == 5) 
         {
             print_type = 0;
         }
@@ -1883,7 +1756,7 @@ static unsigned char parse_tx_power_band(char *varbuf, int len, char str_pwr_pla
 
 static unsigned char parse_cali_param(char *varbuf, int len, struct Cali_Param *cali_param)
 {
-    unsigned short platform_verid = 0; // default: 0
+    unsigned short platform_verid = 0; 
     unsigned short cali_config = 0;
     unsigned int version = 0;
 
@@ -1921,10 +1794,7 @@ static unsigned char parse_cali_param(char *varbuf, int len, struct Cali_Param *
         tpc_mode = 2;
     }
 
-    /* maybe get from txt */
-#ifdef HAL_FPGA_VER
     platform_verid = aml_wifi_get_platform_verid();
-#endif
     cali_param->platform_versionid = platform_verid;
 
     pr_info("======>>>>>> version = %ld\n", cali_param->version);
@@ -2020,12 +1890,12 @@ static void set_cca_energy_detection(unsigned int reg_addr)
 
     if (reg_addr == DF_AGC_REG_A12) {
         reg_val = hif->hif_ops.hi_read_word(reg_addr);
-        reg_val &= 0xFFFF0000; //bit0~bit15 set to 0
+        reg_val &= 0xFFFF0000; 
         hif->hif_ops.hi_write_word(reg_addr, reg_val);
 
     } else if (reg_addr == DF_AGC_REG_A27) {
         reg_val = hif->hif_ops.hi_read_word(reg_addr);
-        reg_val &= 0xE00FFFFF; //bit20~bit28 set to 0
+        reg_val &= 0xE00FFFFF; 
         hif->hif_ops.hi_write_word(reg_addr, reg_val);
 
     } else if (reg_addr == REG_ED_THR_DB) {
@@ -2115,7 +1985,6 @@ void phy_set_tx_power_accord_rssi(int bw, unsigned short channel, unsigned char 
            return;
         }
 
-
     } else {
         return;
     }
@@ -2142,10 +2011,7 @@ static unsigned char get_cali_param(struct Cali_Param *cali_param, struct WF2G_T
     memset(chip_id_buf, 0, 100);
     sprintf(file_name, "aml/aml_wifi_rf_%04x.txt", chip_id_l);
     if (request_firmware(&fw, file_name, dev)) {
-        /* v15u-fix: per-SN file missing — fall back to per-module-vendor
-         * filename and report the *next* path we are about to try, not the
-         * always-empty chip_id_buf scratch (which made the dmesg line read
-         * "the rf config: " with no filename at all). */
+        
         memset(chip_id_buf, '\0', sizeof(chip_id_buf));
         switch ((chip_id_l & 0xff00) >> 8) {
             case MODULE_ITON:
@@ -2163,14 +2029,13 @@ static unsigned char get_cali_param(struct Cali_Param *cali_param, struct WF2G_T
         pr_info("aml wifi module SN:%04x  per-SN txt not found, trying rf config: %s\n",
                 chip_id_l, file_name);
     } else {
-        /* v15u-fix: print the actual file that was found, not the empty
-         * chip_id_buf scratch. */
+        
         pr_info("aml wifi module SN:%04x  the rf config: %s\n", chip_id_l, file_name);
     }
 
     error = request_firmware(&fw, file_name, dev);
     if (error) {
-        // sn txt not found, the rf set default config
+        
         memset(file_name, 0, 100);
         sprintf(file_name, "aml/aml_wifi_rf.txt");
         pr_info("aml wifi module SN:%04x  sn txt not found, the rf config: %s\n", chip_id_l, file_name);
@@ -2217,6 +2082,10 @@ static unsigned char get_cali_param(struct Cali_Param *cali_param, struct WF2G_T
         else
             cali_param->rf_num = 1;
         pr_debug("rf_cout is: %d\n", cali_param->rf_num);
+    }
+    if (rf_count_override == 1 || rf_count_override == 2) {
+        cali_param->rf_num = rf_count_override;
+        pr_info("W522A: rf_count override active: %d\n", cali_param->rf_num);
     }
     release_firmware(fw);
     return 0;
@@ -2287,11 +2156,5 @@ unsigned int hal_cfg_cali_param(void)
 }
 
 void print_driver_version(void) {
-  printk("driver version: %s\n", DRIVERVERSION);
+  printk("W522A: driver version: %s\n", DRIVERVERSION);
 }
-
-#ifdef HAL_SIM_VER
-#ifdef FW_NAME
-}
-#endif
-#endif

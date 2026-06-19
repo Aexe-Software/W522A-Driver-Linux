@@ -16,12 +16,10 @@ typedef enum {
     CSI_FRAME_TYPE_11AX_TRIGGER = 11
 }csi_protocol_mode_e;
 
-
 typedef struct{
     short i;
     short q;
 } csi_complex;
-
 
 typedef struct {
     unsigned long long time_stamp;

@@ -40,7 +40,7 @@ int wifi_mac_send_addba_req(char* buf, int tid)
     actionargs.arg3 = 0;
 
     if (selected_wnet_vif->vm_opmode == WIFINET_M_HOSTAP) {
-        temp[2] = 0; /* end of string '\0' */
+        temp[2] = 0; 
 
         for (i = 0 ; i < ETH_ALEN ; i++) {
             if (aml_char_is_hex_digit(buf[i * 3]) == false || aml_char_is_hex_digit(buf[i * 3 + 1]) == false) {
@@ -72,12 +72,7 @@ int wifi_mac_send_coexist_mgmt(const char* buf)
     struct wifi_mac *wifimac = wifi_mac_get_mac_handle();
     struct wlan_net_vif *selected_wnet_vif = NULL;
     int parsed;
-    /* v16c (B19): sscanf "%s %s" without width specifiers — userspace can
-     * trivially overflow type[16]/value[32] on stack by sending strings
-     * longer than the buffers without spaces. Buffer overflow is
-     * exploitable from any caller with CAP_NET_ADMIN (sysfs/iwpriv write).
-     * Fix: bound widths to buffer size minus 1, and check parse result so
-     * uninitialized stack data does not propagate into action frame. */
+    
     type[0] = '\0';
     value[0] = '\0';
     parsed = sscanf(buf, "%15s %31s", type, value);
@@ -125,7 +120,6 @@ int wifi_mac_send_wmm_ac_addts(char** buf)
     selected_wnet_vif->vm_wmm_ac_params.sba = simple_strtoul(*(buf + 6), NULL, 0);
     selected_wnet_vif->vm_wmm_ac_params.dialog_token = simple_strtoul(*(buf + 7), NULL, 0);
 
-
     DPRINTF(AML_DEBUG_WARNING,"<running> %s %d mean_data_rate=%d, direction=%d, tid=%d, up=%d, size=%d, phyrate=%d, sba=%d, dialog_token=%d. \n", __func__,__LINE__, selected_wnet_vif->vm_wmm_ac_params.mean_data_rate,
                   selected_wnet_vif->vm_wmm_ac_params.direction, selected_wnet_vif->vm_wmm_ac_params.tid, selected_wnet_vif->vm_wmm_ac_params.up, selected_wnet_vif->vm_wmm_ac_params.size,
                   selected_wnet_vif->vm_wmm_ac_params.phyrate, selected_wnet_vif->vm_wmm_ac_params.sba, selected_wnet_vif->vm_wmm_ac_params.dialog_token);
@@ -152,10 +146,7 @@ int wifi_mac_send_wmm_ac_delts(const char* buf)
         pr_warn("%s, no sta connected\n", __func__);
         return -1;
     }
-    /* v16c (B19): pre-v16c did not check sscanf result. On parse failure
-     * `tid` was left at its initializer (0) — silently using TID 0 instead
-     * of telling the caller their input was bad. Now validate and propagate
-     * the error rather than masking it. */
+    
     if (sscanf(buf, "%d", &tid) != 1) {
         pr_warn("%s: cannot parse tid from buf\n", __func__);
         return -1;
@@ -175,4 +166,3 @@ int wifi_mac_send_wmm_ac_delts(const char* buf)
 
     return 0;
 }
-

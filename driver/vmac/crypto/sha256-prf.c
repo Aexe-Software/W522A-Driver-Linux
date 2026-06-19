@@ -1,33 +1,10 @@
-/*
- * SHA256-based PRF (IEEE 802.11r)
- * Copyright (c) 2003-2016, Jouni Malinen <j@w1.fi>
- *
- * This software may be distributed under the terms of the BSD license.
- * See README for more details.
- */
 
 #include "aml_crypto_wrap.h"
 
-//#include "common.h"
 #include "sha256.h"
-//#include "crypto.h"
+
 #include "wlancrypto_wrap.h"
 
-
-/**
- * aml_sha256_prf - SHA256-based Pseudo-Random Function (IEEE 802.11r, 8.5.1.5.2)
- * @key: Key for PRF
- * @key_len: Length of the key in bytes
- * @label: A unique label for each purpose of the PRF
- * @data: Extra data to bind into the key
- * @data_len: Length of the data
- * @buf: Buffer for the generated pseudo-random key
- * @buf_len: Number of bytes of key to generate
- * Returns: 0 on success, -1 on failure
- *
- * This function is used to derive new, cryptographically separate keys from a
- * given key.
- */
 int aml_sha256_prf(const u8 *key, size_t key_len, const char *label,
 		const u8 *data, size_t data_len, u8 *buf, size_t buf_len)
 {
@@ -35,23 +12,6 @@ int aml_sha256_prf(const u8 *key, size_t key_len, const char *label,
 			       buf_len * 8);
 }
 
-
-/**
- * aml_sha256_prf_bits - IEEE Std 802.11-2012, 11.6.1.7.2 Key derivation function
- * @key: Key for KDF
- * @key_len: Length of the key in bytes
- * @label: A unique label for each purpose of the PRF
- * @data: Extra data to bind into the key
- * @data_len: Length of the data
- * @buf: Buffer for the generated pseudo-random key
- * @buf_len: Number of bits of key to generate
- * Returns: 0 on success, -1 on failure
- *
- * This function is used to derive new, cryptographically separate keys from a
- * given key. If the requested buf_len is not divisible by eight, the least
- * significant 1-7 bits of the last octet in the output are not part of the
- * requested output.
- */
 int aml_sha256_prf_bits(const u8 *key, size_t key_len, const char *label,
 		    const u8 *data, size_t data_len, u8 *buf,
 		    size_t buf_len_bits)
@@ -94,10 +54,6 @@ int aml_sha256_prf_bits(const u8 *key, size_t key_len, const char *label,
 		counter++;
 	}
 
-	/*
-	 * Mask out unused bits in the last octet if it does not use all the
-	 * bits.
-	 */
 	if (buf_len_bits % 8) {
 		u8 mask = 0xff << (8 - buf_len_bits % 8);
 		buf[pos - 1] &= mask;

@@ -1,10 +1,3 @@
-/*
- * CTR with CBC-MAC Protocol (CCMP)
- * Copyright (c) 2010-2012, Jouni Malinen <j@w1.fi>
- *
- * This software may be distributed under the terms of the BSD license.
- * See README for more details.
- */
 
 #include "aml_crypto_wrap.h"
 #include "aes.h"
@@ -27,7 +20,7 @@ static void ccmp_aad_nonce(const struct ieee80211_hdr *hdr, const u8 *data,
 		addr4 = 1;
 
 	if (WLAN_FC_GET_TYPE(fc) == WLAN_FC_TYPE_DATA) {
-		fc &= ~0x0070; /* Mask subtype bits */
+		fc &= ~0x0070; 
 		if (stype & WLAN_FC_STYPE_QOS_DATA) {
 			const u8 *qc;
 			qos = 1;
@@ -38,7 +31,7 @@ static void ccmp_aad_nonce(const struct ieee80211_hdr *hdr, const u8 *data,
 			nonce[0] = qc[0] & 0x0f;
 		}
 	} else if (WLAN_FC_GET_TYPE(fc) == WLAN_FC_TYPE_MGMT)
-		nonce[0] |= 0x10; /* Management */
+		nonce[0] |= 0x10; 
 
 	fc &= ~(WLAN_FC_RETRY | WLAN_FC_PWRMGT | WLAN_FC_MOREDATA);
 	fc |= WLAN_FC_ISWEP;
@@ -49,7 +42,7 @@ static void ccmp_aad_nonce(const struct ieee80211_hdr *hdr, const u8 *data,
 	os_memcpy(pos + 2 * ETH_ALEN, hdr->addr3,ETH_ALEN);
 	pos += 3 * ETH_ALEN;
 	seq = (hdr->seq_ctrl);
-	seq &= ~0xfff0; /* Mask Seq#; do not modify Frag# */
+	seq &= ~0xfff0; 
 	WPA_PUT_LE16(pos, seq);
 	pos += 2;
 
@@ -57,7 +50,7 @@ static void ccmp_aad_nonce(const struct ieee80211_hdr *hdr, const u8 *data,
 	pos += addr4 * ETH_ALEN;
 	if (qos) {
 		pos[0] &= ~0x70;
-		if (1 /* FIX: either device has SPP A-MSDU Capab = 0 */)
+		if (1 )
 			pos[0] &= ~0x80;
 		pos++;
 		*pos++ = 0x00;
@@ -66,14 +59,13 @@ static void ccmp_aad_nonce(const struct ieee80211_hdr *hdr, const u8 *data,
 	*aad_len = pos - aad;
 
 	os_memcpy(nonce + 1, hdr->addr2, ETH_ALEN);
-	nonce[7] = data[7]; /* PN5 */
-	nonce[8] = data[6]; /* PN4 */
-	nonce[9] = data[5]; /* PN3 */
-	nonce[10] = data[4]; /* PN2 */
-	nonce[11] = data[1]; /* PN1 */
-	nonce[12] = data[0]; /* PN0 */
+	nonce[7] = data[7]; 
+	nonce[8] = data[6]; 
+	nonce[9] = data[5]; 
+	nonce[10] = data[4]; 
+	nonce[11] = data[1]; 
+	nonce[12] = data[0]; 
 }
-
 
 static void ccmp_aad_nonce_pv1(const u8 *hdr, const u8 *a1, const u8 *a2,
 			       const u8 *a3, const u8 *pn,
@@ -82,14 +74,13 @@ static void ccmp_aad_nonce_pv1(const u8 *hdr, const u8 *a1, const u8 *a2,
 	u16 fc, type;
 	u8 *pos;
 
-	nonce[0] = BIT(5); /* PV1 */
-	/* TODO: Priority for QMF; 0 is used for Data frames */
-
+	nonce[0] = BIT(5); 
+	
 	fc = WPA_GET_LE16(hdr);
 	type = (fc & (BIT(2) | BIT(3) | BIT(4))) >> 2;
 
 	if (type == 1)
-		nonce[0] |= 0x10; /* Management */
+		nonce[0] |= 0x10; 
 
 	fc &= ~(BIT(10) | BIT(11) | BIT(13) | BIT(14) | BIT(15));
 	fc |= BIT(12);
@@ -104,14 +95,13 @@ static void ccmp_aad_nonce_pv1(const u8 *hdr, const u8 *a1, const u8 *a2,
 		pos += ETH_ALEN;
 
 		if (type == 0) {
-			/* Either A1 or A2 contains SID */
+			
 			sc = hdr + 2 + 2 + ETH_ALEN;
 		} else {
-			/* Both A1 and A2 contain full addresses */
+			
 			sc = hdr + 2 + 2 * ETH_ALEN;
 		}
-		/* SC with Sequence Number subfield (bits 4-15 of the Sequence
-		 * Control field) masked to 0. */
+		
 		*pos++ = *sc & 0x0f;
 		*pos++ = 0;
 
@@ -124,14 +114,13 @@ static void ccmp_aad_nonce_pv1(const u8 *hdr, const u8 *a1, const u8 *a2,
 	*aad_len = pos - aad;
 
 	os_memcpy(nonce + 1, a2, ETH_ALEN);
-	nonce[7] = pn[5]; /* PN5 */
-	nonce[8] = pn[4]; /* PN4 */
-	nonce[9] = pn[3]; /* PN3 */
-	nonce[10] = pn[2]; /* PN2 */
-	nonce[11] = pn[1]; /* PN1 */
-	nonce[12] = pn[0]; /* PN0 */
+	nonce[7] = pn[5]; 
+	nonce[8] = pn[4]; 
+	nonce[9] = pn[3]; 
+	nonce[10] = pn[2]; 
+	nonce[11] = pn[1]; 
+	nonce[12] = pn[0]; 
 }
-
 
 u8 * ccmp_decrypt(const u8 *tk, const struct ieee80211_hdr *hdr,
 		  const u8 *data, size_t data_len, size_t *decrypted_len)
@@ -173,17 +162,15 @@ u8 * ccmp_decrypt(const u8 *tk, const struct ieee80211_hdr *hdr,
 	return plain;
 }
 
-
 static void ccmp_get_pn(u8 *pn, const u8 *data)
 {
-	pn[0] = data[7]; /* PN5 */
-	pn[1] = data[6]; /* PN4 */
-	pn[2] = data[5]; /* PN3 */
-	pn[3] = data[4]; /* PN2 */
-	pn[4] = data[1]; /* PN1 */
-	pn[5] = data[0]; /* PN0 */
+	pn[0] = data[7]; 
+	pn[1] = data[6]; 
+	pn[2] = data[5]; 
+	pn[3] = data[4]; 
+	pn[4] = data[1]; 
+	pn[5] = data[0]; 
 }
-
 
 u8 * ccmp_encrypt(const u8 *tk, u8 *frame, size_t len, size_t hdrlen, u8 *qos,
 		  u8 *pn, int keyid, size_t *encrypted_len)
@@ -212,14 +199,14 @@ u8 * ccmp_encrypt(const u8 *tk, u8 *frame, size_t len, size_t hdrlen, u8 *qos,
 		hdr = (struct ieee80211_hdr *) crypt;
 		hdr->frame_control |= (WLAN_FC_ISWEP);
 		pos = crypt + hdrlen;
-		*pos++ = pn[0]; /* PN0 */
-		*pos++ = pn[1]; /* PN1 */
-		*pos++ = 0x00; /* Rsvd */
+		*pos++ = pn[0]; 
+		*pos++ = pn[1]; 
+		*pos++ = 0x00; 
 		*pos++ = 0x20 | (keyid << 6);
-		*pos++ = pn[2]; /* PN2 */
-		*pos++ = pn[3]; /* PN3 */
-		*pos++ = pn[4]; /* PN4 */
-		*pos++ = pn[5]; /* PN5 */
+		*pos++ = pn[2]; 
+		*pos++ = pn[3]; 
+		*pos++ = pn[4]; 
+		*pos++ = pn[5]; 
 		pdata = frame + hdrlen;
 	}
 
@@ -241,7 +228,6 @@ u8 * ccmp_encrypt(const u8 *tk, u8 *frame, size_t len, size_t hdrlen, u8 *qos,
 	return crypt;
 }
 
-
 u8 * ccmp_encrypt_pv1(const u8 *tk, const u8 *a1, const u8 *a2, const u8 *a3,
 		      const u8 *frame, size_t len,
 		      size_t hdrlen, const u8 *pn, int keyid,
@@ -262,7 +248,7 @@ u8 * ccmp_encrypt_pv1(const u8 *tk, const u8 *a1, const u8 *a2, const u8 *a3,
 
 	os_memcpy(crypt, frame, hdrlen);
 	hdr = (struct ieee80211_hdr *) crypt;
-	hdr->frame_control |= (BIT(12)); /* Protected Frame */
+	hdr->frame_control |= (BIT(12)); 
 	pos = crypt + hdrlen;
 
 	os_memset(aad, 0, sizeof(aad));
@@ -282,7 +268,6 @@ u8 * ccmp_encrypt_pv1(const u8 *tk, const u8 *a1, const u8 *a2, const u8 *a3,
 
 	return crypt;
 }
-
 
 u8 * ccmp_256_decrypt(const u8 *tk, const struct ieee80211_hdr *hdr,
 		      const u8 *data, size_t data_len, size_t *decrypted_len)
@@ -324,7 +309,6 @@ u8 * ccmp_256_decrypt(const u8 *tk, const struct ieee80211_hdr *hdr,
 	return plain;
 }
 
-
 u8 * ccmp_256_encrypt(const u8 *tk, u8 *frame, size_t len, size_t hdrlen,
 		      u8 *qos, u8 *pn, int keyid, size_t *encrypted_len)
 {
@@ -352,14 +336,14 @@ u8 * ccmp_256_encrypt(const u8 *tk, u8 *frame, size_t len, size_t hdrlen,
 		hdr = (struct ieee80211_hdr *) crypt;
 		hdr->frame_control |= (WLAN_FC_ISWEP);
 		pos = crypt + hdrlen;
-		*pos++ = pn[0]; /* PN0 */
-		*pos++ = pn[1]; /* PN1 */
-		*pos++ = 0x00; /* Rsvd */
+		*pos++ = pn[0]; 
+		*pos++ = pn[1]; 
+		*pos++ = 0x00; 
 		*pos++ = 0x20 | (keyid << 6);
-		*pos++ = pn[2]; /* PN2 */
-		*pos++ = pn[3]; /* PN3 */
-		*pos++ = pn[4]; /* PN4 */
-		*pos++ = pn[5]; /* PN5 */
+		*pos++ = pn[2]; 
+		*pos++ = pn[3]; 
+		*pos++ = pn[4]; 
+		*pos++ = pn[5]; 
 		pdata = frame + hdrlen;
 	}
 

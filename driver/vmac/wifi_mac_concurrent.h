@@ -73,4 +73,4 @@ static inline struct wlan_net_vif *wifi_mac_running_wnet_vif(struct wifi_mac *wi
 }
 static inline void channel_switch_announce_trigger(struct wifi_mac *wifimac, struct wifi_channel *switch_chan) {}
 #endif
-#endif //NET80211_CONCURRENT_H
+#endif 

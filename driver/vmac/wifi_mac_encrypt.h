@@ -1,22 +1,8 @@
-/*
- ****************************************************************************************
- *
- * Copyright (C) Amlogic 2010-2014
- *
- * Project: 11N 80211 mac  layer Software
- *
- * Description:
- *     wifi_mac layer encrypt/decrypt module
- *
- *
- ****************************************************************************************
- */
 
 #ifndef _NET80211_IEEE80211_CRYPTO_H_
 #define _NET80211_IEEE80211_CRYPTO_H_
 
 #include "wifi_drv_if.h"
-
 
 #define WIFINET_KEYBUF_SIZE 16
 #define WIFINET_MICBUF_SIZE (8+8)
@@ -132,9 +118,6 @@ static __inline int wifi_mac_security_demic(struct wlan_net_vif *wnet_vif, struc
 {
     const struct wifi_mac_security *cip;
 
-    /* FIX: k->wk_cipher can be transiently NULL during key rotation
-     * (memset followed by resetkey). Treat NULL as "no MIC required".
-     */
     if (k == NULL)
         return 1;
     cip = k->wk_cipher;
@@ -148,7 +131,6 @@ static __inline int wifi_mac_security_enmic(struct wlan_net_vif *wnet_vif,
 {
     const struct wifi_mac_security *cip;
 
-    /* FIX: same race window as demic above. Be tolerant. */
     if (k == NULL)
         return 1;
     cip = k->wk_cipher;
@@ -160,12 +142,7 @@ static __inline int wifi_mac_security_enmic(struct wlan_net_vif *wnet_vif,
 static __inline void wifi_mac_security_resetkey(struct wlan_net_vif *wnet_vif,
     struct wifi_mac_key *k, unsigned short ix)
 {
-    /* FIX: order of writes matters — make this safe vs. concurrent
-     * readers. Set cipher pointer LAST after the rest of the struct
-     * is in a sane state, using WRITE_ONCE to prevent the compiler
-     * from tearing the store. The previous code wrote wk_cipher first
-     * which left wk_keyix/wk_flags briefly inconsistent.
-     */
+    
     k->wk_keyix = ix;
     k->wk_flags = WIFINET_KEY_XMIT | WIFINET_KEY_RECV;
     k->wk_private = wifi_mac_cipher_none.wm_attach(wnet_vif, k);
@@ -173,11 +150,11 @@ static __inline void wifi_mac_security_resetkey(struct wlan_net_vif *wnet_vif,
 }
 
 void wifi_mac_notify_mic_fail(struct wlan_net_vif *, const struct wifi_frame *, unsigned int key_index);
-#endif /* defined(__KERNEL__) || defined(_KERNEL) */
+#endif 
 
 int wifi_mac_key_delete(struct wlan_net_vif *wnet_vif, const struct wifi_mac_key *k, struct wifi_station *stanfo);
 int wifi_mac_key_set(struct wlan_net_vif *wnet_vif,  const struct wifi_mac_key *k, const unsigned char peermac[WIFINET_ADDR_LEN]);
 int wifi_mac_keyset_tkip(struct wifi_mac *wifimac, unsigned char wnet_vif_id, const struct wifi_mac_key *k, struct hal_key_val *hk,
     const unsigned char mac[WIFINET_ADDR_LEN]);
 
-#endif /* _NET80211_IEEE80211_CRYPTO_H_ */
+#endif 

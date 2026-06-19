@@ -1,16 +1,3 @@
-/*
- ****************************************************************************************
- *
- * Copyright (C) Amlogic 2010-2014
- *
- * Project: 11N 80211 mac  layer Software
- *
- * Description:
- *     wifi_mac layer interface function/interface use by driver layer
- *
- *
- ****************************************************************************************
- */
 
 #ifndef _WIFI_MAC_ACTION_H_
 #define _WIFI_MAC_ACTION_H_
@@ -19,29 +6,27 @@
 
 #define MAX_ACTION_LEN 384
 
-/* Action category code */
 enum aml_ieee80211_category {
     AML_CATEGORY_SPECTRUM_MGMT = 0,
     AML_CATEGORY_QOS = 1,
     AML_CATEGORY_DLS = 2,
     AML_CATEGORY_BACK = 3,
-    AML_CATEGORY_PUBLIC = 4, /* IEEE 802.11 public action frames */
+    AML_CATEGORY_PUBLIC = 4, 
     AML_CATEGORY_RADIO_MEAS = 5,
     AML_CATEGORY_FT = 6,
     AML_CATEGORY_HT = 7,
     AML_CATEGORY_SA_QUERY = 8,
     AML_CATEGORY_WNM = 10,
-    AML_CATEGORY_UNPROTECTED_WNM = 11, /* add for CONFIG_IEEE80211W, none 11w also can use */
+    AML_CATEGORY_UNPROTECTED_WNM = 11, 
     AML_CATEGORY_TDLS = 12,
     AML_CATEGORY_MESH = 13,
     AML_CATEGORY_MULTIHOP = 14,
     AML_CATEGORY_SELF_PROTECTED = 15,
     AML_CATEGORY_WMM = 17,
     AML_CATEGORY_VHT = 21,
-    AML_CATEGORY_P2P = 0x7f,/* P2P action frames */
+    AML_CATEGORY_P2P = 0x7f,
 };
 
-//common header
 struct wifi_mac_action
 {
     unsigned char ia_category;
@@ -57,7 +42,6 @@ struct wifi_mac_action_mgt_args
     unsigned int arg3;
 };
 
-//AML_CATEGORY_BACK action field
 #define WIFINET_ACTION_BA_ADDBA_REQUEST 0
 #define WIFINET_ACTION_BA_ADDBA_RESPONSE 1
 #define WIFINET_ACTION_BA_DELBA 2
@@ -136,8 +120,6 @@ struct wifi_mac_pub_gas_act_frame
     unsigned char   elts[1];
 } __packed;
 
-
-//AML_CATEGORY_PUBLIC action field
 enum WIFINET_PUBLIC_ACTION
 {
     WIFINET_ACT_PUBLIC_BSSCOEXIST = 0,
@@ -164,7 +146,6 @@ struct wifi_mac_action_csa_frame
 
 #define OUI_TYPE_P2P            0x09
 #define OUI_TYPE_DPP            0x1a
-
 
 struct wifi_mac_ie_bss_coex
 {
@@ -206,7 +187,6 @@ struct wifi_mac_action_bss_coex_frame
     struct wifi_mac_ie_intolerant_report chan_report;
 } __packed;
 
-//AML_CATEGORY_HT  action field
 #define WIFINET_ACTION_HT_TXCHWIDTH 0
 #define WIFINET_ACTION_HT_SMPOWERSAVE 1
 
@@ -222,7 +202,6 @@ struct wifi_mac_action_ht_smpowersave
     unsigned char as_control;
 } __packed;
 
-//AML_CATEGORY_SA_QUERY action field
 #define WIFINET_ACTION_SA_QUERY_REQ 0
 #define WIFINET_ACTION_SA_QUERY_RSP 1
 
@@ -232,7 +211,6 @@ struct wifi_mac_action_sa_query
     unsigned short sa_transaction_identifier;
 } __packed;
 
-//AML_CATEGORY_WMM  action field
 enum WIFINET_WMM_ACTION
 {
     WIFINET_ACTION_ADDTS_REQ= 0,
@@ -241,14 +219,13 @@ enum WIFINET_WMM_ACTION
 };
 
 struct wifi_mac_wmm_tspec_element {
-    unsigned char eid; /* 221 = 0xdd */
-    unsigned char length; /* 6 + 55 = 61 */
-    unsigned char oui[3]; /* 00:50:f2 */
-    unsigned char oui_type; /* 2 */
-    unsigned char oui_subtype; /* 2 */
-    unsigned char version; /* 1 */
+    unsigned char eid; 
+    unsigned char length; 
+    unsigned char oui[3]; 
+    unsigned char oui_type; 
+    unsigned char oui_subtype; 
+    unsigned char version; 
 
-    /* WMM TSPEC body (55 octets): */
     unsigned char ts_info[3];
     unsigned short nominal_msdu_size;
     unsigned short maximum_msdu_size;
@@ -281,7 +258,6 @@ struct wifi_mac_action_delts_req_frame {
     struct wifi_mac_wmm_tspec_element wmm_tspec_element;
 };
 
-//AML_CATEGORY_VHT  action field
 enum WIFINET_VHT_ACTION
 {
     WIFINET_ACTION_VHT_CMPRSSD_BMFRM = 0,
@@ -309,14 +285,11 @@ struct wifi_mac_ie_op_mode_ntfy {
     struct wifi_mac_ie_op_mode opmode;
 } __packed;
 
-
-/* VHT - recommended Channel width and Nss */
 struct wifi_mac_action_vht_opmode {
     struct wifi_mac_action at_header;
     struct wifi_mac_ie_op_mode at_op_mode;
 } __packed;
 
-//802.11w
 #define CATEGORY_IS_NON_ROBUST(cat) \
     (cat == AML_CATEGORY_PUBLIC \
     || cat == AML_CATEGORY_HT \
@@ -332,4 +305,4 @@ int wifi_mac_send_coexist_mgmt(const char* buf);
 int wifi_mac_send_wmm_ac_addts(char** buf);
 int wifi_mac_send_wmm_ac_delts(const char* buf);
 
-#endif//_WIFI_MAC_ACTION_H_
+#endif

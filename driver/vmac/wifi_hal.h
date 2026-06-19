@@ -25,7 +25,6 @@ enum aml_pkt_position {
     AML_PKT_IN_HAL = 1
 };
 
-
 int hal_host_init(struct hal_private *hal_priv);
 int hal_host_recovery_init(struct hal_private *hal_priv);
 
@@ -76,8 +75,7 @@ unsigned char hal_get_fw_ps_status(void);
 extern void Test_Done(int pass);
 void hal_enable_gpio_int(unsigned char enable);
 
-/*max length of an ampdu  aligned with page len */
-#define MULTI_DATA_LEN ((((STA1_VMAC0_SEND_LEN + 104/*HI_TXDESC_DATAOFFSET*/ + STA2_VMAC1_SEND_FRAME_NUM) \
+#define MULTI_DATA_LEN ((((STA1_VMAC0_SEND_LEN + 104 + STA2_VMAC1_SEND_FRAME_NUM) \
                                  + PAGE_LEN - 1) / PAGE_LEN) * PAGE_LEN * STA1_VMAC0_AGG_NUM)
 #endif
 

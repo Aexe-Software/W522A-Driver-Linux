@@ -46,7 +46,9 @@ struct wifi_mac_pkt_info
         b_dhcp:1,
         b_arp:1,
         b_tcp_saved_flag:1,
-        b_tcp_free:1;
+        b_tcp_free:1,
+        b_icmp:1,
+        b_latency:1;
 
     unsigned char eat_count;
     unsigned short tcp_src_port;
@@ -63,29 +65,29 @@ struct wifi_drv_pkt_info
 
 struct drv_txdesc
 {
-    struct list_head txdesc_queue; // drv_priv->txdesc_bufptr->txdesc_queue : to queue all descriptors
-                                   //-> drv_tx_descr_1->..->drv_tx_descr_n.
+    struct list_head txdesc_queue; 
+                                   
     struct drv_txdesc *txdesc_queue_last;
     struct drv_txdesc *txdesc_queue_lastframe;
-    struct drv_txdesc *txdesc_queue_next;     /* next subframe in the aggregate */
-    struct sk_buff *txdesc_mpdu;     /* enclosing frame structure */
-    void *txdesc_sta;     /* pointer to the nsta = struct aml_driver_nsta */
-    unsigned short txdesc_flag;    /* tx descriptor flags */
+    struct drv_txdesc *txdesc_queue_next;     
+    struct sk_buff *txdesc_mpdu;     
+    void *txdesc_sta;     
+    unsigned short txdesc_flag;    
     struct wifi_mac_tx_info *txinfo;
     struct wifi_drv_pkt_info drv_pkt_info;
     struct aml_ratecontrol txdesc_rateinfo[DRV_TXDESC_RATE_NUM];
 
-    int txdesc_pktnum;   //num of mpdus, valid for the first txdesc of ampdu
-    int txdesc_agglen;  //total len of mpdus, valid for the first txdesc of ampdu
+    int txdesc_pktnum;   
+    int txdesc_agglen;  
     int txdesc_delimit;
     unsigned short txdesc_chanbw;
     unsigned short txdesc_framectrl;
-    SYS_TYPE txdesc_ddraddr; //struct WIFINET_S_FRAME *
-    unsigned short txdesc_aggr_page_num;//total page num of ampdu,
+    SYS_TYPE txdesc_ddraddr; 
+    unsigned short txdesc_aggr_page_num;
     unsigned char rate_valid;
+    unsigned char txdesc_in_hw; 
     enum tx_frame_flag txdesc_frame_flag;
 };
-
 
 struct wifi_skb_callback
 {
@@ -100,15 +102,15 @@ struct wifi_mac_tx_info
     struct wifi_skb_callback cb;
     struct drv_txdesc *ptxdesc;
 
-    unsigned char wnet_vif_id;      /* vmac index */
-    unsigned char key_index;      /* key index */
-    unsigned char key_type;    /* key type */
+    unsigned char wnet_vif_id;      
+    unsigned char key_index;      
+    unsigned char key_type;    
     unsigned char tid_index;
-    unsigned char queue_id;       /* h/w queue number */
-    unsigned char amsdunum;       /* amsdu frame number*/
-    unsigned short seqnum;      /* sequence number */
-    unsigned short packetlen;     /* frame length+ fcs+ encrypt extern len*/
-    unsigned short mpdulen;     /* frame length  */
+    unsigned char queue_id;       
+    unsigned char amsdunum;       
+    unsigned short seqnum;      
+    unsigned short packetlen;     
+    unsigned short mpdulen;     
 
     unsigned int b_mcast:1,
         b_txfrag:1,
@@ -116,21 +118,21 @@ struct wifi_mac_tx_info
         b_datapkt:1,
         b_qosdata:1,
         b_nulldata:1,
-        ps:1,       /*is powersave mode */
-        b_buffered:1, /* flag frames are buffered. */
-        shortPreamble:1, /* is short preamble */
+        ps:1,       
+        b_buffered:1, 
+        shortPreamble:1, 
         ht:1,
         b_BarPkt:1,
         b_PsPoll:1,
         b_noack:1,
         b_uapsd:1,
-        b_rsten:1,  /* if this frame needs rts first */
-        b_csten:1,  /* if this frame needs cts first */
+        b_rsten:1,  
+        b_csten:1,  
         b_11n:1,
         b_aggr:1,
         b_Ampdu:1,
-        b_hwchecksum:1, /* need hw tcp/ip checksum*/
-        b_hwtkipmic:1,/* need hw tkip mic add*/
+        b_hwchecksum:1, 
+        b_hwtkipmic:1,
         b_amsdu:1,
         b_tcp_saved_flag:1,
         b_pmf:1;
@@ -146,4 +148,4 @@ extern void wifi_mac_recycle_txdesc(struct sk_buff *skbbuf);
 extern struct sk_buff *wifi_mac_alloc_skb(struct wifi_mac *wifimac, unsigned int size);
 extern void wifi_mac_free_skb(struct sk_buff *skb);
 
-#endif//_WIFI_PKT_DESC_H_
+#endif

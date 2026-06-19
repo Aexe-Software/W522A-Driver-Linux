@@ -10,11 +10,10 @@
 #define _STA1_DRV_   0
 #endif
 
-
 #if defined (HAL_FPGA_VER)
 #include <linux/init.h>
 #include <linux/module.h>
-#include <linux/delay.h>    /* udelay */
+#include <linux/delay.h>    
 #include <linux/spinlock.h>
 #include <linux/netdevice.h>
 #include <linux/etherdevice.h>
@@ -31,13 +30,13 @@
 #include <linux/errno.h>
 #include <linux/irq.h>
 #include <linux/interrupt.h>
-#include <linux/kernel.h> /* pr_debug() */
+#include <linux/kernel.h> 
 #include <linux/list.h>
 #include <linux/netdevice.h>
 #include <linux/version.h>
 #include <linux/spinlock.h>
 #include <linux/kthread.h>
-#include <linux/gpio.h> //mach
+#include <linux/gpio.h> 
 #include <linux/timer.h>
 #include <linux/string.h>
 #elif defined (HAL_SIM_VER)
@@ -88,8 +87,6 @@ struct hw_interface;
 #include "wifi_hal_platform.h"
 #include "wifi_hif.h"
 
-
-//////////////////value ////////////////////////
 #define CPU_RUN	BIT(24)
 #define CPU_HALT BIT(25)
 #define SDIO_FW2HOST_GPIO_EN (BIT(20))
@@ -100,19 +97,18 @@ struct hw_interface;
 #define SRAM_MAX_LEN (1024*4)
 #define MAX_OFFSET (1024*100)
 #define SLOT_MASK (0x3f<<16)
-// 1:level sensitive interrupt; 0:edge sensitive interrupt
+
 #define SDIO_GPIO_IRQ_TRIG_MODE_LEVEL  (BIT(30))
-//bit0~bit11, if edge sensitive interrupt mode enabled, interrupt
-//will generate pulse, this is the pulse width, unit is ahb clk
+
 #define SDIO_GPIO_IRQ_EDGE_TIMEUP_MASK  (0xfff)
-//sdio manufacturer code, usually vendor ID, 'a'=0x61, 'm'=0x6d
+
 #define VENDOR_AMLOGIC_EFUSE ('a'|('m'<<8))
-//sdio manufacturer info, usually product ID
+
 #define PRODUCT_AMLOGIC_EFUSE (0x9007)
 
 #define SWITCH_CLK_WAIT_US (10)
 #define UART_BAUD_RATE (115200)
-/***aml hw cmd***/
+
 #define FCS_LEN     4
 
 enum {
@@ -148,7 +144,7 @@ enum wifi_module_sn {
 #define MAC_FCTRL_DATA_T           0x0008
 
 #define MAC_FCTRL_SUBT_MASK            0x00F0
-/* Management SubType                                                               */
+
 #define MAC_FCTRL_ASSOCREQ_ST      0x0000
 #define MAC_FCTRL_ASSOCRSP_ST      0x0010
 #define MAC_FCTRL_REASSOCREQ_ST    0x0020
@@ -161,7 +157,7 @@ enum wifi_module_sn {
 #define MAC_FCTRL_AUTHENT_ST       0x00B0
 #define MAC_FCTRL_DEAUTHENT_ST     0x00C0
 #define MAC_FCTRL_ACTION_ST        0x00D0
-/* Control SubTypes                                                                 */
+
 #define MAC_FCTRL_PSPOLL_ST        0x00A0
 #define MAC_FCTRL_RTS_ST           0x00B0
 #define MAC_FCTRL_CTS_ST           0x00C0
@@ -181,8 +177,6 @@ enum wifi_module_sn {
 #define MAC_FCTRL_PWRMGT               0x1000
 #define MAC_FCTRL_PROTECTEDFRAME       0x4000
 
-
-/* FRAME CONTROL : Type information including Type and SubType                          */
 #define MAC_FCTRL_ASSOCREQ              (MAC_FCTRL_MGT_T     | MAC_FCTRL_ASSOCREQ_ST)
 #define MAC_FCTRL_ASSOCRSP              (MAC_FCTRL_MGT_T     | MAC_FCTRL_ASSOCRSP_ST)
 #define MAC_FCTRL_REASSOCREQ            (MAC_FCTRL_MGT_T     | MAC_FCTRL_REASSOCREQ_ST)
@@ -215,20 +209,14 @@ enum wifi_module_sn {
 #define MAC_FCTRL_QOS_NULL              (MAC_FCTRL_QOS_DATA  | MAC_NODATA_ST_BIT)
 #define MAC_FCTRL_QOS_NULL_CFACK        (MAC_FCTRL_QOS_DATA  | MAC_FCTRL_NULL_CFACK)
 
-
-///
-/// The MacFrame class encapsulates all operations on MAC header fields.
-///
 enum
 {
-    FRAME_TYPE_MASK                         = 0x0000000F,        // Include the version field for error checking
+    FRAME_TYPE_MASK                         = 0x0000000F,        
     FRAME_SUBTYPE_MASK                      = 0x000000F0,
     FRAME_CONTROL_MASK                      = 0x0000FF00,
     DURATION_ID_MASK                        = 0xFFFF0000,
     DURATION_ID_SHIFT                       = 16,
-    //
-    // Management frame types
-    //
+    
     FRAME_TYPE_MANAGEMENT                           = 0x00000000,
     FRAME_SUBTYPE_ASSOCIATION_REQUEST       = 0x00000000,
     FRAME_SUBTYPE_ASSOCIATION_RESPONSE      = 0x00000010,
@@ -243,9 +231,7 @@ enum
     FRAME_SUBTYPE_DEAUTHENTICATION          = 0x000000C0,
     FRAME_SUBTYPE_ACTION                            = 0x000000D0,
     FRAME_SUBTYPE_ACTION_NO_ACK                 = 0x000000E0,
-    //
-    // Control frame types
-    //
+    
     FRAME_TYPE_CONTROL                              = 0x00000004,
     FRAME_SUBTYPE_CONTROL_WRAPPER               = 0x00000070,
     FRAME_SUBTYPE_BLOCK_ACK_REQUEST         = 0x00000080,
@@ -256,9 +242,7 @@ enum
     FRAME_SUBTYPE_ACK                               = 0x000000D0,
     FRAME_SUBTYPE_CF_END                            = 0x000000E0,
     FRAME_SUBTYPE_CFEND_CFACK                   = 0x000000F0,
-    //
-    // Data frame types (various combinations are possible)
-    //
+    
     FRAME_TYPE_DATA                                     = 0x00000008,
     FRAME_SUBTYPE_DATA                              = 0x00000000,
     FRAME_SUBTYPE_CF_ACK                            = 0x00000010,
@@ -266,9 +250,7 @@ enum
     FRAME_SUBTYPE_NULL                              = 0x00000040,
     FRAME_SUBTYPE_QOS                               = 0x00000080,
     FRAME_SUBTYPE_CFACK_POLL                        = 0x00000030,
-    //
-    // Frame control flags (various combinations are possible)
-    //
+    
     FRAME_CONTROL_TO_DS                             = 0x00000100,
     FRAME_CONTROL_FROM_DS                           = 0x00000200,
     FRAME_CONTROL_MORE_FRAGMENT                 = 0x00000400,
@@ -277,16 +259,12 @@ enum
     FRAME_CONTROL_MORE_DATA                     = 0x00002000,
     FRAME_CONTROL_PROTECTED                         = 0x00004000,
     FRAME_CONTROL_ORDERED                           = 0x00008000,
-    //
-    // Sequence Control
-    //
+    
     SEQUENCE_CONTROL_FRAGMENT_MASK          = 0x000F,
     SEQUENCE_CONTROL_FRAGMENT_SHIFT         = 0,
     SEQUENCE_CONTROL_SEQUENCE_MASK          = 0xFFF0,
     SEQUENCE_CONTROL_SEQUENCE_SHIFT         = 4,
-    //
-    // QoS Control
-    //
+    
     QOS_CONTROL_TID_MASK                        = 0x000F,
     QOS_CONTROL_TID_SHIFT                       = 0,
     QOS_CONTROL_EOSP_MASK                       = 0x0010,
@@ -301,17 +279,13 @@ enum
     QOS_CONTROL_TXOP_QUEUE_SHIFT            = 8,
 };
 
-/*
- * Channels are specified by frequency.
- */
  struct hal_channel
 {
-    /*center frequency, setting in Mhz */
+    
     unsigned short   channel;
-    /* primary channel number */
+    
     unsigned char  pchan_num;
-    /*shijie.chen add,  center channel number of center frequency,
-    set cchan_num to rf */
+    
     unsigned char  cchan_num;
     int  chan_bw;
 } ;
@@ -333,7 +307,6 @@ struct  PHY_PRIMARY_CHANNEL_BIT
              rf_fs                          :2;
 };
 
-///< Common signature of task handlers.
 typedef void (*WorkHandler)(SYS_TYPE param1,SYS_TYPE param2,
     SYS_TYPE param3,SYS_TYPE param4,SYS_TYPE param5); 
 typedef void (*TaskHandler)(SYS_TYPE param1);
@@ -349,11 +322,8 @@ struct  hal_work_task
     SYS_TYPE param5;
 } ;
 
-
-/****************************** aml fwdownload**************************************************/
 #ifdef PROJECT_T9026
 
-// for check
 #define ICCM_BUFFER_RD_LEN (96*1024)
 #define ICCM_CHECK_LEN (96*1024)
 #define DCCM_CHECK_LEN (48*1024)
@@ -373,7 +343,6 @@ struct  hal_work_task
 #define SRAM_LEN        (8 * 1024)
 #define ICCM_ALL_LEN    (ICCM_ROM_LEN + ICCM_RAM_LEN)
 
-// for check
 #define ICCM_BUFFER_RD_LEN  (ICCM_RAM_LEN)
 #define ICCM_CHECK_LEN      (ICCM_RAM_LEN)
 #define DCCM_CHECK_LEN      (DCCM_LEN)
@@ -385,18 +354,16 @@ struct  hal_work_task
 
 #endif
 
-/********************************** aml hal**********************************************/
-
 #ifndef BIT
 #define BIT(n)    (1UL << (n))
-#endif //BIT
+#endif 
 
 #define WIFI_ADDR2(wh)          (((unsigned char *)wh)+4+6)
 #define MAC_FCTRL_PROTECTEDFRAME       0x4000
 #define MAC_FCTRL_TODS                 0x0100
 #define MAC_FCTRL_FROMDS               0x0200
 #define MAC_HEAD_QOS_UP_MASK            0x07
-#define MAC_SHORT_MAC_HDR_LEN          24              /* size without FCS              */
+#define MAC_SHORT_MAC_HDR_LEN          24              
 #define MAC_FCTRL_TYPE_MASK            0x000C
 #define MAC_QOS_ST_BIT             BIT(7)
 #define MAC_FCTRL_DATA_T           0x0008
@@ -406,7 +373,6 @@ struct  hal_work_task
 
 #define TXID_INVALID 0xff
 
-/******************************* aml hal test*************************************************/
 #define HAL_TEST_ENABLE    BIT(0)
 #define HAL_TEST_HELPINFO    BIT(1)
 
@@ -423,15 +389,9 @@ struct  hal_work_task
 #define MEASURE_SDIO_THROUGHPUT    BIT(14)
 #define MEASURE_WIFI_THROUGHPUT    BIT(15)
 #define TEST_WIFI_EFUSE             BIT(16)
-//#define TEST_SDIO_MODULE          BIT(17)
 
 #define HAL_TEST_DEFAULT    (0)
 
-
-/****************************** aml hi**************************************************/
-
-/* tx+rx page <= 448 pagenum, the other pages 512-(tx+rx)
-    (at least 32KB) are for capture or dpd training*/
 #define DEFAULT_TXPAGENUM 224
 
 #ifdef SRAM_FULL_TEST
@@ -442,14 +402,13 @@ struct  hal_work_task
 #define PT_MODE 1
 #define DEFAULT_BCN_NUM             4
 #define DEFAULT_SRAM_LEN        (100*1024)
-#define PAGE_DELT                                 0   /**/
-#define TOTAL_SRAM_NUM                     8     /*system have SRAM number ,every SRAM is 32K*/
-#define TXRX_SRAM_NUM                      7    /*TX RX used SRAM number, and TX RX use low address sram*/
+#define PAGE_DELT                                 0   
+#define TOTAL_SRAM_NUM                     8     
+#define TXRX_SRAM_NUM                      7    
 #define TBC_ADDR_BEGIN_OFFSET         (0x08000* TXRX_SRAM_NUM)
 #define TBC_ADDR_END_OFFSET            (0x40000)
-/*ramshare_and_ahb_ctrl register config value*/
-#define TBC_RAM_SHARE_MASK            ( 0x0000007f | ( (0xFF& (~((1<<TXRX_SRAM_NUM)-1) ) ) <<24 )  )
 
+#define TBC_RAM_SHARE_MASK            ( 0x0000007f | ( (0xFF& (~((1<<TXRX_SRAM_NUM)-1) ) ) <<24 )  )
 
 #if defined (HAL_FPGA_VER)
 #define RX_FIFO_SIZE  ( 4*DEFAULT_RXPAGENUM*(PAGE_LEN))
@@ -457,28 +416,20 @@ struct  hal_work_task
 #endif
 
 #define DATA_PACKET_LENGTH_MIN 1000
-#define THROUGHPUT_GET_INTERVAL 2000 //ms
+#define THROUGHPUT_GET_INTERVAL 2000 
 
-//for tx mpdus, state machine: GET -> MAKE -> SET
-//each mpdu occupy one unit
 #define CO_TX_BUFFER_GET           0
 #define CO_TX_BUFFER_MAKE          1
 #define CO_TX_BUFFER_SET           2
 #define CO_SF_BLOCK_TX_NBR         3
 
-/*
- * Transmit queue subtype.  These map directly to
- * WME Access Categories (except for UPSD).  Refer
- * to Table 5 of the WME spec.
- */
-
  enum
 {
     HAL_WME_MIN = 0,
-    HAL_WME_AC_BE = 0,            /* best effort access category*/
-    HAL_WME_AC_BK = 1,            /* background access category */
-    HAL_WME_AC_VI = 2,            /* video access category */
-    HAL_WME_AC_VO = 3,            /* voice access category */
+    HAL_WME_AC_BE = 0,            
+    HAL_WME_AC_BK = 1,            
+    HAL_WME_AC_VI = 2,            
+    HAL_WME_AC_VO = 3,            
     HAL_WME_NOQOS = 4,
     HAL_WME_MGT = 5,
     HAL_WME_UAPSD = 6,
@@ -486,8 +437,7 @@ struct  hal_work_task
     HAL_WME_MAX = 8,
 } ;
 
-#define HAL_NUM_TX_QUEUES HAL_WME_MAX        /* max possible # of queues */
-
+#define HAL_NUM_TX_QUEUES HAL_WME_MAX        
 
  struct hi_status
 {
@@ -499,7 +449,7 @@ struct  hal_work_task
 #if LINUX_VERSION_CODE <= KERNEL_VERSION(5,15,0) && !defined (LINUX_PLATFORM)
     unsigned int Tx_Send_num;
     unsigned int Tx_Done_num;
-    unsigned int Tx_Free_num;    //num of tx frames have been freed after tx completed
+    unsigned int Tx_Free_num;    
 #else
     atomic_t Tx_Send_num;
     atomic_t Tx_Done_num;
@@ -515,10 +465,6 @@ struct  hal_work_task
     unsigned int HiTask_exit_num;
     unsigned int rxlen_Err_num;
 } ;
-
-
-//save some info for ampdu tx
-//not necessary, already deleted in 11ac, to be deleted in x111
 
  struct fw_txdesc_fifo
 {
@@ -542,21 +488,19 @@ struct  hal_work_task
     SYS_TYPE    param1;
 } ;
 
-/* note: not really a mode; there are really multiple PHY's */
 enum wifi_mac_chanbw
 {
-    WIFINET_BW_20               = 0,    /* 2Ghz, HT20 */
-    WIFINET_BW_40PLUS           = 1,    /* 2Ghz, HT40 (ext ch +1) */
-    WIFINET_BW_40MINUS          = 2,    /* 2Ghz, HT40 (ext ch -1) */
+    WIFINET_BW_20               = 0,    
+    WIFINET_BW_40PLUS           = 1,    
+    WIFINET_BW_40MINUS          = 2,    
 
-    WIFINET_BW_80_U10             =3 ,    /*primary channel = center channel +10*/
-    WIFINET_BW_80_U30             =4 ,     /*primary channel = center channel +30*/
-    WIFINET_BW_80_L10             =5 ,     /*primary channel = center channel -10*/
-    WIFINET_BW_80_L30             =6 ,     /*primary channel = center channel -30*/
+    WIFINET_BW_80_U10             =3 ,    
+    WIFINET_BW_80_U30             =4 ,     
+    WIFINET_BW_80_L10             =5 ,     
+    WIFINET_BW_80_L30             =6 ,     
 
     WIFINET_BW_MAX,
 };
-
 
 #define BW_20			0
 #define BW_40			1
@@ -570,17 +514,16 @@ enum wifi_mac_chanbw
 #define BUS_DMA_TODEVICE        1
 
 #if defined(HAL_FPGA_VER)
-//struct use to set rx packet date address to host driver
+
  struct rx_share_fifo_ctrl
 {
-    unsigned char   *FDB;    // 8 byte  fifo start address
-    unsigned long     FDN;    // 8 Byte  fifo size
-    unsigned long     FDH;    // 4 Byte fifo  head
-    unsigned long     FDT;    // 4 Byte fifo  tail
+    unsigned char   *FDB;    
+    unsigned long     FDN;    
+    unsigned long     FDH;    
+    unsigned long     FDT;    
 } ;
 
 #endif
-
 
 struct hw_sts_snr
 {
@@ -591,7 +534,7 @@ struct hw_sts_snr
 
 struct  hw_interface
 {
-    struct amlw_hif_ops   hif_ops;// exported
+    struct amlw_hif_ops   hif_ops;
 
 #if defined (HAL_FPGA_VER)
     struct rx_share_fifo_ctrl  rx_fifo;
@@ -622,24 +565,23 @@ struct  hw_interface
 #define MAX_PN_WINDOW   62
  struct unicastReplayCnt
 {
-#define MAX_RX_QUEUE    4   //rx PN of each tid need to be increase, so rx need 4 ACs
-#define MAX_TX_QUEUE    1   //tx PN of all tids are merged into one ac, we can keep the increase
+#define MAX_RX_QUEUE    4   
+#define MAX_TX_QUEUE    1   
 #define TX_UNICAST_REPCNT_ID 0
 
-
-    unsigned char txPN[MAX_TX_QUEUE/*macx ac queue num*/][MAX_PN_LEN]; //see HW_TxOption PN
-    unsigned char rxPN[MAX_RX_QUEUE/*macx ac queue num*/][MAX_PN_LEN]; //see HW_RxDescripter_bit PN
+    unsigned char txPN[MAX_TX_QUEUE][MAX_PN_LEN]; 
+    unsigned char rxPN[MAX_RX_QUEUE][MAX_PN_LEN]; 
 
 } ;
  struct multicastReplayCnt
 {
 
-    unsigned char txPN[MAX_PN_LEN];    //see HW_TxOption PN
-    unsigned char rxPN[MAX_PN_LEN];    //see HW_RxDescripter_bit PN
+    unsigned char txPN[MAX_PN_LEN];    
+    unsigned char rxPN[MAX_PN_LEN];    
 
 } ;
 
-#define AC_MAX_INDEX 4 // BE:0,BK:1,VI:2,VO:3
+#define AC_MAX_INDEX 4 
  struct AcParam
 {
     unsigned char ac;
@@ -648,7 +590,6 @@ struct  hw_interface
     unsigned short txop;
 } ;
 
-// since amlogic's self-definition reset ,we need store ap's bssid,sta's mac ,and others.
  struct sta_connect_msg
 {
     RegStaIdParam CmdParam;
@@ -669,7 +610,6 @@ struct  hw_interface
 #define MAC_LEN 6
 #endif
 
-
  struct hi_tx_priv_hdr
 {
     unsigned char          TX_STATUS;
@@ -677,12 +617,12 @@ struct  hw_interface
     unsigned char          LongRetryNum;
     unsigned char          ACKRSSI;
     unsigned int           TimeStmp;
-    unsigned long         DDRADDR;    //struct WIFINET_S_FRAME *, point to frame body
-    SYS_TYPE               DMAADDR;    //mapped to txdesc_ddraddr, no use now /*shijie.chen change to pointer skb */
-    unsigned short         DMALEN; //data len for hal_fill_agg_start or hal_fill_priv
-    unsigned short         MPDULEN;    // frame length
-    unsigned long         hostreserve;    //pointer of ptxdesc
-    unsigned char          Delimiter;///Delimiter padding
+    unsigned long         DDRADDR;    
+    SYS_TYPE               DMAADDR;    
+    unsigned short         DMALEN; 
+    unsigned short         MPDULEN;    
+    unsigned long         hostreserve;    
+    unsigned char          Delimiter;
     unsigned char          Flag;
     unsigned short         Seqnum;
     unsigned short         HTC;
@@ -695,7 +635,7 @@ struct  hw_interface
 {
     unsigned char              RateTableMode;
     unsigned char              TxPower;
-    unsigned char              StaId;  //assoc id
+    unsigned char              StaId;  
     unsigned char              KeyId;
     unsigned char              EncryptType;
     unsigned char              TID;
@@ -707,11 +647,11 @@ struct  hw_interface
     unsigned char              TxTryNum1;
     unsigned char              TxTryNum2;
     unsigned char              TxTryNum3;
-    unsigned short             FLAG;   //wifi flag, such as short gi, rts en
-    unsigned short             FLAG2;  //tx descriptor flag, such as checksum, mic
-    unsigned short             AGGR_len;   //total len of mpdus
-    unsigned char              TxPrivNum;  //only mac1.0 use
-    unsigned short             MpduNum;    //number of mpdus
+    unsigned short             FLAG;   
+    unsigned short             FLAG2;  
+    unsigned short             AGGR_len;   
+    unsigned char              TxPrivNum;  
+    unsigned short             MpduNum;    
     int                              vid;
     int                             queue_id;
     unsigned short            HiP2pNoaCountNow;
@@ -726,13 +666,11 @@ struct  hw_interface
 #define READ_LEN_PER_ONCE               (64 * 1024)
 #endif
 
-// last 1024 word memory of sram for dpd training
 #define DPD_MEMORY_ADDR (0x00b00000 + (512 * PAGE_LEN) - (8 * PAGE_LEN))
 #define DPD_MEMORY_LEN (1024 * 4)
 
-//(0x00b00000 + (512 * PAGE_LEN) - (64 * PAGE_LEN))
 #define SRAM_FWLOG_BUFFER (0x00b00000 + (512 * PAGE_LEN) - (16 * PAGE_LEN))
-#define SRAM_FWLOG_BUFFER_LEN (1024 * 4) //4K
+#define SRAM_FWLOG_BUFFER_LEN (1024 * 4) 
 
 struct hal_layer_ops
 {
@@ -794,14 +732,14 @@ struct hal_layer_ops
     unsigned int (*phy_set_chan_phy_type)(int);
     unsigned char  (*hal_tx_empty)(void);
     unsigned char *  (*hal_get_config)(void);
-    void  (*phy_scan_cmd)(unsigned int data);// 1 start,0 end
+    void  (*phy_scan_cmd)(unsigned int data);
     void (*phy_set_tx_power_accord_rssi)(int bw, unsigned short channel, unsigned char rssi, unsigned char power_mode);
     void (*phy_set_channel_rssi)(unsigned char rssi);
-    unsigned int (*phy_pwr_save_mode)(unsigned char wnet_vif_id,unsigned int data);// 1 start,0 end
+    unsigned int (*phy_pwr_save_mode)(unsigned char wnet_vif_id,unsigned int data);
     unsigned int (*phy_set_rd_support)(unsigned char wnet_vif_id, unsigned int data);
-    unsigned int (*phy_set_txlive_time)(unsigned int  txlivetime);//ms
-    unsigned int (*phy_set_slot_time)( unsigned int  slot);//us
-    unsigned int (*phy_set_bcn_intvl)(unsigned char wnet_vif_id,unsigned int  bcninterval);//us
+    unsigned int (*phy_set_txlive_time)(unsigned int  txlivetime);
+    unsigned int (*phy_set_slot_time)( unsigned int  slot);
+    unsigned int (*phy_set_bcn_intvl)(unsigned char wnet_vif_id,unsigned int  bcninterval);
     unsigned int (*phy_set_ac_param)(unsigned char wnet_vif_id,unsigned char ac,unsigned char aifsn,unsigned char cwminmax,unsigned short txop);
     int (*hal_tx_flush)(unsigned char vid);
     int (*phy_set_p2p_opps_cwend_enable)(unsigned char vid, unsigned char p2p_oppps_cw);
@@ -833,11 +771,9 @@ struct hal_layer_ops
     void (*hal_pt_rx_start)(unsigned int qos);
     void (*hal_pt_rx_stop)(void);
 
-    // sdio pmu
     unsigned char (*hal_get_fw_ps_status)(void);
     unsigned char (*hal_check_fw_wake)(void);
 
-    // beamforming
     unsigned int (*phy_send_ndp_announcement)(struct NDPAnncmntCmd ndp_annc);
     void (*phy_set_bmfm_info)(int wnet_vif_id, unsigned char *group_id, unsigned char * user_position, unsigned char feedback_type);
     unsigned int (*phy_set_coexist_en)( unsigned char enable);
@@ -860,8 +796,8 @@ struct hal_layer_ops
 #define HAL_FW_IN_SLEEP  BIT(2)
 #define HAL_FW_STS_MASK  (HAL_FW_IN_SLEEP | HAL_FW_IN_AWAKE | HAL_FW_IN_ACTIVE)
 
-#define HAL_DRV_IN_SLEEPING  BIT(6) // driver set sleep cmd
-#define HAL_DRV_IN_ACTIVE  BIT(7) // driver set cmds or tx frames
+#define HAL_DRV_IN_SLEEPING  BIT(6) 
+#define HAL_DRV_IN_ACTIVE  BIT(7) 
 #define HAL_DRV_STS_MASK  (HAL_DRV_IN_ACTIVE | HAL_DRV_IN_SLEEPING)
 
  struct hal_private
@@ -879,8 +815,8 @@ struct hal_layer_ops
 
     struct task_struct * work_thread;
     struct semaphore work_thread_sem;
-    atomic_t work_thread_sem_pending; /* KP-6 FIX: throttle counter separate from semaphore internals */
-    /* thread completion */
+    atomic_t work_thread_sem_pending; 
+    
     struct completion  work_thread_completion;
     int work_thread_quit;
 
@@ -891,7 +827,7 @@ struct hal_layer_ops
 #if defined (HAL_FPGA_VER)
     struct task_struct* rx_thread;
     struct semaphore rx_thread_sem;
-    atomic_t rx_thread_sem_pending; /* KP-6 FIX */
+    atomic_t rx_thread_sem_pending; 
     struct completion rx_thread_completion;
     int rx_thread_quit;
 
@@ -902,7 +838,7 @@ struct hal_layer_ops
 
     struct task_struct* hi_irq_thread;
     struct semaphore hi_irq_thread_sem;
-    atomic_t hi_irq_thread_sem_pending; /* KP-6 FIX */
+    atomic_t hi_irq_thread_sem_pending; 
     struct completion hi_irq_thread_completion;
     int hi_irq_thread_quit;
 
@@ -927,20 +863,20 @@ struct hal_layer_ops
     struct _CO_SHARED_FIFO txds_trista_fifo[HAL_NUM_TX_QUEUES];
     struct fw_txdesc_fifo  txds_trista_fifo_buf[HI_AGG_TXD_NUM_ALL_QUEUE];
 
-    struct hal_layer_ops hal_ops; // exported
-    struct hw_interface* hif;        // call next layer
+    struct hal_layer_ops hal_ops; 
+    struct hw_interface* hif;        
 
     void *drv_priv;
     struct aml_hal_call_backs * hal_call_back;
-    void *Hi_TxAgg[WIFI_MAX_TXQUEUE_ID];  //save the pointer of TxPageInfo
+    void *Hi_TxAgg[WIFI_MAX_TXQUEUE_ID];  
     struct tx_complete_status *txcompletestatus;
     struct Tx_FrameDesc tx_frames[WIFI_MAX_TXFRAME];
     unsigned long tx_frames_map[BITS_TO_LONGS(WIFI_MAX_TXFRAME)];
-    unsigned int txPageFreeNum;  //the num of free tx pages
+    unsigned int txPageFreeNum;  
     struct unicastReplayCnt  uRepCnt[WIFI_MAX_VID][WIFI_MAX_STA];
     struct multicastReplayCnt mRepCnt[WIFI_MAX_VID];
 
-    struct OS_TQ_STRUCT hi_tasktq;      /* hi intr tasklet */
+    struct OS_TQ_STRUCT hi_tasktq;      
     OS_MUTEX hal_phy_mutex;
     OS_MUTEX power_mutex;
 
@@ -952,29 +888,29 @@ struct hal_layer_ops
     unsigned long com_spinlock_flag;
     unsigned long pn_spinlock_flag;
 
-    unsigned char hst_if_init_ok; // shared for DMA & SDIO
-    unsigned char hst_if_irq_en; //shared for DMA & SDIO
+    unsigned char hst_if_init_ok; 
+    unsigned char hst_if_irq_en; 
     unsigned char bhalOpen;
     unsigned char bhalProbelok;
-    unsigned char bhalMKeySet[4]; //for all vmac_id, now for mkey reset
-    unsigned char bhalUKeySet[4]; //for all vmac_id, now for ukey reset
+    unsigned char bhalMKeySet[4]; 
+    unsigned char bhalUKeySet[4]; 
     unsigned char bWpaMicMeasureEnable;
 
-    unsigned int int_status_copy; //0x70  is read-clean REG,save for debug
-    unsigned char HalTxFrameDoneCounter;  //old counter of frames have been tx completed
-    unsigned int HalRxFrameDoneCounter;  //old counter of frames have been rxed from firmware
-    unsigned short HalTxPageDoneCounter;   //old counter of pages have been tx completed
+    unsigned int int_status_copy; 
+    unsigned char HalTxFrameDoneCounter;  
+    unsigned int HalRxFrameDoneCounter;  
+    unsigned short HalTxPageDoneCounter;   
 
     unsigned char use_irq;
-    int tx_queueid_downloadok; //the id of queue which has been downloaded ok, init as 0
+    int tx_queueid_downloadok; 
     unsigned int beaconaddr[WIFI_MAX_VID];
     int bhaltxdrop;
-    //when driver insmod and remod, the value is -1 as a flag.
+    
     unsigned char bhalPowerSave;
     unsigned char powersave_init_flag;
     unsigned char hal_fw_ps_status;
     unsigned char hal_drv_ps_status;
-    int rssi;   //counted after rxed acked frames responsed txed frames
+    int rssi;   
     unsigned int rtc_func_enable;
     unsigned int ps_host_state;
     unsigned int fec_coding;
@@ -983,14 +919,16 @@ struct hal_layer_ops
 #if defined (HAL_FPGA_VER)
     unsigned int sts_hirq[hirq_max_idx +1];
     unsigned int gpio_irq_cnt;
-    /* for host sw statistic*/
+    
+    int oob_irq;
+    int oob_irq_masked;
+    
     struct sts_sw_cnt_ctrl sts_hst_sw[sts_hst_sw_max_idx];
     unsigned int sts_en_bcn[2];
     unsigned int sts_dis_bcn[2];
 #endif
 };
 
-/*** aml platform***/
 struct platform_wifi_gpio
 {
     unsigned int gpio_wakeup;
@@ -999,7 +937,7 @@ struct platform_wifi_gpio
     unsigned int   gpio_irq_mode;
     unsigned int   irq_num;
     unsigned int gpio_rtc;
-    unsigned int clk_sel; // 0: FPGA CLK 1: SSV RF
+    unsigned int clk_sel; 
     unsigned int filter_num;
 };
 
@@ -1013,8 +951,6 @@ enum
 
 extern struct platform_wifi_gpio amlhal_gpio;
 
-/*** aml sdio***/
-
  enum cust_gpio_modes
 {
     WLAN_RESET_ON,
@@ -1025,7 +961,7 @@ extern struct platform_wifi_gpio amlhal_gpio;
 
  struct sdio_rw_desc
 {
-    unsigned int     addr;               /* request data */
+    unsigned int     addr;               
     unsigned char *    buf;
     unsigned int     len;
     short   status;
@@ -1046,13 +982,7 @@ extern struct platform_wifi_gpio amlhal_gpio;
 #define AMLSD_DBG_IOS       (1<<9)
 #define AMLSD_DBG_CLKC      (1<<11)
 
-
-/*for status cnt control*/
-
-/*** aml test***/
-/********************************* aml test***********************************************/
-
-#define THREAD_SWITCH_INTERVAL_ONCE      	(5000)  //ms
+#define THREAD_SWITCH_INTERVAL_ONCE      	(5000)  
 
 #define HAL_TEST_ENABLE    			BIT(0)
 #define HAL_TEST_HELPINFO    			BIT(1)
@@ -1083,16 +1013,14 @@ extern struct platform_wifi_gpio amlhal_gpio;
 #define INBUFFER_LEN_VALID_BIT 			(256-2)
 #define INBUFFER_LEN_VALID 			((INBUFFER_LEN_VALID_BIT)/8)
 
-#define DA 					0	//LG
+#define DA 					0	
 
 #define SW					9
 #define FCS_ERR					3
 #define AGC_FSM_TRIG				0
 
-
-
 #if defined (HAL_SIM_VER)
-/*********************************  aml txdesc***********************************************/
+
 #define BITS_PER_BYTE			8
 #define OFDM_PLCP_BITS                  22
 #define L_STF                           8
@@ -1110,11 +1038,11 @@ extern struct platform_wifi_gpio amlhal_gpio;
 #define VHT_SIG_B                       4
 
 #define MCS_2_STREAMS(_mcs)             ((((_mcs)&0x78)>>3)+1)
-#define SYMBOL_TIME(_ns)                ((_ns) << 2)            // ns * 4 us
-#define SYMBOL_TIME_HALFGI(_ns)         (((_ns) * 18 + 4) / 5)  // ns * 3.6 us
+#define SYMBOL_TIME(_ns)                ((_ns) << 2)            
+#define SYMBOL_TIME_HALFGI(_ns)         (((_ns) * 18 + 4) / 5)  
 #define NUM_SYMBOLS_PER_USEC(_usec)     (_usec >> 2)
 #define NUM_SYMBOLS_PER_USEC_HALFGI(_usec) (((_usec*5)-4)/18)
-#define SIGNAL_EXTENSION_VALUE          6              /* Value of the signal extension          */
+#define SIGNAL_EXTENSION_VALUE          6              
 #endif
 
 #define DESC_PREMBLETYPE  tmp_dot11_preamble_type
@@ -1134,79 +1062,69 @@ extern struct platform_wifi_gpio amlhal_gpio;
 
 #define IS_OFMD_RATE(_r)                ((_r)>WIFI_11B_11M)
 
+#define DP_SEC_WEP_IV_LEN          	4    
+#define DP_SEC_WEP_ICV_LEN         	4    
+#define DP_SEC_WEP_EXP_LEN (DP_SEC_WEP_IV_LEN + DP_SEC_WEP_ICV_LEN)
 
-/* Mpdu expand length */
-/* WEP  */
-#define DP_SEC_WEP_IV_LEN          	4    /* IV field Length  */
-#define DP_SEC_WEP_ICV_LEN         	4    /* ICV field Length */
-#define DP_SEC_WEP_EXP_LEN (DP_SEC_WEP_IV_LEN + DP_SEC_WEP_ICV_LEN)/* WEP expand length */
-
-/* TKIP  */
-#define DP_SEC_TKIP_IV_LEN         	8    /* IV field Length */
-#define DP_SEC_TKIP_MIC_LEN        	8    /* MIC length  */
-#define DP_SEC_TKIP_ICV_LEN        	4    /* ICV field Length */
+#define DP_SEC_TKIP_IV_LEN         	8    
+#define DP_SEC_TKIP_MIC_LEN        	8    
+#define DP_SEC_TKIP_ICV_LEN        	4    
 #define DP_SEC_TKIP_MPDU_EXP_LEN (DP_SEC_TKIP_IV_LEN + DP_SEC_TKIP_ICV_LEN)
 
-/* CCMP   */
-#define DP_SEC_CCMP_IV_LEN         	8    /* IV field Length */
-#define DP_SEC_CCMP_MIC_LEN        	8    /* MIC length */
+#define DP_SEC_CCMP_IV_LEN         	8    
+#define DP_SEC_CCMP_MIC_LEN        	8    
 #define DP_SEC_CCMP_EXP_LEN (DP_SEC_CCMP_IV_LEN + DP_SEC_CCMP_MIC_LEN )
 
-/* WAPI  */
-#define DP_SEC_WAPI_PN_LEN         	16    /* IV field Length */
-#define DP_SEC_WAPI_MIC_LEN        	16    /* MIC length */
+#define DP_SEC_WAPI_PN_LEN         	16    
+#define DP_SEC_WAPI_MIC_LEN        	16    
 #define DP_SEC_WAPI_EXP_LEN (DP_SEC_WAPI_PN_LEN + DP_SEC_WAPI_MIC_LEN +2)
 
  struct wifi_cfg_mib
 {
-    unsigned char          dot11LongRetryLimit;    //not use now
-    unsigned char          dot11ShortRetryLimit;   //not use now
-    /*  MODE_IBSS = 0,MODE_AP = 1,MODE_STA = 2, MODE_WDS = 3*/
+    unsigned char          dot11LongRetryLimit;    
+    unsigned char          dot11ShortRetryLimit;   
+    
     unsigned char          dot11CamMode;
-    unsigned int            dot11RtsThreshold;  //not use now
-    unsigned short         dot11CurrentTxPowerLevel;   //not use now
-    unsigned short         dot11FragmentationThreshold;    //now not use
-    unsigned short         dot11BeaconInterval;    //not use now
-    unsigned short         dot11SlotTime;  //not use now
-    unsigned short         BasicRateTbl;   //not use now
-    unsigned short         SupportRateMap; //not use now
+    unsigned int            dot11RtsThreshold;  
+    unsigned short         dot11CurrentTxPowerLevel;   
+    unsigned short         dot11FragmentationThreshold;    
+    unsigned short         dot11BeaconInterval;    
+    unsigned short         dot11SlotTime;  
+    unsigned short         BasicRateTbl;   
+    unsigned short         SupportRateMap; 
     unsigned char          dot11PreambleType;
-    unsigned char          dot11Rifs;  //not use now
-    unsigned int            cmddata[MAX_HI_CMD];    //save param for each cmd
+    unsigned char          dot11Rifs;  
+    unsigned int            cmddata[MAX_HI_CMD];    
 };
-///
-/// Rate Control class. All members are private.
-///
+
 struct rate_control
 {
-    unsigned int bit_time;                      ///< Shifted time for each bit, = 2^18 / rate.
-    //unsigned short ack_time;                      ///< ACK and CTS-to-self time in us including SIFS.
-    unsigned char  rts_rate;                      ///< ACK and CTS-to-self time in us including SIFS.
-    unsigned char  ack_rate;                      ///< ACK and CTS-to-self rates from the BasicRateSet.
-    unsigned char  tx_power;                      ///< Transmit power for the given rate.
-    unsigned char  reserve;                      ///< Reservations
+    unsigned int bit_time;                      
+    
+    unsigned char  rts_rate;                      
+    unsigned char  ack_rate;                      
+    unsigned char  tx_power;                      
+    unsigned char  reserve;                      
 } ;
 
  struct ht_mcs_control
 {
-    unsigned char  rts_rate;                      ///< ACK and CTS-to-self time in us including SIFS.
-    unsigned char  ack_rate;                      ///< ACK and CTS-to-self rates from the BasicRateSet.
-    unsigned char  tx_power;                      ///< Transmit power for the given rate.
-    unsigned char  reserve;                      ///< Reservations
+    unsigned char  rts_rate;                      
+    unsigned char  ack_rate;                      
+    unsigned char  tx_power;                      
+    unsigned char  reserve;                      
 };
 
  struct vht_mcs_control
 {
-    unsigned char  rts_rate;                      ///< ACK and CTS-to-self time in us including SIFS.
-    unsigned char  ack_rate;                      ///< ACK and CTS-to-self rates from the BasicRateSet.
-    unsigned char  tx_power;                      ///< Transmit power for the given rate.
-    unsigned char  reserve;                      ///< Reservations
+    unsigned char  rts_rate;                      
+    unsigned char  ack_rate;                      
+    unsigned char  tx_power;                      
+    unsigned char  reserve;                      
 } ;
 
 extern struct wifi_cfg_mib  wifi_conf_mib;
 
-/*** aml  uno***/
-//for TxPrivDescripter->Flag
 #define WIFI_MORE_BUFFER            	BIT(0)
 #define WIFI_FIRST_BUFFER           	BIT(1)
 #define WIFI_MORE_AGG                   	BIT(2)
@@ -1228,7 +1146,6 @@ enum
     TX_DESCRIPTOR_STATUS_DELIMIT_ERROR,
 };
 
-//RateTableMode
 enum
 {
     PHY_MODE_11A2 = 0,
@@ -1240,11 +1157,10 @@ enum
     PHY_MODE_11NG_HT40 = 6
 };
 
-#define CHAN_BW_20M 0 // 0 bit8 and bit9 are both 0
+#define CHAN_BW_20M 0 
 #define CHAN_BW_40M 1
 #define CHAN_BW_80M 2
 
-//FLAG
 #define WIFI_IS_AGGR                BIT(0)
 #define WIFI_IS_NOACK               BIT(1)
 #define WIFI_IS_RTSEN               BIT(2)
@@ -1261,9 +1177,6 @@ enum
 #define WIFI_IS_BLOCKACK            BIT(14)
 #define WIFI_IS_DYNAMIC_BW       BIT(15)
 
-//
-///Flag2
-//
 #define TX_DESCRIPTER_NOT_FREE      BIT(0)
 #define TX_DESCRIPTER_BEACON        BIT(2)
 #define TX_DESCRIPTER_RD_SUPPORT    BIT(3)
@@ -1272,7 +1185,6 @@ enum
 #define TX_DESCRIPTER_MIC           BIT(8)
 #define TX_DESCRIPTER_P2P_PS_NOA_TRIGRSP  BIT(9)
 #define TX_DESCRIPTER_ENABLE_TX_LDPC  BIT(10)
-
 
 #define RX_PHY_NOWEP    0
 #define RX_PHY_WEP64    1
@@ -1283,32 +1195,30 @@ enum
 
 enum hal_op_mode
 {
-    WIFI_M_IBSS     =0x0,/* IBSS (adhoc) station */
-    WIFI_M_STA      =0x1,/* infrastructure station */
-    WIFI_M_HOSTAP   =0x2,/* Software Access Point */
-    WIFI_M_WDS      =0x3,/* WDS link */
-    WIFI_M_MONITOR   =0x4/* Monitor mode */
+    WIFI_M_IBSS     =0x0,
+    WIFI_M_STA      =0x1,
+    WIFI_M_HOSTAP   =0x2,
+    WIFI_M_WDS      =0x3,
+    WIFI_M_MONITOR   =0x4
 } ;
 
-/***calibration config struct***/
  struct product_cal_mib_v3
 {
     unsigned int calibration_flag;
-    ///rx frequency calibration
+    
     unsigned int RxFreqReg[14];
-    ///rx IQ mismatch calibration
+    
     unsigned int RxIqMismatchReg;
-    ///rx DC calibration
+    
     unsigned int RxDcReg;
     int  Ant_loss_db;
     int  noisefloor;
     unsigned char TxScaleID[8][14];
-    ///Tx IqMismatch
+    
     unsigned int TxIqMismatchReg;
-    ///tx dc
-    //txdci(5: 0) and txdcq(11: 6)
+    
     unsigned int TxDcReg;
-    ///MAC address
+    
     unsigned char MacAddr[6];
     unsigned char reserve1[2];
     int  Ant_loss_gen;
@@ -1318,7 +1228,7 @@ enum hal_op_mode
 
 struct aml_hal_call_backs
 {
-    /* callbacks regist to hal layer for interrupt behind handle */
+    
     int  (*get_defaultcfg)(void *  drv_prv, void* para);
     void (*mic_error_event)(void *  drv_prv,const void * wh,unsigned char * sa,unsigned char wnet_vif_id);
     void (*intr_tx_handle)(void *drv_prv, struct txdonestatus *tx_done_status, SYS_TYPE callback, unsigned char queue_id);

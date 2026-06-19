@@ -1,63 +1,7 @@
-/*
- * AES (Rijndael) cipher
- *
- * Modifications to public domain implementation:
- * - cleanup
- * - use C pre-processor to make it easier to change S table access
- * - added option (AES_SMALL_TABLES) for reducing code size by about 8 kB at
- *   cost of reduced throughput (quite small difference on Pentium 4,
- *   10-25% when using -O1 or -O2 optimization)
- *
- * Copyright (c) 2003-2012, Jouni Malinen <j@w1.fi>
- *
- * This software may be distributed under the terms of the BSD license.
- * See README for more details.
- */
 
 #include "aml_crypto_wrap.h"
 
 #include "aes_i.h"
-
-/*
- * rijndael-alg-fst.c
- *
- * @version 3.0 (December 2000)
- *
- * Optimised ANSI C code for the Rijndael cipher (now AES)
- *
- * @author Vincent Rijmen <vincent.rijmen@esat.kuleuven.ac.be>
- * @author Antoon Bosselaers <antoon.bosselaers@esat.kuleuven.ac.be>
- * @author Paulo Barreto <paulo.barreto@terra.com.br>
- *
- * This code is hereby placed in the public domain.
- *
- * THIS SOFTWARE IS PROVIDED BY THE AUTHORS ''AS IS'' AND ANY EXPRESS
- * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
- * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHORS OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
- * BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
- * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
- * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
- * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
-
-
-/*
-Te0[x] = S [x].[02, 01, 01, 03];
-Te1[x] = S [x].[03, 02, 01, 01];
-Te2[x] = S [x].[01, 03, 02, 01];
-Te3[x] = S [x].[01, 01, 03, 02];
-Te4[x] = S [x].[01, 01, 01, 01];
-
-Td0[x] = Si[x].[0e, 09, 0d, 0b];
-Td1[x] = Si[x].[0b, 0e, 09, 0d];
-Td2[x] = Si[x].[0d, 0b, 0e, 09];
-Td3[x] = Si[x].[09, 0d, 0b, 0e];
-Td4[x] = Si[x].[01, 01, 01, 01];
-*/
 
 const u32 Te0[256] = {
     0xc66363a5U, 0xf87c7c84U, 0xee777799U, 0xf67b7b8dU,
@@ -391,7 +335,7 @@ const u32 Te4[256] = {
     0x41414141U, 0x99999999U, 0x2d2d2d2dU, 0x0f0f0f0fU,
     0xb0b0b0b0U, 0x54545454U, 0xbbbbbbbbU, 0x16161616U,
 };
-#endif /* AES_SMALL_TABLES */
+#endif 
 const u32 Td0[256] = {
     0x51f4a750U, 0x7e416553U, 0x1a17a4c3U, 0x3a275e96U,
     0x3bab6bcbU, 0x1f9d45f1U, 0xacfa58abU, 0x4be30393U,
@@ -727,9 +671,9 @@ const u32 Td4[256] = {
 const u32 rcon[] = {
 	0x01000000, 0x02000000, 0x04000000, 0x08000000,
 	0x10000000, 0x20000000, 0x40000000, 0x80000000,
-	0x1B000000, 0x36000000, /* for 128-bit blocks, Rijndael never uses more than 10 rcon values */
+	0x1B000000, 0x36000000, 
 };
-#else /* AES_SMALL_TABLES */
+#else 
 const u8 Td4s[256] = {
     0x52U, 0x09U, 0x6aU, 0xd5U, 0x30U, 0x36U, 0xa5U, 0x38U,
     0xbfU, 0x40U, 0xa3U, 0x9eU, 0x81U, 0xf3U, 0xd7U, 0xfbU,
@@ -766,14 +710,10 @@ const u8 Td4s[256] = {
 };
 const u8 rcons[] = {
 	0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1B, 0x36
-	/* for 128-bit blocks, Rijndael never uses more than 10 rcon values */
+	
 };
-#endif /* AES_SMALL_TABLES */
-/**
- * Expand the cipher key into the encryption key schedule.
- *
- * @return	the number of rounds for the given cipher key size.
- */
+#endif 
+
 int rijndaelKeySetupEnc(u32 rk[], const u8 cipherKey[], int keyBits)
 {
 	int i;

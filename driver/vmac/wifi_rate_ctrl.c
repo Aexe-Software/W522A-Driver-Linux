@@ -1,26 +1,3 @@
-/*
- * This file is an implementation of the SampleRate algorithm
- * in "Bit-rate Selection in Wireless Networks"
- * (http://www.pdos.lcs.mit.edu/papers/jbicket-ms.ps)
- *
- * SampleRate chooses the bit-rate it predicts will provide the most
- * throughput based on estimates of the expected per-packet
- * transmission time for each bit-rate.  SampleRate periodically sends
- * packets at bit-rates other than the current one to estimate when
- * another bit-rate will provide better performance. SampleRate
- * switches to another bit-rate when its estimated per-packet
- * transmission time becomes smaller than the current bit-rate's.
- * SampleRate reduces the number of bit-rates it must sample by
- * eliminating those that could not perform better than the one
- * currently being used.  SampleRate also stops probing at a bit-rate
- * if it experiences several successive losses.
- *
- * The difference between the algorithm in the thesis and the one in this
- * file is that the one in this file uses a ewma instead of a window.
- *
- * Also, this implementation tracks the average transmission time for
- * a few different packet sizes independently for each link.
- */
 
 #include "wifi_rate_ctrl.h"
 #include "rc80211_minstrel_init.h"
@@ -52,8 +29,8 @@ int max_4ms_framelen[MCS_VHT160_SGI +1][32] =
         29616, 59232,  65532,  65532,  65532,  65532,  65532,  65532,
     },
     [  MCS_VHT80] = {
-	20036 - DELT, 40072 - DELT, 60108 -DELT, 80145-DELT, 120217-DELT,  // MCS0 ~4
-	169290-DELT, 180326-DELT, 200362-DELT, 240435-DELT, 267150-DELT, // MCS5 ~ 9
+	20036 - DELT, 40072 - DELT, 60108 -DELT, 80145-DELT, 120217-DELT,  
+	169290-DELT, 180326-DELT, 200362-DELT, 240435-DELT, 267150-DELT, 
 	0,0,0,0,0,
 	0,0,0,0,0,
 	0,0,0,0,0,
@@ -62,9 +39,6 @@ int max_4ms_framelen[MCS_VHT160_SGI +1][32] =
 	}
 };
 
-////////////////////////////////////////////////////////////////////
-// ratecontrol module
-////////////////////////////////////////////////////////////////////
 struct ratecontrol_ops minstrel_ops =
 {
     .name              = "minstrel",
@@ -75,4 +49,3 @@ struct ratecontrol_ops minstrel_ops =
     .rate_findrate     = minstrel_find_rate,
     .rate_tx_complete  = minstrel_tx_complete,
 };
-

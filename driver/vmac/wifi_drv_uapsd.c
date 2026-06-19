@@ -1,16 +1,3 @@
-/*
- ****************************************************************************************
- *
- * Copyright (C) Amlogic 2010-2014
- *
- * Project: 11N 80211 driver  layer Software
- *
- * Description:
- *     driver layer u-APSU power save module
- *
- *
- ****************************************************************************************
- */
 
 #include "wifi_drv_uapsd.h"
 #include "wifi_mac_com.h"
@@ -38,10 +25,6 @@ static void drv_txdesc_list_cleanup(struct drv_private *drv_priv, int *qcnt, str
     DRV_TXQ_LOCK(txlist);
 }
 
-/*
- * Reclaim all UAPSD nsta resources.
- * Context: Tasklet
- */
 static void drv_txdesc_list_drain(struct drv_private *drv_priv, struct list_head *txdesc_list, int *qcnt, unsigned char vid)
 {
     struct drv_txdesc *ptxdesc = NULL;
@@ -77,11 +60,6 @@ static void drv_txdesc_list_drain(struct drv_private *drv_priv, struct list_head
     DRV_TX_QUEUE_UNLOCK(drv_priv);
 }
 
-/*
- * Add frames to per nsta UAPSD queue.
- * Frames will be transmitted on receiving trigger.
- * Context: Tasklet
- */
 static void drv_txdesc_list_queue (struct drv_private *drv_priv, struct list_head *txdesc_list_head, struct list_head *txdesc_list, int *qcnt)
 {
     struct drv_txdesc *ptxdesc, *bf_prev;
@@ -94,10 +72,6 @@ static void drv_txdesc_list_queue (struct drv_private *drv_priv, struct list_hea
     }
     ptxdesc = list_first_entry(txdesc_list_head, struct drv_txdesc, txdesc_queue);
 
-    /*
-     * Lock out interrupts since this queue shall be accessed
-     * in interrupt context.
-     */
     DRV_TX_QUEUE_LOCK(drv_priv);
     if (!list_empty(txdesc_list))
     {
@@ -110,58 +84,7 @@ static void drv_txdesc_list_queue (struct drv_private *drv_priv, struct list_hea
     (*qcnt) ++;
     DRV_TX_QUEUE_UNLOCK(drv_priv);
 
-    //DPRINTF(AML_DEBUG_PWR_SAVE, "%s %d bufffer head qcnt=%d\n",__func__,__LINE__, (*qcnt));
 }
-
-#ifdef CONFIG_P2P
-static int drv_if_noa_started (struct drv_txdesc *ptxdesc)
-{
-    int ret = -1;
-    struct sk_buff *skbbuf;
-    struct wifi_skb_callback *cb;
-    struct wifi_station *sta;
-
-    do
-    {
-        ASSERT((SYS_TYPE)ptxdesc > 0x500);
-        if (ptxdesc==NULL)
-        {
-            break;
-        }
-        skbbuf = ptxdesc->txdesc_mpdu;
-        ASSERT((SYS_TYPE)skbbuf > 0x500);
-        if (skbbuf==NULL)
-        {
-            break;
-        }
-        cb = (struct wifi_skb_callback *)skbbuf->cb;
-        ASSERT((SYS_TYPE)cb > 0x500);
-        if (cb==NULL)
-        {
-            break;
-        }
-        sta = cb->sta;
-        ASSERT((SYS_TYPE)sta > 0x500);
-        /* nsta may disconnect during tx */
-
-        if (sta)
-        {
-            struct wlan_net_vif *wnet_vif = sta->sta_wnet_vif;
-            ASSERT((SYS_TYPE)wnet_vif > 0x500);
-            if (wnet_vif && wnet_vif->vm_p2p)
-            {
-                if (P2P_NoA_START_FLAG(wnet_vif->vm_p2p->HiP2pNoaCountNow))
-                {
-                    DPRINTF(AML_DEBUG_PWR_SAVE, "%s %d canceled by noa start\n",__func__,__LINE__);
-                    ret = 1;
-                }
-            }
-        }
-    }
-    while(0);
-    return ret;
-}
-#endif
 
 static void drv_txdesc_list_send (struct drv_private *drv_priv, struct list_head *txdesc_list, int *qcnt)
 {
@@ -188,14 +111,6 @@ static void drv_txdesc_list_send (struct drv_private *drv_priv, struct list_head
         }
         ptxdesc = list_first_entry(txdesc_list, struct drv_txdesc, txdesc_queue);
 
-#ifdef CONFIG_P2P
-        if (drv_if_noa_started(ptxdesc) >= 0)
-        {
-            DRV_TX_QUEUE_UNLOCK(drv_priv);
-            break;
-        }
-#endif
-
         txlist = &drv_priv->drv_txlist_table[ptxdesc->txinfo->queue_id];
         DRV_TXQ_LOCK(txlist);
         ASSERT(txlist->txlist_qnum == ptxdesc->txinfo->queue_id);
@@ -215,10 +130,8 @@ static void drv_txdesc_list_send (struct drv_private *drv_priv, struct list_head
             break;
         }
 
-        //cut lastbf as head of av_mcastq_bhead, and add to head of txdesc_list_head
         list_cut_position(&txdesc_list_head,txdesc_list,&lastbf->txdesc_queue);
 
-        //add head of txdesc_list_head to last of tx_queue, and reinit txdesc_list_head
         list_splice_tail_init(&txdesc_list_head,&tx_queue);
         (*qcnt) --;
 
@@ -228,7 +141,6 @@ static void drv_txdesc_list_send (struct drv_private *drv_priv, struct list_head
     }
     while ((*qcnt > 0) && !list_empty(txdesc_list));
 }
-
 
 static void
 drv_uapsd_send_qos_null(struct drv_private *drv_priv, struct aml_driver_nsta *drv_sta, unsigned char ac)
@@ -253,11 +165,7 @@ unsigned int drv_tx_uapsd_nsta_qcnt(void * nsta)
 {
     struct aml_driver_nsta *drv_sta = DRIVER_NODE(nsta);
 
-#ifdef DRV_SUPPORT_TX_WITHDRAW
-    return drv_sta->sta_uapsd_queuecnt + drv_sta->sta_txwd_uapsd_qqcnt;
-#else
     return drv_sta->sta_uapsd_queuecnt;
-#endif
 }
 
 void drv_tx_queue_uapsd_nsta(struct drv_private *drv_priv, struct list_head *txdesc_list_head, struct aml_driver_nsta *drv_sta)
@@ -279,7 +187,6 @@ int drv_process_uapsd_nsta_trigger( struct drv_private *drv_priv, void * nsta, u
 
     struct wifi_qos_frame *whqos = NULL;
 
-
     if (!drv_sta->sta_isuapsd)
     {
         return 0;
@@ -295,9 +202,7 @@ int drv_process_uapsd_nsta_trigger( struct drv_private *drv_priv, void * nsta, u
 
     INIT_LIST_HEAD(&tx_queue);
     INIT_LIST_HEAD(&txdesc_list_head);
-    /*
-     * Send all frames
-     */
+    
     if (maxsp == WME_UAPSD_NODE_MAXQDEPTH)
         txn_real = uapsd_qqcnt;
     else
@@ -315,21 +220,8 @@ int drv_process_uapsd_nsta_trigger( struct drv_private *drv_priv, void * nsta, u
 
         pr_debug("tx=%d\n", count);
 
-#ifdef DRV_SUPPORT_TX_WITHDRAW
-        if (drv_sta->sta_txwd_uapsd_qqcnt)
-        {
-            list_head  = &drv_sta->sta_txwd_uapsd_q;
-            qqcnt = &drv_sta->sta_txwd_uapsd_qqcnt;
-        }
-        else
-        {
-            list_head  = &drv_sta->sta_uapsd_queue;
-            qqcnt = &drv_sta->sta_uapsd_queuecnt;
-        }
-#else
         list_head  = &drv_sta->sta_uapsd_queue;
         qqcnt = &drv_sta->sta_uapsd_queuecnt;
-#endif
 
         DRV_TX_QUEUE_LOCK(drv_priv);
         if (list_empty(list_head))
@@ -340,21 +232,6 @@ int drv_process_uapsd_nsta_trigger( struct drv_private *drv_priv, void * nsta, u
         }
         ptxdesc = list_first_entry(list_head, struct drv_txdesc, txdesc_queue);
 
-#ifdef CONFIG_P2P
-        if (drv_if_noa_started(ptxdesc) >= 0)
-        {
-            struct wifi_station *sta = (struct wifi_station *)(drv_sta->net_nsta);
-            sta->sta_flags_ext |= WIFINET_NODE_UAPSD_WAIT_NOA_END;
-            if (flush)
-            {
-                sta->sta_flags_ext |= WIFINET_NODE_UAPSD_FLUSH_WAIT_NOA_END;
-            }
-            DRV_TX_QUEUE_UNLOCK(drv_priv);
-            break;
-        }
-#endif
-
-        //test by wp
         DRV_TXQ_LOCK(txlist);
         ASSERT(ptxdesc->txinfo->queue_id== txlist->txlist_qnum);
         if (aml_tx_hal_buffer_full(drv_priv,txlist->txlist_qnum, 1, 1))
@@ -378,10 +255,7 @@ int drv_process_uapsd_nsta_trigger( struct drv_private *drv_priv, void * nsta, u
         list_cut_position(&txdesc_list_head,list_head,&lastbf->txdesc_queue);
         list_splice_tail_init(&txdesc_list_head,&tx_queue);
         (*qqcnt)--;
-        /*
-         * Mark EOSP flag at the last frame in this SP
-         */
-
+        
         if (!flush)
         {
          #define UAPSD_BRN   (2)
@@ -394,10 +268,6 @@ int drv_process_uapsd_nsta_trigger( struct drv_private *drv_priv, void * nsta, u
             }
         }
 
-        /*
-         * Clear More data bit for EOSP frame if we have
-         * no pending frames
-         */
         if (drv_tx_uapsd_nsta_qcnt(nsta) == 0)
         {
             whqos->i_fc[1] &= ~WIFINET_FC1_MORE_DATA;
@@ -417,10 +287,8 @@ int drv_process_uapsd_nsta_trigger( struct drv_private *drv_priv, void * nsta, u
     return drv_tx_uapsd_nsta_qcnt(nsta);
 }
 
-
 #ifdef AML_MCAST_QUEUE
 
-/* setup multicast queue */
 void drv_tx_mcastq_init (struct drv_private *drv_priv, int wnet_vif_id)
 {
     struct wlan_net_vif *wnet_vif = drv_priv->drv_wnet_vif_table[wnet_vif_id];
@@ -437,7 +305,6 @@ void drv_tx_mcastq_cleanup (struct drv_private *drv_priv, int wnet_vif_id)
     wnet_vif->vm_mqueue_flag_send = 0;
 }
 
-//when multicast, put it into Tid8
 void drv_tx_mcastq_addbuf(struct drv_private *drv_priv, struct list_head *head)
 {
     struct drv_txlist *txlist = &drv_priv->drv_txlist_table[HAL_WME_MCAST];
@@ -484,13 +351,8 @@ int drv_tx_mcastq_send (struct drv_private *drv_priv)
         if (sta)
         {
             struct wlan_net_vif *wnet_vif = sta->sta_wnet_vif;
-            if (txlist->txlist_backup_qcnt && !wnet_vif->vm_ps_sta) //as ap, if has no ps sta, then send bufferred mcast packets
+            if (txlist->txlist_backup_qcnt && !wnet_vif->vm_ps_sta) 
             {
-#ifdef CONFIG_P2P
-                if (drv_if_noa_started(ptxdesc) >= 0) {
-                    break;
-                }
-#endif
                 DRV_TXQ_LOCK(txlist);
 
                 ASSERT(txlist->txlist_qnum == ptxdesc->txinfo->queue_id);
@@ -510,7 +372,6 @@ int drv_tx_mcastq_send (struct drv_private *drv_priv)
             }
         }
 
-        /* If element is still in list, go to next. */
         if (!curr_next)
             bf_qnode = bf_qnode->next;
         else
@@ -528,63 +389,16 @@ int drv_tx_mcastq_send (struct drv_private *drv_priv)
 
 #endif
 
-#ifdef DRV_SUPPORT_TX_WITHDRAW
-
-void drv_tx_withdraw_init (struct drv_private *drv_priv, struct aml_driver_nsta *drv_sta)
-{
-    drv_txdesc_list_init(&(drv_sta->sta_txwd_uapsd_q), &(drv_sta->sta_txwd_uapsd_qqcnt));
-    drv_txdesc_list_init(&(drv_sta->sta_txwd_legacyps_q), &(drv_sta->sta_txwd_legacyps_qqcnt));
-}
-
-void drv_tx_withdraw_cleanup (struct drv_private *drv_priv, struct aml_driver_nsta *drv_sta)
-{
-    drv_txdesc_list_drain(drv_priv, &(drv_sta->sta_txwd_uapsd_q), &(drv_sta->sta_txwd_uapsd_qqcnt), 3);
-    drv_txdesc_list_drain(drv_priv, &(drv_sta->sta_txwd_legacyps_q), &(drv_sta->sta_txwd_legacyps_qqcnt), 3);
-}
-
-void drv_tx_withdraw_uapsd_addbuf(struct drv_private *drv_priv, struct list_head *txdesc_list_head, struct aml_driver_nsta *drv_sta)
-{
-    drv_txdesc_list_queue(drv_priv, txdesc_list_head, &(drv_sta->sta_txwd_uapsd_q), &(drv_sta->sta_txwd_uapsd_qqcnt));
-}
-
-void drv_tx_withdraw_legacyps_addbuf(struct drv_private *drv_priv, struct list_head *txdesc_list_head, struct aml_driver_nsta *drv_sta)
-{
-    drv_txdesc_list_queue(drv_priv, txdesc_list_head, &(drv_sta->sta_txwd_legacyps_q), &(drv_sta->sta_txwd_legacyps_qqcnt));
-}
-
-int drv_tx_withdraw_legacyps_send (struct drv_private *drv_priv, struct aml_driver_nsta *drv_sta)
-{
-    int legacyps_qqcnt_init, legacyps_qqcnt_now;
-    int tx_frames = 0;
-
-    if (!drv_sta->sta_txwd_legacyps_qqcnt)
-    {
-        return tx_frames;
-    }
-
-    legacyps_qqcnt_init = legacyps_qqcnt_now = 1;
-
-    /* tx one frame */
-    drv_txdesc_list_send(drv_priv, &(drv_sta->sta_txwd_legacyps_q), &legacyps_qqcnt_now);
-    tx_frames = legacyps_qqcnt_init - legacyps_qqcnt_now;
-    drv_sta->sta_txwd_legacyps_qqcnt -= tx_frames;
-    return tx_frames;
-}
-
-#endif
-
 void drv_tx_bk_list_init (struct drv_txlist *txlist)
 {
     drv_txdesc_list_init(&txlist->txlist_backup, &txlist->txlist_backup_qcnt);
 }
 
-/* release all backup buf for the queue */
 void drv_txq_backup_drain (struct drv_private *drv_priv, struct drv_txlist *txlist, unsigned char vid)
 {
     drv_txdesc_list_drain(drv_priv, &txlist->txlist_backup, &txlist->txlist_backup_qcnt, vid);
 }
 
-/* release backup buf for the drv_sta */
 void drv_txq_backup_cleanup (struct drv_private *drv_priv, struct drv_txlist *txlist, struct aml_driver_nsta *drv_sta)
 {
     struct drv_txdesc *ptxdesc = NULL, *txdesc_queue_next = NULL;
@@ -619,4 +433,3 @@ int drv_txq_backup_send (struct drv_private *drv_priv, struct drv_txlist *txlist
     drv_txdesc_list_send(drv_priv, &txlist->txlist_backup, &txlist->txlist_backup_qcnt);
     return 0;
 }
-

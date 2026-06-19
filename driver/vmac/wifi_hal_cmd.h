@@ -93,4 +93,4 @@ unsigned char get_s32_item(char *varbuf, int len, char *item, unsigned int *item
 unsigned char get_s8_item_limit(char *varbuf, int len, char *item, char *item_value, unsigned int max_items);
 unsigned char get_s16_item_limit(char *varbuf, int len, char *item, short *item_value, unsigned int max_items);
 unsigned char get_s32_item_limit(char *varbuf, int len, char *item, unsigned int *item_value, unsigned int max_items);
-#endif  //__AML_PHY_H__
+#endif  

@@ -1,16 +1,3 @@
-/*
- ****************************************************************************************
- *
- * Copyright (C) Amlogic 2010-2014
- *
- * Project: 11N 80211 mac  layer Software
- *
- * Description:
- *     wifi_mac layer interface function/interface use by driver layer
- *
- *
- ****************************************************************************************
- */
 
 #ifndef _DRV_IEEE80211_INTERFACES_H
 #define _DRV_IEEE80211_INTERFACES_H
@@ -34,7 +21,6 @@ wifi_mac_com_clear_cap(struct wifi_mac *wifimac, unsigned int cap)
 {
     wifimac->wm_caps &= ~cap;
 }
-
 
 static __inline void
 wifi_mac_com_set_flag(struct wifi_mac *wifimac, unsigned int flag)
@@ -107,13 +93,11 @@ wifi_macwnet_vif_get_opmode(struct wlan_net_vif *wnet_vif)
     (((_sta)->sta_flags & WIFINET_NODE_HT) != 0) && \
     (((_sta)->sta_wnet_vif->vm_flags_ext & WIFINET_FEXT_AMPDU) != 0)
 
-
 static __inline void
 wifi_macnsta_set_txpower(struct wifi_station *sta, unsigned short txpower)
 {
     sta->sta_txpower = txpower;
 }
-
 
 static __inline int
 wifi_macnsta_has_cap(struct wifi_station *sta, unsigned short cap)
@@ -128,8 +112,6 @@ wifi_mac_wmm_chanparams(struct wlan_net_vif *wnet_vif,
     return &wifimac->wm_wme[wnet_vif->wnet_vif_id].wme_chanParams.cap_wmeParams[ac];
 }
 
-
-
 #define wifi_mac_enumerate_wnet_vifs(_wnet_vif, _netcom)  \
         list_for_each_entry(_wnet_vif,&(_netcom)->wm_wnet_vifs,vm_next)
 
@@ -141,7 +123,7 @@ wifi_mac_wmm_chanparams(struct wlan_net_vif *wnet_vif,
 #define ETHER_MAX_LEN       1518
 
 #ifndef ETHERTYPE_PAE
-#define ETHERTYPE_PAE   0x888e   /* EAPOL PAE/802.1x */
+#define ETHERTYPE_PAE   0x888e   
 #endif
 
 #ifndef ETHERTYPE_WPI
@@ -158,11 +140,9 @@ wifi_mac_wmm_chanparams(struct wlan_net_vif *wnet_vif,
 #define VLAN_PRI_SHIFT  13
 #define VLAN_PRI_MASK   7
 
-
 #define llc_control     llc_un.type_u.control
 #define llc_frmr_control    llc_un.type_frmr.frmr_control
 #define llc_snap        llc_un.type_snap
-
 
 #define LLC_SNAPFRAMELEN 8
 
@@ -175,16 +155,12 @@ wifi_mac_wmm_chanparams(struct wlan_net_vif *wnet_vif,
 #define LLC_XID     0xaf
 #define LLC_SAME    0x6f
 
-
-
 #define LLC_SNAP_LSAP   0xaa
-
 
 #define MAC_MAX_GAIN -82
 #define MAC_MID_GAIN -70
 #define MAC_MIN_GAIN -65
 
-// when scan ap count more than MIN_GIAN_THRESHOLD , use MAC_MIN_GAIN
 #define MAX_GIAN_THRESHOLD 10
 #define CONNECT_MIN_GIAN_THRESHOLD 25
 #define UNCONNECT_MIN_GIAN_THRESHOLD 80
@@ -197,8 +173,6 @@ struct  ether_header
     u_char  ether_shost[MAC_ADDR_LEN];
     u_short ether_type;
 } __packed;
-
-
 
 struct llc
 {
@@ -277,11 +251,9 @@ void wifi_mac_set_channel_rssi(struct wifi_mac *wifimac, unsigned char rssi);
 int wifi_mac_is_in_noisy_environment(struct wifi_mac *wifimac);
 int wifi_mac_is_in_clear_environment(struct wifi_mac *wifimac);
 
-
 void wifi_mac_get_channel_rssi_before_scan(struct wifi_mac *wifimac, int *rssi);
 
 void wifi_mac_set_tx_power_accord_rssi(struct wifi_mac *wifimac, unsigned char rssi);
-
 
 unsigned int wifi_mac_add_work_task(struct wifi_mac *wifimac,
     void *func,void *func_cb, SYS_TYPE param1, SYS_TYPE param2, SYS_TYPE param3, SYS_TYPE param4, SYS_TYPE param5);

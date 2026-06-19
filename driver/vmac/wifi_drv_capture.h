@@ -7,7 +7,6 @@
 int dut_start_capture(unsigned int value);
 int   dut_stop_capture(void);
 
-//0:use sw stop   1:use hw stop
 int  dut_stop_tbus_to_get_sram(struct file *filep, int stop_ctrl, int save_file);
 unsigned char dut_set_reg_frag(int address, int bit_end, int bit_start, int value);
 int dut_bt_start_capture(unsigned int value );

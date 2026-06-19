@@ -8,12 +8,12 @@
 #define MAX(a,b)    ((a) > (b) ? (a) : (b))
 #endif
 
-#define DRV_MGT_TXMAXTRY 4/* max number of trynum for management and control frames */
+#define DRV_MGT_TXMAXTRY 4
 
 struct aml_ratecontrol
 {
     signed char rate_index;
-    unsigned char vendor_rate_code;/* hardware rate code */
+    unsigned char vendor_rate_code;
     unsigned char trynum;
     unsigned char shortgi_en;
     unsigned char bw;
@@ -39,25 +39,25 @@ struct wifi_mac_tx_status
 
 struct drv_rate_table
 {
-    int rateCount;/* NB: for proper padding */
-    unsigned char dot11rate_to_idx[256];/* back mapping */
+    int rateCount;
+    unsigned char dot11rate_to_idx[256];
     struct
     {
-        unsigned char valid;/* valid for rate control use */
-        unsigned char phy;/* CCK/OFDM/XR */
-        unsigned int rateKbps;/* transfer rate in kbs */
-        unsigned char vendor_rate_code;/* rate for h/w descriptors */
-        unsigned char shortPreamble;/* mask for enabling short * preamble in CCK rate code */
-        unsigned char dot11Rate;/* value for supported rates* info element of MLME */
-        unsigned char controlRate;/* index of next lower basic* rate; used for dur. calcs */
-        unsigned short lpAckDuration;/* long preamble ACK duration */
-        unsigned short spAckDuration;/* short preamble ACK duration*/
+        unsigned char valid;
+        unsigned char phy;
+        unsigned int rateKbps;
+        unsigned char vendor_rate_code;
+        unsigned char shortPreamble;
+        unsigned char dot11Rate;
+        unsigned char controlRate;
+        unsigned short lpAckDuration;
+        unsigned short spAckDuration;
     } info[102];
 };
 
 enum
 {
-    HAL_NOSUPPORT = 0x0,/* NB: lots of code assumes false is zero */
+    HAL_NOSUPPORT = 0x0,
     HAL_SUPPORT  = 0x1,
     HAL_RATECTRL  =0x2,
 };
@@ -74,7 +74,6 @@ enum
     MCS_VHT160_SGI
 };
 
-/***  aml txdesc***/
 #define BITS_PER_BYTE			8
 #define OFDM_PLCP_BITS                  22
 #define L_STF                           8
@@ -91,14 +90,12 @@ enum
 #define VHT_SIG_B                       4
 #define HT_LTF(_ns)         (4 * (_ns))
 #define MCS_2_STREAMS(_mcs)             ((((_mcs)&0x78)>>3)+1)
-#define SYMBOL_TIME(_ns)                ((_ns) << 2)            // ns * 4 us
-#define SYMBOL_TIME_HALFGI(_ns)         (((_ns) * 18 + 4) / 5)  // ns * 3.6 us
+#define SYMBOL_TIME(_ns)                ((_ns) << 2)            
+#define SYMBOL_TIME_HALFGI(_ns)         (((_ns) * 18 + 4) / 5)  
 #define NUM_SYMBOLS_PER_USEC(_usec)     (_usec >> 2)
 #define NUM_SYMBOLS_PER_USEC_HALFGI(_usec) (((_usec*5)-4)/18)
-#define SIGNAL_EXTENSION_VALUE          6              /* Value of the signal extension          */
+#define SIGNAL_EXTENSION_VALUE          6              
 
-
-/* 802.11n related timing definitions */
 #define HT_RC_2_MCS(_rc)    ((_rc) & 0xf)
 #define HT_RC_2_STREAMS(_rc)    ((((_rc) & 0x78) >> 3) + 1)
 
@@ -108,7 +105,6 @@ enum
 #define OFDM_SYMBOL_TIME    4
 #define DELT (0)
 
-// rate control modules
 struct ratecontrol_ops
 {
     char name[16];
@@ -124,22 +120,8 @@ extern struct drv_rate_table amluno_11bgnac_table;
 extern struct ratecontrol_ops minstrel_ops;
 extern int max_4ms_framelen[MCS_VHT160_SGI +1][32];
 
-/* v15s: shared helper - pick the right max_4ms_framelen[] row for a
- * given vendor_rate_code, bw and short_gi combination. Was a static
- * inline private to rc80211_minstrel_init.c in v15r, which left the
- * third call site in drv_tx_lower_rate_when_signal_weak() still using
- * max_4ms_framelen[0][...] (MCS_HT20 row, see wifi_drv_xmit.c:737).
- *
- * IS_VHT_RATE / IS_HT_RATE / HT_RC_2_MCS live in common/fi_sdio.h
- * which is reachable from every consumer via wifi_mac_com.h. We do
- * not pull it in here on purpose - keeping this header dependency-
- * free; consumers must include it themselves (they all do).
- *
- * BW_20/40/80 = CHAN_BW_20M/40M/80M = WIFINET_BWC_WIDTH20/40/80 = 0/1/2
- * by construction (see wifi_hal_com.h:561, wifi_mac.h WIFINET_BWC_*).
- */
 extern unsigned int aml_max_4ms_framelen(unsigned char vendor_rate_code,
                                          unsigned char bw,
                                          unsigned char short_gi);
 
-#endif /* _DRV__RATE_SAMPLE_H */
+#endif 
