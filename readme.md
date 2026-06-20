@@ -36,6 +36,7 @@ This is an Armbian/mainline-kernel port of Amlogic's vendor `aml-w1` SDIO driver
 2. **VHT80 advertises Short‑GI‑80.** Added `IEEE80211_VHT_CAP_SHORT_GI_80` to the band VHT cap in `vmac/wifi_cfg80211.c`; without it `hostapd` rejects the VHT80 config and the AP is **invisible**.
 3. **TX aggregation forced OFF in AP mode** — the only stable choice on this firmware.
 4. **SDIO fairness throttle disabled** when BT isn't sharing the bus (restores throughput).
+5. **Idle SDIO IRQ storm killed (v2.1).** At idle the chip generated **~1773 SDIO interrupts/sec** — the `hi_irq` kernel thread burning **8–12 % CPU for nothing**. Two self‑inflicted layers were traced and fixed: the `hi_irq_task` RX/TX drain loop spinning empty idle polls (`vmac/wifi_hif.c`), and the meson‑mmc card‑IRQ (DAT1) level‑storm (`vmac/wifi_sdio.c`). Result: **idle interrupts ~1773 → <100/s, idle CPU back to near‑zero**, ping stays clean. Every knob is runtime‑tunable under the module's sysfs parameters dir (`idle_grace_skip`, `idle_break_on_repeat`, `keep_card_irq_masked`, `poll_interval_us`), with read‑only `stat_*` counters to verify the effect live.
 
 ---
 

@@ -7,6 +7,8 @@
 
 #include "wifi_pt_init.h"
 #include "wifi_pt_network.h"
+#include <linux/hrtimer.h>
+#include <linux/ktime.h>
 
 struct amlw_hwif_sdio g_amlw_hwif_sdio;
 
@@ -1179,6 +1181,28 @@ static void aml_sdio_interrupt(struct sdio_func * func)
 #endif
 }
 
+/*
+ * Idle-storm fix part 3 (2026-06): on this chip the SDIO card-IRQ (DAT1) stays
+ * level-asserted, so the meson_mmc controller re-fires its SDIO-IRQ (~967/s on
+ * IRQ23) even with ZERO mmc transactions and without dispatching to
+ * aml_sdio_interrupt. RX runs fine via the driver's polling path (ping 0%
+ * loss), so the card-IRQ is not actually needed to receive. When
+ * keep_card_irq_masked=1 (default) we honour requests to DISABLE the host
+ * SDIO-IRQ but turn requests to ENABLE it into a no-op, leaving the line
+ * masked at the controller and collapsing the IRQ23 storm. Set to 0 at
+ * runtime to restore the original enable/disable behaviour without reload.
+ */
+static int w522a_keep_card_irq_masked = 1;
+module_param_named(keep_card_irq_masked, w522a_keep_card_irq_masked, int, 0644);
+MODULE_PARM_DESC(keep_card_irq_masked,
+    "W522A: keep SDIO card-IRQ masked at the host (RX runs via polling); kills IRQ23 level storm");
+static unsigned int w522a_stat_card_irq_enable_skipped;
+module_param_named(stat_card_irq_enable_skipped,
+    w522a_stat_card_irq_enable_skipped, uint, 0444);
+
+/* The definition follows the card-IRQ helper; re-arm it after HAL is open. */
+void aml_sdio_poll_timer_start(void);
+
 void aml_sdio_set_card_irq(int enable)
 {
     struct sdio_func *func = aml_priv_to_func(SDIO_FUNC1);
@@ -1186,9 +1210,167 @@ void aml_sdio_set_card_irq(int enable)
 
     if (!func || !func->card || !func->card->host)
         return;
+
+    if (enable && READ_ONCE(w522a_keep_card_irq_masked)) {
+        w522a_stat_card_irq_enable_skipped++;
+        /*
+         * The initial enable can happen before bhalOpen.  A later re-arm
+         * request from hi_top_task occurs with HAL live, so use it to start
+         * (or restart) the periodic RX poller.
+         */
+        aml_sdio_poll_timer_start();
+        return;
+    }
+
     host = func->card->host;
     if (host->ops && host->ops->enable_sdio_irq)
         host->ops->enable_sdio_irq(host, enable ? 1 : 0);
+}
+
+/*
+ * Idle-storm fix part 4 (2026-06): masking the card-IRQ (part 3) kills the
+ * IRQ23 level storm but removes the only REGULAR wakeup for the polling path,
+ * so an RX frame sits in the FIFO until the next irregular txok/work wakeup ->
+ * latency jitter (4-198ms). This hrtimer restores a STEADY poll cadence while
+ * the card-IRQ stays masked: every poll_interval_us it nudges hi_irq_thread
+ * with the exact same semaphore pattern hal_irq_top uses. Default 4000us
+ * (250/s) = far below the old ~967/s storm yet regular enough to flatten the
+ * jitter. Only armed when keep_card_irq_masked is on; set poll_interval_us=0
+ * to disable the poller (then RX relies on incidental wakeups again).
+ */
+static int w522a_poll_interval_us = 4000;
+module_param_named(poll_interval_us, w522a_poll_interval_us, int, 0644);
+MODULE_PARM_DESC(poll_interval_us,
+    "W522A: card-IRQ-masked RX poll cadence in us (0=off, default 4000)");
+/*
+ * The SDIO card IRQ stays masked on this board, so only the driver itself can
+ * safely tell whether traffic is active. Use 1 ms while frames flow, then
+ * back off after a quiet window to save CPU at idle.
+ */
+static int w522a_adaptive_poll = 1;
+module_param_named(adaptive_poll, w522a_adaptive_poll, int, 0644);
+MODULE_PARM_DESC(adaptive_poll,
+    "W522A: adapt poll cadence after real RX/TX activity (1=on, default on)");
+static int w522a_poll_busy_interval_us = 1000;
+module_param_named(poll_busy_interval_us, w522a_poll_busy_interval_us, int, 0644);
+MODULE_PARM_DESC(poll_busy_interval_us,
+    "W522A: poll cadence in active traffic, usec (default 1000)");
+static int w522a_poll_idle_interval_us = 4000;
+module_param_named(poll_idle_interval_us, w522a_poll_idle_interval_us, int, 0644);
+MODULE_PARM_DESC(poll_idle_interval_us,
+    "W522A: poll cadence after quiet period, usec (default 4000)");
+static int w522a_poll_busy_window_ms = 3000;
+module_param_named(poll_busy_window_ms, w522a_poll_busy_window_ms, int, 0644);
+MODULE_PARM_DESC(poll_busy_window_ms,
+    "W522A: stay at active cadence after RX/TX, ms (default 3000)");
+static unsigned int w522a_stat_poll_wakes;
+module_param_named(stat_poll_wakes, w522a_stat_poll_wakes, uint, 0444);
+static unsigned int w522a_stat_poll_busy_wakes;
+module_param_named(stat_poll_busy_wakes, w522a_stat_poll_busy_wakes, uint, 0444);
+static unsigned int w522a_stat_poll_idle_wakes;
+module_param_named(stat_poll_idle_wakes, w522a_stat_poll_idle_wakes, uint, 0444);
+
+static struct hrtimer w522a_poll_timer;
+static int w522a_poll_timer_inited;
+static unsigned long w522a_poll_busy_until;
+
+void aml_sdio_poll_activity(void)
+{
+    int window_ms = READ_ONCE(w522a_poll_busy_window_ms);
+
+    if (window_ms > 0)
+        WRITE_ONCE(w522a_poll_busy_until,
+                   jiffies + msecs_to_jiffies((unsigned int)window_ms));
+}
+
+static enum hrtimer_restart w522a_poll_timer_fn(struct hrtimer *t)
+{
+    struct hal_private *hal_priv = hal_get_priv();
+    int interval = READ_ONCE(w522a_poll_interval_us);
+    int busy;
+
+    if (!hal_priv || !hal_priv->bhalOpen || interval <= 0 ||
+        !READ_ONCE(w522a_keep_card_irq_masked))
+        return HRTIMER_NORESTART;
+
+    busy = READ_ONCE(w522a_adaptive_poll) &&
+           time_before(jiffies, READ_ONCE(w522a_poll_busy_until));
+    if (READ_ONCE(w522a_adaptive_poll)) {
+        int adaptive_interval = busy ? READ_ONCE(w522a_poll_busy_interval_us) :
+                                       READ_ONCE(w522a_poll_idle_interval_us);
+
+        if (adaptive_interval > 0)
+            interval = adaptive_interval;
+    }
+
+    if (atomic_inc_return(&hal_priv->hi_irq_thread_sem_pending) <= MAX_SEM_CNT) {
+        w522a_stat_poll_wakes++;
+        if (busy)
+            w522a_stat_poll_busy_wakes++;
+        else
+            w522a_stat_poll_idle_wakes++;
+        up(&hal_priv->hi_irq_thread_sem);
+    } else {
+        atomic_dec(&hal_priv->hi_irq_thread_sem_pending);
+    }
+
+    hrtimer_forward_now(t, ns_to_ktime((u64)interval * 1000));
+    return HRTIMER_RESTART;
+}
+
+void aml_sdio_poll_timer_start(void)
+{
+    if (READ_ONCE(w522a_poll_interval_us) <= 0)
+        return;
+    if (!w522a_poll_timer_inited) {
+        hrtimer_init(&w522a_poll_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+        w522a_poll_timer.function = w522a_poll_timer_fn;
+        w522a_poll_timer_inited = 1;
+    }
+    if (!hrtimer_active(&w522a_poll_timer))
+        hrtimer_start(&w522a_poll_timer,
+                      ns_to_ktime((u64)(READ_ONCE(w522a_adaptive_poll) ?
+                          READ_ONCE(w522a_poll_idle_interval_us) :
+                          READ_ONCE(w522a_poll_interval_us)) * 1000),
+                      HRTIMER_MODE_REL);
+}
+
+void aml_sdio_poll_timer_stop(void)
+{
+    if (w522a_poll_timer_inited)
+        hrtimer_cancel(&w522a_poll_timer);
+}
+
+static unsigned int w522a_stat_card_irq_path_masked;
+module_param_named(stat_card_irq_path_masked,
+    w522a_stat_card_irq_path_masked, uint, 0444);
+
+/*
+ * Do not merely disable the host side: sdio_claim_irq() also enables the
+ * function bits in CCCR.  On this board DAT1 remains asserted and causes a
+ * level storm unless both sides stay disabled.
+ */
+static void aml_sdio_mask_card_irq(void)
+{
+    struct sdio_func *func = aml_priv_to_func(SDIO_FUNC1);
+    unsigned char ien;
+    int err = 0;
+
+    if (!func)
+        return;
+
+    sdio_claim_host(func);
+    ien = sdio_f0_readb(func, SDIO_CCCR_IEN, &err);
+    if (!err) {
+        ien &= ~BIT(SDIO_FUNC1);
+        ien &= ~BIT(SDIO_FUNC4);
+        sdio_f0_writeb(func, ien, SDIO_CCCR_IEN, &err);
+    }
+    if (func->card && func->card->host &&
+        func->card->host->ops && func->card->host->ops->enable_sdio_irq)
+        func->card->host->ops->enable_sdio_irq(func->card->host, 0);
+    sdio_release_host(func);
+    w522a_stat_card_irq_path_masked++;
 }
 
 void aml_sdio_unmask_irq(void)
@@ -1199,6 +1381,11 @@ void aml_sdio_unmask_irq(void)
 
     if (!atomic_xchg(&aml_sdio_irq_pending, 0))
         return;
+
+    if (READ_ONCE(w522a_keep_card_irq_masked)) {
+        w522a_stat_card_irq_path_masked++;
+        return;
+    }
 
     func = aml_priv_to_func(SDIO_FUNC1);
     if (!func)
@@ -1226,6 +1413,10 @@ void aml_sdio_enable_irq(int func_n)
     struct hal_private *hal_priv = hal_get_priv();
     if (!hal_priv->hst_if_irq_en) {
 #if (USE_SDIO_IRQ==1)
+        if (READ_ONCE(w522a_keep_card_irq_masked)) {
+            /* Poll timer owns RX; never claim/re-enable the storming DAT1 IRQ. */
+            aml_sdio_mask_card_irq();
+        } else {
         struct sdio_func *func = aml_priv_to_func(func_n);
         struct sdio_func *func4 = aml_priv_to_func(SDIO_FUNC4);
         int ret = 0;
@@ -1258,6 +1449,7 @@ void aml_sdio_enable_irq(int func_n)
             }
         }
         aml_sdio_irq_path(0);
+        }
 #elif (USE_GPIO_IRQ==1)
         int ret = amlhal_gpio_open(hal_priv);
         if (ret != 0) {
@@ -1267,6 +1459,7 @@ void aml_sdio_enable_irq(int func_n)
 #endif
         w1_wifi_irq_enable = 1;
         hal_priv->hst_if_irq_en = 1;
+        aml_sdio_poll_timer_start();
     }
 }
 
@@ -1295,6 +1488,7 @@ void aml_sdio_disable_irq(int func_n)
 #elif (USE_GPIO_IRQ==1)
         amlhal_gpio_close(hal_priv);
 #endif
+        aml_sdio_poll_timer_stop();
         w1_wifi_irq_enable = 0;
         hal_priv->hst_if_irq_en = 0;
     }

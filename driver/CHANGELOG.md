@@ -1,5 +1,21 @@
 # W522A / W155S1 Driver — Changelog
 
+## v2.1 (2026-06-20) — Idle IRQ storm fixed
+
+Same working WiFi + BT as v2.0, plus a major idle-CPU fix.
+
+**Fix vs v2.0:**
+- **Idle SDIO IRQ storm killed.** At idle the chip fired **~1773 SDIO interrupts/sec**, with the `hi_irq` thread eating **8–12% CPU doing nothing**. Root cause traced to two self-inflicted layers:
+  1. `hi_irq_task` RX/TX drain loop spinning empty idle polls on every spurious wakeup (`vmac/wifi_hif.c`) — each pass issued a CMD53 status read + `usleep_range`, manufacturing its own SDIO traffic.
+  2. The meson-mmc card-IRQ (DAT1) level-storm, independent of driver CMD53 (`vmac/wifi_sdio.c`) — masked, with an hrtimer poller restoring RX/TX cadence.
+- Result: **idle interrupts ~1773 → <100/s, idle CPU near-zero**, ping stays clean (0% loss).
+- All behaviour is runtime-tunable (no rebuild) under the module's sysfs parameters dir:
+  `idle_grace_skip`, `idle_break_on_repeat`, `keep_card_irq_masked`, `poll_interval_us`
+  (default 4000 µs) — plus read-only `stat_*` counters (`stat_hi_entry`, `stat_rxtx_entry`,
+  `stat_idle_poll`, `stat_idle_break`, `stat_poll_wakes`, …) to measure the storm live.
+
+---
+
 ## v2.0 (2026-06-19) — BT + WiFi all work
 
 First fully-working release of the WiFi+BT driver.

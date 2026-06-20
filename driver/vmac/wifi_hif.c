@@ -36,6 +36,62 @@ module_param_named(irq_idle_sleep_max_us, w522a_irq_idle_sleep_max_us, int, 0644
 MODULE_PARM_DESC(irq_idle_sleep_max_us,
     "W522A maximum idle sleep usec between SDIO IRQ poll probes");
 
+/*
+ * Idle-storm work (2026-06): on this chip hal_irq_top never fires at idle
+ * (no card-IRQ), yet hi_irq_task still runs ~78x/s and each entry spins the
+ * RX/TX drain grace below up to irq_idle_polls times, issuing a CMD53 status
+ * read (-> meson_mmc completion IRQ) + usleep_range (-> hrtimer) per pass.
+ * That self-inflicted SDIO traffic is the ~1773/s seen in /proc/interrupts.
+ *
+ * Release builds compile pr_debug to a no-op and inline the hot path, so the
+ * counters below are exported read-only under the module's sysfs parameters
+ * dir to let us measure the real cause on the shipped .ko after a rebuild:
+ *   stat_hi_entry   - hi_irq_task entries
+ *   stat_rxtx_entry - entries that arrived WITH real RX/TX work
+ *   stat_idle_poll  - drain-loop status probes (CMD53) that found no work
+ *   stat_drain_work - drain-loop iterations that did real RX/TX work
+ * Read deltas over 1s: if stat_idle_poll dominates and stat_rxtx_entry stays
+ * ~0, the storm is the idle grace spinning on spurious wakeups (the expected
+ * result), and idle_grace_skip=1 collapses it.
+ */
+static unsigned int w522a_stat_hi_entry;
+module_param_named(stat_hi_entry, w522a_stat_hi_entry, uint, 0444);
+static unsigned int w522a_stat_rxtx_entry;
+module_param_named(stat_rxtx_entry, w522a_stat_rxtx_entry, uint, 0444);
+static unsigned int w522a_stat_idle_poll;
+module_param_named(stat_idle_poll, w522a_stat_idle_poll, uint, 0444);
+static unsigned int w522a_stat_drain_work;
+module_param_named(stat_drain_work, w522a_stat_drain_work, uint, 0444);
+
+/*
+ * When 1 (default): if a hi_irq_task wakeup carried no RX_OK/TX_OK bit, probe
+ * the drain loop only once instead of spinning irq_idle_polls times. Safe
+ * because the grace loop only batches frames that TRAIL real RX/TX activity;
+ * a wakeup with no RX/TX bit has nothing to drain. Set to 0 at runtime to
+ * restore the original full-grace behaviour without reloading the module.
+ */
+static int w522a_idle_grace_skip = 1;
+module_param_named(idle_grace_skip, w522a_idle_grace_skip, int, 0644);
+MODULE_PARM_DESC(idle_grace_skip,
+    "W522A: probe RX/TX drain once on idle (no-RX/TX) wakeups instead of spinning");
+
+/*
+ * Idle-storm fix part 2 (2026-06): even wakeups that DO carry an RX_OK/TX_OK
+ * bit spin the full grace count when the bit is level-asserted but the FW RX
+ * pointer has not advanced (frame already consumed in the first pass) and no
+ * TX could be reaped. The status word (RG_WIFI_IF_HOST_IRQ_ST) carries the FW
+ * RX pointer in its high bits, so "status unchanged since the previous probe"
+ * == "no new event, pointer did not move". When that happens there is nothing
+ * left to drain, so break immediately instead of burning the remaining polls +
+ * usleep_range. stat_idle_break counts how often this early-out fires.
+ */
+static int w522a_idle_break_on_repeat = 1;
+module_param_named(idle_break_on_repeat, w522a_idle_break_on_repeat, int, 0644);
+MODULE_PARM_DESC(idle_break_on_repeat,
+    "W522A: leave the drain loop as soon as the IRQ status word stops changing");
+static unsigned int w522a_stat_idle_break;
+module_param_named(stat_idle_break, w522a_stat_idle_break, uint, 0444);
+
 struct hw_interface* hif_get_hw_interface(void)
 {
     return &g_hw_interface;
@@ -764,6 +820,8 @@ unsigned int hi_soft_tx_irq(void)
         }
     }
 
+    if (reaped)
+        aml_sdio_poll_activity();
     up(&hal_priv->txok_thread_sem);
     return reaped;
 }
@@ -1008,6 +1066,10 @@ void hi_irq_task(struct hal_private *hal_priv)
     intr_status = hi_get_irq_status();
     hal_priv->int_status_copy = intr_status;
 
+    w522a_stat_hi_entry++;
+    if (intr_status & (RX_OK | TX_OK))
+        w522a_stat_rxtx_entry++;
+
     loop_count += 1;
     if (intr_status & GOTO_WAKEUP_VID1)
     {
@@ -1136,9 +1198,11 @@ void hi_irq_task(struct hal_private *hal_priv)
 
         {
             unsigned int re_status, re_rx_fw_ptr;
+            unsigned int prev_status = intr_status;
+            int break_on_repeat = READ_ONCE(w522a_idle_break_on_repeat);
             struct hal_private *p = hal_priv;
             int idle_polls = 0;
-            
+
             int work_since_flush = 0;
             const int TX_FLUSH_EVERY = 4;
             int max_idle_polls =
@@ -1153,9 +1217,21 @@ void hi_irq_task(struct hal_private *hal_priv)
                 clamp_t(unsigned int, READ_ONCE(w522a_irq_poll_max_iters),
                         1, 4096);
 
+            /*
+             * If this wakeup carried no RX_OK/TX_OK bit, there is nothing
+             * trailing to drain. Probe once instead of spinning the full
+             * grace count + usleep_range (the idle-storm source). The first
+             * loop iteration still re-reads status, so genuine just-arrived
+             * work is not missed.
+             */
+            if (READ_ONCE(w522a_idle_grace_skip) &&
+                !(intr_status & (RX_OK | TX_OK)))
+                max_idle_polls = 1;
+
             while (iters++ < max_iters) {
                 int did_work = 0;
                 int tx_reaped = 0;
+                w522a_stat_idle_poll++;
                 re_status = hi_get_irq_status();
                 re_rx_fw_ptr = (re_status & FW_RX_PTR_MASK) >>
                                FW_RX_PTR_OFFSET;
@@ -1177,7 +1253,8 @@ void hi_irq_task(struct hal_private *hal_priv)
                 }
                 if (did_work) {
                     p->need_scheduling_tx = 1;
-                    
+                    w522a_stat_drain_work++;
+
                     if (tx_reaped || ++work_since_flush >= TX_FLUSH_EVERY) {
                         AML_TXLOCK_LOCK();
                         hal_tx_frame();
@@ -1194,6 +1271,18 @@ void hi_irq_task(struct hal_private *hal_priv)
                     AML_TXLOCK_UNLOCK();
                     work_since_flush = 0;
                 }
+                /*
+                 * No work this pass. If the status word is identical to the
+                 * previous probe, the FW RX pointer has not moved and no new
+                 * event arrived -- a level-asserted RX_OK/TX_OK with nothing
+                 * left to drain. Spinning the remaining grace polls + usleep
+                 * just generates idle SDIO traffic, so leave now.
+                 */
+                if (break_on_repeat && re_status == prev_status) {
+                    w522a_stat_idle_break++;
+                    break;
+                }
+                prev_status = re_status;
                 if (++idle_polls >= max_idle_polls)
                     break;
                 if (idle_sleep_max_us > 0)
