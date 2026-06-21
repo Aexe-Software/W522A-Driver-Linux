@@ -37,6 +37,9 @@ This is an Armbian/mainline-kernel port of Amlogic's vendor `aml-w1` SDIO driver
 3. **TX aggregation forced OFF in AP mode** — the only stable choice on this firmware.
 4. **SDIO fairness throttle disabled** when BT isn't sharing the bus (restores throughput).
 5. **Idle SDIO IRQ storm killed (v2.1).** At idle the chip generated **~1773 SDIO interrupts/sec** — the `hi_irq` kernel thread burning **8–12 % CPU for nothing**. Two self‑inflicted layers were traced and fixed: the `hi_irq_task` RX/TX drain loop spinning empty idle polls (`vmac/wifi_hif.c`), and the meson‑mmc card‑IRQ (DAT1) level‑storm (`vmac/wifi_sdio.c`). Result: **idle interrupts ~1773 → <100/s, idle CPU back to near‑zero**, ping stays clean. Every knob is runtime‑tunable under the module's sysfs parameters dir (`idle_grace_skip`, `idle_break_on_repeat`, `keep_card_irq_masked`, `poll_interval_us`), with read‑only `stat_*` counters to verify the effect live.
+6. **SDIO IRQ governor refined → hybrid RX poll (v2.2).** The v2.1 storm fix masked the card IRQ by default (`keep_card_irq_masked=1`), but masking it can leave the **TX queue wedged after boot** (the card IRQ is what signals TX completion). v2.2 keeps the hardware SDIO IRQ on (`keep_card_irq_masked=0`) for reliable TX completion **and** runs a bounded RX poller alongside it (new `hybrid_rx_poll=1`, default on) to pick up RX work if the controller drops an in‑band card IRQ — and a TX event kicks the poller immediately (`aml_sdio_poll_activity()` in `vmac/wifi_hal.c`). Keeps idle interrupts low without the post‑boot TX wedge.
+7. **STA TX‑aggregation restart‑freeze gate (v2.2).** With STA A‑MPDU on, a box restart made the first post‑association data burst start an ADDBA exchange in the unstable bring‑up window; the aggregated TX then wedged the firmware (ADDBA_TIMEOUT → no TX completion → netdev watchdog → **0 Mbit** while RX/ping still answered). New `sta_aggr_settle_ms` (default **8000 ms**, `vmac/wifi_mac_if.c`) keeps aggregation **enabled** but **defers the first ADDBA** for STA/P2P‑client vifs until the link has been connected that long — legacy frames first (never wedge), then aggregate once the datapath is proven. AP vifs untouched. Read‑only `stat_addba_deferred` counts skipped attempts. (No more blunt `cfg_txaggr=0`.)
+8. **STA 2.4 GHz channel‑width knob (v2.2).** New `sta_2g_ht20` module param (`vmac/wifi_mac_sta.c`) controls STA channel width on 2.4 GHz: **`0` (default) = follow the AP, allow HT40 (40 MHz)** for peak throughput; **`1` = force HT20 (20 MHz)** — more robust on a congested band where 40 MHz doubles interference exposure and the AP rate‑controls the link down. Runtime‑tunable (`/sys/module/vlsicomm/parameters/sta_2g_ht20`); reconnect to apply. 5 GHz is unaffected (stays VHT80/40). Verified on hardware: STA associates at **40 MHz** (ch6+10), −57 dBm, 0 firmware events under sustained load, width held under load.
 
 ---
 
@@ -108,6 +111,14 @@ sudo W522A_STA_SSID='your-ssid' W522A_STA_PSK='your-pass' \
 sudo dhcpcd w522a
 ```
 > For low STA latency keep the interface NetworkManager‑unmanaged and set `bgscan=""`, otherwise periodic scans make the single radio go off‑channel (~2 s ping spikes).
+
+STA **2.4 GHz channel width** (see fix #8) — default is 40 MHz; force 20 MHz for a congested band:
+```sh
+# 1 = force HT20 (robust), 0 = allow HT40/40 MHz (default). Reconnect to apply.
+echo 1 | sudo tee /sys/module/vlsicomm/parameters/sta_2g_ht20
+# persist across reboot:
+echo 'options vlsicomm sta_2g_ht20=1' | sudo tee /etc/modprobe.d/w522a-ht20.conf
+```
 
 **Bluetooth A2DP audio** (shares the radio — Wi‑Fi must be off first):
 ```sh

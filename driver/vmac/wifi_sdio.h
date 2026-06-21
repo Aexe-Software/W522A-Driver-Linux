@@ -28,6 +28,9 @@ enum SDIO_STD_FUNNUM {
 #define SDIO_CCCR_IOABORT 	6
 #define SDIO_ADDR_MASK 		(128*1024-1)
 
+/* W522A card-IRQ-masked polling governor (implemented in wifi_sdio.c). */
+void aml_sdio_poll_activity(void);
+
 enum SDIO_RW_FLAG
 {
     SDIO_F_SYNCHRONOUS= BIT(0),

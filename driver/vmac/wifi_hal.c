@@ -1361,6 +1361,8 @@ void  hal_tx_frame(void)
         }
         if (mpdu_num > 0)
         {
+            /* TX is the immediate signal that replies need low latency. */
+            aml_sdio_poll_activity();
             AML_TXLOCK_UNLOCK();
             hif->hif_ops.hi_send_frame(scat_req);
             hal_priv->need_scheduling_tx = 0;

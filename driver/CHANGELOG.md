@@ -1,5 +1,36 @@
 # W522A / W155S1 Driver — Changelog
 
+## v2.2 (2026-06-21) — STA stability + channel-width control
+
+Same working WiFi + BT as v2.1, plus STA-mode fixes and a 2.4 GHz width knob. All
+changes are already running stably on hardware (kernel 6.12.81-ophub).
+
+**Fixes vs v2.1 (all in `vmac/`):**
+- **STA 2.4 GHz channel-width knob** (`wifi_mac_sta.c`): new `sta_2g_ht20` module
+  param. `0` (default) = follow the AP / allow HT40 (40 MHz) for peak throughput;
+  `1` = force HT20 (20 MHz), more robust on a congested 2.4 GHz band where 40 MHz
+  doubles interference exposure and the AP rate-controls the link down to MCS0/1.
+  Applies the same clamp the vendor already uses for platform verid 2, *without*
+  repurposing verid (which also drives RF cal + minstrel). 5 GHz unaffected.
+  Runtime-tunable (`/sys/module/vlsicomm/parameters/sta_2g_ht20`), reconnect to apply.
+  Verified: STA associates at 40 MHz (ch6+10), −57 dBm, 0 firmware events under load.
+- **STA TX-aggregation restart-freeze gate** (`wifi_mac_if.c`, `wifi_mac_var.h`): new
+  `sta_aggr_settle_ms` (default 8000). With STA A-MPDU on, a restart made the first
+  post-association burst start ADDBA in the unstable bring-up window → aggregated TX
+  wedged the firmware (ADDBA_TIMEOUT → no TX completion → netdev watchdog → 0 Mbit
+  while RX/ping still answered). The gate keeps aggregation ENABLED but defers the
+  first ADDBA for STA/P2P-client vifs until the link has been connected that long
+  (legacy frames first, then aggregate). AP vifs untouched. Read-only
+  `stat_addba_deferred` counts skipped attempts. Replaces the blunt `cfg_txaggr=0`.
+- **SDIO IRQ governor → hybrid RX poll** (`wifi_sdio.c/.h`, `wifi_hal.c`): v2.1 masked
+  the card IRQ by default (`keep_card_irq_masked=1`), which could leave the TX queue
+  wedged after boot (that IRQ signals TX completion). v2.2 keeps the HW SDIO IRQ on
+  (`keep_card_irq_masked=0`) AND runs a bounded RX poller alongside it (new
+  `hybrid_rx_poll=1`, default on); a TX event kicks the poller immediately
+  (`aml_sdio_poll_activity()`). Low idle IRQs without the post-boot TX wedge.
+
+---
+
 ## v2.1 (2026-06-20) — Idle IRQ storm fixed
 
 Same working WiFi + BT as v2.0, plus a major idle-CPU fix.

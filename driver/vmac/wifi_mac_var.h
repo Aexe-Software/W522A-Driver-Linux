@@ -554,6 +554,16 @@ struct wlan_net_vif
     unsigned char wnet_vif_id;
     enum wifi_mac_opmode vm_opmode;
     enum wifi_mac_state vm_state;
+    /*
+     * W522A: jiffies before which STA TX A-MPDU (ADDBA) must NOT be initiated.
+     * Stamped = jiffies + settle on every fresh transition into CONNECTED.
+     * Starting aggregation in the unstable window right after (re)association
+     * (esp. just after a box restart) wedges the firmware TX path (no TX
+     * completion -> SDIO dies -> netdev watchdog -> 0 Mbit). Deferring ADDBA
+     * past this anchor lets the link pass legacy frames first, then aggregate.
+     * 0 = no hold (e.g. AP vifs, or gate disabled via settle_ms=0).
+     */
+    unsigned long vm_aggr_hold_until;
     unsigned char remain_on_channel;
     struct ieee80211_channel remain_on_ch_channel;
     unsigned long long remain_on_ch_cookie;

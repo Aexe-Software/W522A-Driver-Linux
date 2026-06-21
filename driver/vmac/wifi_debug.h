@@ -115,7 +115,7 @@ enum
 /* The crypto/ wpa-derived sources (aml_crypto_wrap.h) define their own
  * ERROR_DEBUG_OUT -> wpa_printf before pulling this header in via
  * wifi_mac_com.h. Guard with #ifndef so we don't redefine it there (which
- * warned on every crypto/*.c). Non-crypto translation units have it undefined
+ * warned on every file in the crypto directory). Non-crypto translation units have it undefined
  * and get the kernel pr_err() version below. */
 #ifndef ERROR_DEBUG_OUT
 #define ERROR_DEBUG_OUT(format, ...) do {                               \

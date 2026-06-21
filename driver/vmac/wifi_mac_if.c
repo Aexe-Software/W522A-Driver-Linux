@@ -23,6 +23,33 @@ extern void w1_wifi_bt_release(int who);
 unsigned char tpc_mode = 0;
 extern unsigned char g_wftx_pwrtbl_en;
 
+/*
+ * W522A STA aggregation settle gate (2026-06).
+ *
+ * Confirmed failure: with STA A-MPDU on, restarting the box made the very
+ * first post-association data burst start an ADDBA exchange in the unstable
+ * bring-up window; the aggregated TX then wedged the firmware (ADDBA_TIMEOUT
+ * 1500ms -> no TX completion -> NETDEV WATCHDOG 3000ms -> tx-recovery GIVES UP
+ * -> 0 Mbit while RX/ping still answers). The user's blunt workaround was
+ * cfg_txaggr=0 (no aggregation at all, lower speed).
+ *
+ * This gate keeps aggregation ENABLED but DEFERS the first ADDBA for STA/P2P-
+ * client vifs until the link has been CONNECTED for sta_aggr_settle_ms. During
+ * the hold the link runs as plain legacy frames (which never wedge), then
+ * aggregates once the firmware datapath is proven up. AP vifs are untouched.
+ *
+ * Runtime-tunable (no rebuild) under the module's sysfs parameters dir:
+ *   sta_aggr_settle_ms  - hold window, ms (default 8000). 0 = gate OFF.
+ *   stat_addba_deferred - read-only count of ADDBA attempts skipped by the gate.
+ */
+static unsigned int w522a_sta_aggr_settle_ms = 8000;
+module_param_named(sta_aggr_settle_ms, w522a_sta_aggr_settle_ms, uint, 0644);
+MODULE_PARM_DESC(sta_aggr_settle_ms,
+    "W522A: defer STA TX A-MPDU/ADDBA this many ms after connect (0=off)");
+
+static unsigned int w522a_stat_addba_deferred;
+module_param_named(stat_addba_deferred, w522a_stat_addba_deferred, uint, 0444);
+
 extern unsigned int   host_wake_w1_fail_cnt;
 extern unsigned char w1_wifi_in_insmod;
 
@@ -667,6 +694,26 @@ void wifi_mac_tx_addba_check(struct wifi_station *sta, unsigned char tid_index)
         (!wifimac->drv_priv || !wifimac->drv_priv->drv_config.cfg_ap_vht80_txaggr)) {
         
         pr_info_once("W522A: HOSTAP VHT80 TX A-MPDU disabled (cfg_ap_vht80_txaggr=0); RX BA remains enabled, HT20/HT40 AP TX BA is allowed\n");
+        return;
+    }
+
+    /*
+     * W522A STA aggregation settle gate: inside the post-connect hold window
+     * keep this TID legacy (skip ADDBA entirely — return BEFORE check_aggr so
+     * no addba_exchangeattempts are consumed). This stops aggregated TX from
+     * hitting the firmware in the unstable bring-up window after a restart,
+     * which used to wedge TX (ADDBA_TIMEOUT -> NETDEV WATCHDOG -> 0 Mbit).
+     * Once vm_aggr_hold_until passes, ADDBA proceeds as normal.
+     */
+    if (useampdu &&
+        (wnet_vif->vm_opmode == WIFINET_M_STA ||
+         wnet_vif->vm_opmode == WIFINET_M_P2P_CLIENT) &&
+        wnet_vif->vm_aggr_hold_until &&
+        time_before(jiffies, wnet_vif->vm_aggr_hold_until)) {
+        w522a_stat_addba_deferred++;
+        pr_info_once("W522A: STA TX A-MPDU deferred by settle gate (%ums) — "
+                     "link runs legacy until the link settles after connect\n",
+                     READ_ONCE(w522a_sta_aggr_settle_ms));
         return;
     }
 
@@ -2991,6 +3038,20 @@ wifi_mac_sub_sm(struct wlan_net_vif *wnet_vif, enum wifi_mac_state nstate, int a
     }
 
     WRITE_ONCE(wnet_vif->vm_state, nstate);
+
+    /*
+     * W522A: arm the STA aggregation settle gate on a fresh entry into
+     * CONNECTED. Frames flow legacy until this anchor passes, then ADDBA is
+     * allowed (see wifi_mac_tx_addba_check). Covers both first boot and any
+     * later reassociation/roam. AP vifs leave vm_aggr_hold_until at 0.
+     */
+    if (nstate == WIFINET_S_CONNECTED && prestate != WIFINET_S_CONNECTED &&
+        (wnet_vif->vm_opmode == WIFINET_M_STA ||
+         wnet_vif->vm_opmode == WIFINET_M_P2P_CLIENT)) {
+        unsigned int settle = READ_ONCE(w522a_sta_aggr_settle_ms);
+        wnet_vif->vm_aggr_hold_until =
+            settle ? (jiffies + msecs_to_jiffies(settle)) : 0;
+    }
 
     WIFINET_DPRINTF(AML_DEBUG_STATE,"%s state %s->%s", __func__,
             wifi_mac_state_name[prestate],wifi_mac_state_name[nstate]);

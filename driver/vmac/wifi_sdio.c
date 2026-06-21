@@ -1192,7 +1192,13 @@ static void aml_sdio_interrupt(struct sdio_func * func)
  * masked at the controller and collapsing the IRQ23 storm. Set to 0 at
  * runtime to restore the original enable/disable behaviour without reload.
  */
-static int w522a_keep_card_irq_masked = 1;
+/*
+ * Normal SDIO card IRQ delivery is required for reliable TX completion.
+ * The polling-only mode remains available for diagnosis, but masking the
+ * card IRQ by default can leave the TX queue wedged after boot.
+ */
+static int w522a_keep_card_irq_masked = 0;
+static int w522a_hybrid_rx_poll = 1;
 module_param_named(keep_card_irq_masked, w522a_keep_card_irq_masked, int, 0644);
 MODULE_PARM_DESC(keep_card_irq_masked,
     "W522A: keep SDIO card-IRQ masked at the host (RX runs via polling); kills IRQ23 level storm");
@@ -1225,6 +1231,14 @@ void aml_sdio_set_card_irq(int enable)
     host = func->card->host;
     if (host->ops && host->ops->enable_sdio_irq)
         host->ops->enable_sdio_irq(host, enable ? 1 : 0);
+
+    /*
+     * In hybrid mode this runs after hi_irq_task has completed and the HAL is
+     * live.  Restart a poller that may have stopped during early boot, while
+     * retaining the hardware IRQ needed for TX completion.
+     */
+    if (enable && READ_ONCE(w522a_hybrid_rx_poll))
+        aml_sdio_poll_timer_start();
 }
 
 /*
@@ -1242,6 +1256,13 @@ static int w522a_poll_interval_us = 4000;
 module_param_named(poll_interval_us, w522a_poll_interval_us, int, 0644);
 MODULE_PARM_DESC(poll_interval_us,
     "W522A: card-IRQ-masked RX poll cadence in us (0=off, default 4000)");
+/*
+ * Keep the hardware SDIO IRQ for TX completions, but also run the bounded
+ * poller to pick up RX work when the controller drops an in-band card IRQ.
+ */
+module_param_named(hybrid_rx_poll, w522a_hybrid_rx_poll, int, 0644);
+MODULE_PARM_DESC(hybrid_rx_poll,
+    "W522A: run RX poller alongside normal SDIO IRQ (1=on, default on)");
 /*
  * The SDIO card IRQ stays masked on this board, so only the driver itself can
  * safely tell whether traffic is active. Use 1 ms while frames flow, then
@@ -1290,7 +1311,8 @@ static enum hrtimer_restart w522a_poll_timer_fn(struct hrtimer *t)
     int busy;
 
     if (!hal_priv || !hal_priv->bhalOpen || interval <= 0 ||
-        !READ_ONCE(w522a_keep_card_irq_masked))
+        (!READ_ONCE(w522a_keep_card_irq_masked) &&
+         !READ_ONCE(w522a_hybrid_rx_poll)))
         return HRTIMER_NORESTART;
 
     busy = READ_ONCE(w522a_adaptive_poll) &&

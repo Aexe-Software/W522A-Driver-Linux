@@ -8,6 +8,24 @@
 
 DEFINE_SRCU(vlsi_sta_srcu);
 
+/*
+ * W522A: force 20 MHz channel width for STA on 2.4 GHz.
+ * On a congested 2.4 GHz band, 40 MHz doubles interference exposure (the noisy
+ * extension channel) and the AP then rate-controls the downlink down to MCS0/1
+ * (~6 Mbit, packet drops, SSH stalls). The vendor source already forces 20 MHz
+ * on 2.4 GHz for platform verid 2; this knob applies the same clamp on this
+ * platform WITHOUT touching verid (which also drives RF calibration + minstrel,
+ * so it must not be repurposed). 5 GHz is unaffected (stays VHT80/40).
+ * 1 = STA uses 20 MHz on 2.4 GHz (robust); 0 = follow AP (allow 40 MHz, default
+ * per user request — keep 40 MHz peak). Flip to 1 + reconnect to test the
+ * lower-loss 20 MHz path live without rebuilding.
+ * Runtime-tunable under the module's sysfs parameters dir; reconnect to apply.
+ */
+static int w522a_sta_2g_ht20 = 0;
+module_param_named(sta_2g_ht20, w522a_sta_2g_ht20, int, 0644);
+MODULE_PARM_DESC(sta_2g_ht20,
+    "W522A: STA forces 20MHz on 2.4GHz (1=on/default, 0=allow 40MHz)");
+
 static void wifi_station_kfree_cb(struct rcu_head *head)
 {
     struct wifi_station *sta = container_of(head, struct wifi_station, sta_rcu);
@@ -315,7 +333,7 @@ int wifi_mac_connect(struct wlan_net_vif *wnet_vif, struct wifi_scan_info *se)
     wifi_mac_connect_start(wifimac);
     wifi_mac_get_connect_bw_center(se, &connect_bw, &connect_center_chan);
 
-    if(aml_wifi_get_platform_verid() == 2) {
+    if(aml_wifi_get_platform_verid() == 2 || READ_ONCE(w522a_sta_2g_ht20)) {
         
         if (WIFINET_IS_CHAN_2GHZ(se->SI_chan)) {
                 pr_debug("%s %d set bw 20M\n", __func__, __LINE__);
@@ -338,7 +356,7 @@ int wifi_mac_connect(struct wlan_net_vif *wnet_vif, struct wifi_scan_info *se)
     }
     wnet_vif->vm_curchan = work_channel;
 
-    if(aml_wifi_get_platform_verid() == 2) {
+    if(aml_wifi_get_platform_verid() == 2 || READ_ONCE(w522a_sta_2g_ht20)) {
         
         if (WIFINET_IS_CHAN_2GHZ(se->SI_chan)) {
             pr_debug("%s %d set bw 20M\n", __func__, __LINE__);
