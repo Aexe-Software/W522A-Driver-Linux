@@ -1181,32 +1181,38 @@ static void aml_sdio_interrupt(struct sdio_func * func)
 #endif
 }
 
-/*
- * Idle-storm fix part 3 (2026-06): on this chip the SDIO card-IRQ (DAT1) stays
- * level-asserted, so the meson_mmc controller re-fires its SDIO-IRQ (~967/s on
- * IRQ23) even with ZERO mmc transactions and without dispatching to
- * aml_sdio_interrupt. RX runs fine via the driver's polling path (ping 0%
- * loss), so the card-IRQ is not actually needed to receive. When
- * keep_card_irq_masked=1 (default) we honour requests to DISABLE the host
- * SDIO-IRQ but turn requests to ENABLE it into a no-op, leaving the line
- * masked at the controller and collapsing the IRQ23 storm. Set to 0 at
- * runtime to restore the original enable/disable behaviour without reload.
- */
-/*
- * Normal SDIO card IRQ delivery is required for reliable TX completion.
- * The polling-only mode remains available for diagnosis, but masking the
- * card IRQ by default can leave the TX queue wedged after boot.
- */
-static int w522a_keep_card_irq_masked = 0;
+ 
+
+
+
+
+
+
+
+
+
+
+ 
+
+
+
+
+/* Default ON: leaving the SDIO card-IRQ unmasked produces a ~1773 IRQ/s level
+ * storm on ffe03000.mmc (irq/23) that burns 9-14% of a CPU core at idle. With
+ * this masked the RX path is serviced by the poll timer below (hybrid_rx_poll
+ * also picks up RX if a card IRQ is ever dropped), and TX completion is caught
+ * by the same poller -- verified stable on hardware (97% idle, no TX wedge).
+ * Set keep_card_irq_masked=0 only to debug the legacy IRQ path. */
+static int w522a_keep_card_irq_masked = 1;
 static int w522a_hybrid_rx_poll = 1;
 module_param_named(keep_card_irq_masked, w522a_keep_card_irq_masked, int, 0644);
 MODULE_PARM_DESC(keep_card_irq_masked,
-    "W522A: keep SDIO card-IRQ masked at the host (RX runs via polling); kills IRQ23 level storm");
+    "W522A: keep SDIO card-IRQ masked at the host (RX runs via polling); kills IRQ23 level storm (default on)");
 static unsigned int w522a_stat_card_irq_enable_skipped;
 module_param_named(stat_card_irq_enable_skipped,
     w522a_stat_card_irq_enable_skipped, uint, 0444);
 
-/* The definition follows the card-IRQ helper; re-arm it after HAL is open. */
+ 
 void aml_sdio_poll_timer_start(void);
 
 void aml_sdio_set_card_irq(int enable)
@@ -1219,11 +1225,11 @@ void aml_sdio_set_card_irq(int enable)
 
     if (enable && READ_ONCE(w522a_keep_card_irq_masked)) {
         w522a_stat_card_irq_enable_skipped++;
-        /*
-         * The initial enable can happen before bhalOpen.  A later re-arm
-         * request from hi_top_task occurs with HAL live, so use it to start
-         * (or restart) the periodic RX poller.
-         */
+         
+
+
+
+
         aml_sdio_poll_timer_start();
         return;
     }
@@ -1232,42 +1238,42 @@ void aml_sdio_set_card_irq(int enable)
     if (host->ops && host->ops->enable_sdio_irq)
         host->ops->enable_sdio_irq(host, enable ? 1 : 0);
 
-    /*
-     * In hybrid mode this runs after hi_irq_task has completed and the HAL is
-     * live.  Restart a poller that may have stopped during early boot, while
-     * retaining the hardware IRQ needed for TX completion.
-     */
+     
+
+
+
+
     if (enable && READ_ONCE(w522a_hybrid_rx_poll))
         aml_sdio_poll_timer_start();
 }
 
-/*
- * Idle-storm fix part 4 (2026-06): masking the card-IRQ (part 3) kills the
- * IRQ23 level storm but removes the only REGULAR wakeup for the polling path,
- * so an RX frame sits in the FIFO until the next irregular txok/work wakeup ->
- * latency jitter (4-198ms). This hrtimer restores a STEADY poll cadence while
- * the card-IRQ stays masked: every poll_interval_us it nudges hi_irq_thread
- * with the exact same semaphore pattern hal_irq_top uses. Default 4000us
- * (250/s) = far below the old ~967/s storm yet regular enough to flatten the
- * jitter. Only armed when keep_card_irq_masked is on; set poll_interval_us=0
- * to disable the poller (then RX relies on incidental wakeups again).
- */
+ 
+
+
+
+
+
+
+
+
+
+
 static int w522a_poll_interval_us = 4000;
 module_param_named(poll_interval_us, w522a_poll_interval_us, int, 0644);
 MODULE_PARM_DESC(poll_interval_us,
     "W522A: card-IRQ-masked RX poll cadence in us (0=off, default 4000)");
-/*
- * Keep the hardware SDIO IRQ for TX completions, but also run the bounded
- * poller to pick up RX work when the controller drops an in-band card IRQ.
- */
+ 
+
+
+
 module_param_named(hybrid_rx_poll, w522a_hybrid_rx_poll, int, 0644);
 MODULE_PARM_DESC(hybrid_rx_poll,
     "W522A: run RX poller alongside normal SDIO IRQ (1=on, default on)");
-/*
- * The SDIO card IRQ stays masked on this board, so only the driver itself can
- * safely tell whether traffic is active. Use 1 ms while frames flow, then
- * back off after a quiet window to save CPU at idle.
- */
+ 
+
+
+
+
 static int w522a_adaptive_poll = 1;
 module_param_named(adaptive_poll, w522a_adaptive_poll, int, 0644);
 MODULE_PARM_DESC(adaptive_poll,
@@ -1367,11 +1373,11 @@ static unsigned int w522a_stat_card_irq_path_masked;
 module_param_named(stat_card_irq_path_masked,
     w522a_stat_card_irq_path_masked, uint, 0444);
 
-/*
- * Do not merely disable the host side: sdio_claim_irq() also enables the
- * function bits in CCCR.  On this board DAT1 remains asserted and causes a
- * level storm unless both sides stay disabled.
- */
+ 
+
+
+
+
 static void aml_sdio_mask_card_irq(void)
 {
     struct sdio_func *func = aml_priv_to_func(SDIO_FUNC1);
@@ -1436,7 +1442,7 @@ void aml_sdio_enable_irq(int func_n)
     if (!hal_priv->hst_if_irq_en) {
 #if (USE_SDIO_IRQ==1)
         if (READ_ONCE(w522a_keep_card_irq_masked)) {
-            /* Poll timer owns RX; never claim/re-enable the storming DAT1 IRQ. */
+             
             aml_sdio_mask_card_irq();
         } else {
         struct sdio_func *func = aml_priv_to_func(func_n);

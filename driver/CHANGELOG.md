@@ -1,5 +1,20 @@
 # W522A / W155S1 Driver — Changelog
 
+## v2.4 (2026-06-24) — IRQ-storm fix in the driver default
+
+- **`keep_card_irq_masked` default flipped `0` → `1`** in `vmac/wifi_sdio.c`. The
+  unmasked SDIO card IRQ produced a ~1773 IRQ/s level storm (irq/23) burning
+  9–14 % of a core at idle. RX is serviced by the poll timer; `hybrid_rx_poll`
+  (already default 1) is the backstop; TX completion is caught by the poller.
+  Verified: a clean install with **no modprobe.d drop-in and no watchdog** boots
+  to **99 % idle** with `keep_card_irq_masked=1` straight from the driver.
+- This removes the dependency on `/etc/modprobe.d/w522a-cpu.conf` and the
+  watchdog's CPU job. The non-driver stability bits (CPU governor, RPS,
+  multi-home source routing, ARP/rp_filter sysctls, default route) are host/
+  network settings a kernel module cannot set, so they stay in `install.sh` /
+  the optional watchdog.
+- Driver binary changed → prebuilt modules rebuilt (gcc-15, 6.12.81-ophub).
+
 ## v2.3 (2026-06-24) — stable-by-default packaging
 
 Same driver binary as v2.2 (no rate-control / firmware-path changes). This release

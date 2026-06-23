@@ -50,6 +50,10 @@ This is an Armbian/mainline-kernel port of Amlogic's vendor `aml-w1` SDIO driver
 
 > **On 2.4 GHz packet "loss".** Investigated exhaustively: on a busy 2.4 GHz channel `ping` to the gateway/Internet shows a few % loss, but that is **ICMP de-prioritisation + ambient co-channel collisions**, not a driver fault — measured real TCP retransmit rate is ~0 %. The one driver timing knob that looked relevant, `cfg_rx_reorder_timeout`, was tested at 20 ms and **made latency far worse (avg 4→57 ms) with no loss reduction** (head-of-line blocking), so it stays at the default `1`. The only real cures are a clean router channel (ch1/ch11) or Ethernet — neither is a driver setting.
 
+### v2.4 — IRQ-storm fix baked into the driver default
+
+13. **`keep_card_irq_masked` now defaults to `1` in the source** (`vmac/wifi_sdio.c`). Previously the default was `0`, so a fresh install with no `modprobe.d` drop-in re-introduced the idle IRQ-23 level storm (~1773 IRQ/s, 9–14 % CPU). The RX path is serviced by the poll timer (and `hybrid_rx_poll`, also default on) and TX completion is caught by the same poller — verified on hardware: a clean install **with no modprobe.d file and no watchdog** boots to **99 % idle**, `keep_card_irq_masked=1` straight from the driver. So the CPU/IRQ fix no longer depends on any external file or service. (The other stability items — CPU governor, RPS, multi-home routing, ARP/rp_filter, default route — are host/network settings a kernel module cannot and should not set, so those remain in `install.sh` / the optional watchdog.)
+
 ---
 
 ## 📦 Repo layout
