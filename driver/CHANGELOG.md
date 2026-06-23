@@ -1,5 +1,29 @@
 # W522A / W155S1 Driver — Changelog
 
+## v2.3 (2026-06-24) — stable-by-default packaging
+
+Same driver binary as v2.2 (no rate-control / firmware-path changes). This release
+makes the **install kit** apply the proven stability fixes automatically and cleans
+up packaging. All verified on hardware (kernel 6.12.81-ophub).
+
+- **CPU/IRQ stability layer auto-applied by the installer** (`install.sh prebuilt|build`,
+  or `install.sh stability`): `performance` CPU governor (removes the `sugov` RT-kthread
+  churn, 24–82 % of a core under SDIO load), `keep_card_irq_masked=1` via `modprobe.d`
+  (kills the idle host-wake IRQ storm), and RPS/XPS softirq spreading. Idle CPU ~96 %.
+- **Config files now parse.** Base profile `aml_wifi_drv_cfg_0.conf` shipped with
+  `key = value` (spaces); `process_drv_cfg_content` does not strip whitespace and
+  silently ignored those lines. All shipped profiles are now `key=value` (no spaces).
+- **Per-unit RF calibration removed from the repo/release.** Only the generic vendor
+  tables (`aml_wifi_rf.txt`, `aml_wifi_rf_fn_link.txt`) ship; firmware auto-selects a
+  per-serial `aml_wifi_rf_<SN>.txt` if present, else falls back to generic.
+- **Optional RF resilience** (`install.sh resilience`, Wi-Fi-uplink boxes only): SSH
+  `ClientAlive` keepalive + a ~0 % CPU gateway link-warm service.
+- **Investigated & rejected** `cfg_rx_reorder_timeout` as a loss knob: at 20 ms it
+  inflated latency (avg 4→57 ms) with zero loss reduction (head-of-line blocking).
+  Stays at default `1`. The few-% 2.4 GHz `ping` loss is ICMP de-prioritisation +
+  co-channel collisions (real TCP retransmit ≈ 0 %), not a driver fault — only a clean
+  router channel or Ethernet fixes it.
+
 ## v2.2 (2026-06-21) — STA stability + channel-width control
 
 Same working WiFi + BT as v2.1, plus STA-mode fixes and a 2.4 GHz width knob. All

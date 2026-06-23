@@ -235,7 +235,6 @@ install: all
 	install -d /lib/firmware/aml/
 	install -d /etc/aml-wifi/
 	install -m 644 vmac/aml_wifi_rf_fn_link.txt /lib/firmware/aml/aml_wifi_rf_fn_link.txt
-	install -m 644 vmac/aml_wifi_rf_0333.txt /lib/firmware/aml/aml_wifi_rf_0333.txt
 	install -m 644 vmac/aml_wifi_rf_fn_link.txt /lib/firmware/aml/aml_wifi_rf.txt
 	install -m 644 vmac/aml_wifi_rf_fn_link.txt /etc/aml-wifi/aml_wifi_rf.txt
 	install -m 644 vmac/aml_wifi_drv_cfg_0.conf /etc/aml-wifi/
@@ -272,7 +271,6 @@ uninstall:
 	rm -f /etc/modprobe.d/aml-w1.conf /etc/modules-load.d/aml-w1.conf
 	rm -rf /etc/aml-wifi/
 	rm -f /lib/firmware/aml/aml_wifi_rf_fn_link.txt
-	rm -f /lib/firmware/aml/aml_wifi_rf_0333.txt
 	rm -f /lib/firmware/aml/aml_wifi_rf.txt
 	depmod -a $(shell uname -r)
 	@echo "Done. Reboot to fully unload."
